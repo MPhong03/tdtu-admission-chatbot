@@ -87,7 +87,7 @@ class ElasticRepository {
                 }
             });
 
-            return result.body.hits.hits.map(hit => hit._source);
+            return result.hits.hits.map(hit => hit._source);
         } catch (error) {
             throw new Error(`Error searching: ${error.message}`);
         }
