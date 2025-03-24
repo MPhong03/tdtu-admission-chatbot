@@ -1,6 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const UserRepository = require("../repositories/user.repository");
+const HttpResponse = require("../data/responses/http.response");
 
 class AuthService {
     constructor() {
@@ -11,36 +12,20 @@ class AuthService {
         try {
             const existingUser = await this.userRepo.findByEmail(email);
             if (existingUser) {
-                return { 
-                    Code: -1, 
-                    Message: "Email already exists", 
-                    Data: null 
-                };
+                return HttpResponse.error("Email already exists");
             }
 
             const hashedPassword = await bcrypt.hash(password, 10);
             const newUser = await this.userRepo.createUser({ username, email, password: hashedPassword });
 
             if (!newUser) {
-                return { 
-                    Code: -1, 
-                    Message: "Failed to register user", 
-                    Data: null 
-                };
+                return HttpResponse.error("Failed to register user");
             }
 
-            return { 
-                Code: 1, 
-                Message: "User registered successfully", 
-                Data: newUser 
-            };
+            return HttpResponse.success("User registered successfully", newUser);
         } catch (error) {
             console.error("Error in registerUser:", error);
-            return { 
-                Code: -1, 
-                Message: "Internal Server Error", 
-                Data: null 
-            };
+            return HttpResponse.error("Internal Server Error");
         }
     }
 
@@ -48,36 +33,22 @@ class AuthService {
         try {
             const user = await this.userRepo.findByEmail(email);
             if (!user) {
-                return { 
-                    Code: -1, 
-                    Message: "Invalid email or password", 
-                    Data: null 
-                };
+                return HttpResponse.error("Invalid email or password");
             }
 
             const isMatch = await bcrypt.compare(password, user.password);
             if (!isMatch) {
-                return { 
-                    Code: -1, 
-                    Message: "Invalid email or password", 
-                    Data: null 
-                };
+                return HttpResponse.error("Invalid email or password");
             }
 
-            const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1h" });
+            const token = jwt.sign({ id: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "24h" });
 
-            return { 
-                Code: 1, 
-                Message: "Login successful", 
-                Data: { token, user } 
-            };
+            const { password: _, ...userWithoutPassword } = user.toObject();
+
+            return HttpResponse.success("Login successful", { token, user: userWithoutPassword });
         } catch (error) {
             console.error("Error in loginUser:", error);
-            return { 
-                Code: -1, 
-                Message: "Internal Server Error", 
-                Data: null 
-            };
+            return HttpResponse.error("Internal Server Error");
         }
     }
 
@@ -85,24 +56,12 @@ class AuthService {
         try {
             const user = await this.userRepo.findById(id);
             if (!user) {
-                return { 
-                    Code: -1, 
-                    Message: "User not found", 
-                    Data: null 
-                };
+                return HttpResponse.error("User not found");
             }
-            return { 
-                Code: 1, 
-                Message: "User found", 
-                Data: user 
-            };
+            return HttpResponse.success("User found", user);
         } catch (error) {
             console.error("Error in getUserById:", error);
-            return { 
-                Code: -1,
-                Message: "Internal Server Error", 
-                Data: null 
-            };
+            return HttpResponse.error("Internal Server Error");
         }
     }
 }

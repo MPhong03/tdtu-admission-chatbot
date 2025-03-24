@@ -1,8 +1,11 @@
+const HttpResponse = require("../data/responses/http.response");
 const AuthService = require("../services/auth.service");
+const TurndownService = require("turndown");
 
 class AuthController {
     constructor() {
         this.authService = new AuthService();
+        this.turndownService = new TurndownService();
 
         this.register = this.register.bind(this);
         this.login = this.login.bind(this);
@@ -11,11 +14,9 @@ class AuthController {
     }
 
     async hello(req, res) {
-        res.json({ 
-            Code: 1, 
-            Message: "Hello World", 
-            Data: null 
-        });
+        const html = "<h1>Hướng dẫn xét tuyển</h1><p>Bạn cần đăng ký <a href='https://example.com'>tại đây</a>.</p>";
+
+        res.json(HttpResponse.success(this.turndownService.turndown(html)));
     }
 
     async register(req, res) {
@@ -23,11 +24,7 @@ class AuthController {
             const result = await this.authService.registerUser(req.body);
             res.json(result);
         } catch (error) {
-            res.status(500).json({ 
-                Code: -1, 
-                Message: "Internal Server Error", 
-                Data: null 
-            });
+            res.status(500).json(HttpResponse.error("Internal Server Error"));
         }
     }
 
@@ -36,11 +33,7 @@ class AuthController {
             const result = await this.authService.loginUser(req.body);
             res.json(result);
         } catch (error) {
-            res.status(500).json({ 
-                Code: -1, 
-                Message: "Internal Server Error", 
-                Data: null 
-            });
+            res.status(500).json(HttpResponse.error("Internal Server Error"));
         }
     }
 
@@ -49,11 +42,7 @@ class AuthController {
             const result = await this.authService.getUserById(req.user.id);
             res.json(result);
         } catch (error) {
-            res.status(500).json({
-                Code: -1,
-                Message: "Internal Server Error",
-                Data: null
-            });
+            res.status(500).json(HttpResponse.error("Internal Server Error"));
         }
     }
 }

@@ -1,0 +1,29 @@
+{
+    "index_patterns": [
+        "admission_regulations_index"
+    ],
+    "template": {
+        "settings": {
+            "number_of_shards": 1
+        },
+        "mappings": {
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "title": {
+                    "type": "text"
+                },
+                "description": {
+                    "type": "text"
+                },
+                "file_url": {
+                    "type": "keyword"
+                },
+                "content": {
+                    "type": "text"
+                }
+            }
+        }
+    }
+}

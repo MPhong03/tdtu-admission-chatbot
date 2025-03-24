@@ -16,6 +16,7 @@
   "author": "MPhong",
   "license": "ISC",
   "dependencies": {
+    "@elastic/elasticsearch": "^8.17.1",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
@@ -26,6 +27,7 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.10.1",
     "path": "^0.12.7",
+    "turndown": "^7.2.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {

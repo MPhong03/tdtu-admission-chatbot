@@ -4,6 +4,7 @@ const cors = require("cors");
 const connectDB = require("./configs/db.config");
 const apiRoutes = require("./routes/index.route");
 const Logger = require("./utils/logger.util");
+const HttpResponse = require("./data/responses/http.response");
 
 dotenv.config();
 connectDB();
@@ -33,19 +34,11 @@ app.use("/api", apiRoutes);
 // EXCEPTION
 app.use((err, req, res, next) => {
     Logger.error("Unhandled Error", err);
-    res.status(500).json({ 
-        Code: -1, 
-        Message: "Internal Server Error", 
-        Data: null 
-    });
+    res.status(500).json(HttpResponse.error("Internal Server Error"));
 });
 
 app.use((req, res, next) => {
-    res.status(404).json({
-        Code: -1,
-        Message: "Route not found",
-        Data: null
-    });
+    res.status(404).json(HttpResponse.error("Route Not Found"));
 });
 
 module.exports = app;

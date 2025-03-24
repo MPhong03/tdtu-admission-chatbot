@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const HttpResponse = require("../data/responses/http.response");
 
 const verifyToken = (req, res, next) => {
     const authHeader = req.header("Authorization");
@@ -13,20 +14,16 @@ const verifyToken = (req, res, next) => {
         req.user = decoded;
         next();
     } catch (error) {
-        res.json({ 
-            Code: -1, 
-            Message: "Invalid Token", 
-            Data: null 
-        });
+        res.json(HttpResponse.error("Invalid Token"));
     }
 };
 
 const isAdmin = (req, res, next) => {
     if (!req.user) 
-        return res.json({ Code: -1, Message: "User not authenticated", Data: null });
+        return res.json(HttpResponse.error("User not authenticated"));
 
     if (req.user.role !== "admin") 
-        return res.json({ Code: -1, Message: "Admin Access Required", Data: null });
+        return res.json(HttpResponse.error("Admin Access Required"));
     
     next();
 };

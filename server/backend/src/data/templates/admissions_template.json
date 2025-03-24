@@ -1,0 +1,49 @@
+{
+    "index_patterns": [
+        "admissions"
+    ],
+    "template": {
+        "settings": {
+            "number_of_shards": 1,
+            "number_of_replicas": 1
+        },
+        "mappings": {
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "method": {
+                    "type": "text"
+                },
+                "method_code": {
+                    "type": "keyword"
+                },
+                "description": {
+                    "type": "text"
+                },
+                "conditions": {
+                    "type": "text"
+                },
+                "registration_time": {
+                    "type": "date",
+                    "format": "dd/MM/yyyy"
+                },
+                "registration_url": {
+                    "type": "keyword"
+                },
+                "required_documents": {
+                    "type": "text"
+                },
+                "tuition_fee": {
+                    "type": "text"
+                },
+                "priority_policy": {
+                    "type": "text"
+                },
+                "special_requirements": {
+                    "type": "text"
+                }
+            }
+        }
+    }
+}

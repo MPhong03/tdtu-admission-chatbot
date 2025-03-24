@@ -1,0 +1,64 @@
+{
+    "index_patterns": [
+        "majors_index"
+    ],
+    "template": {
+        "settings": {
+            "number_of_shards": 1
+        },
+        "mappings": {
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "text"
+                },
+                "description": {
+                    "type": "text"
+                },
+                "why_choose": {
+                    "type": "text"
+                },
+                "programs": {
+                    "type": "nested",
+                    "properties": {
+                        "program_name": {
+                            "type": "text"
+                        },
+                        "program_code": {
+                            "type": "keyword"
+                        },
+                        "description": {
+                            "type": "text"
+                        },
+                        "degree": {
+                            "type": "text"
+                        },
+                        "duration": {
+                            "type": "text"
+                        },
+                        "curriculum": {
+                            "type": "text"
+                        },
+                        "expected_outcome": {
+                            "type": "text"
+                        },
+                        "special_admission": {
+                            "type": "text"
+                        },
+                        "exam_admission": {
+                            "type": "text"
+                        },
+                        "start_date": {
+                            "type": "date"
+                        },
+                        "tuition_fee": {
+                            "type": "text"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

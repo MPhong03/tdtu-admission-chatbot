@@ -1,0 +1,49 @@
+{
+    "index_patterns": [
+        "university_info_index"
+    ],
+    "template": {
+        "settings": {
+            "number_of_shards": 1
+        },
+        "mappings": {
+            "properties": {
+                "id": {
+                    "type": "integer"
+                },
+                "name": {
+                    "type": "text"
+                },
+                "description": {
+                    "type": "text"
+                },
+                "established_year": {
+                    "type": "integer"
+                },
+                "address": {
+                    "type": "text"
+                },
+                "website": {
+                    "type": "keyword"
+                },
+                "contact_email": {
+                    "type": "keyword"
+                },
+                "contact_phone": {
+                    "type": "keyword"
+                },
+                "faculties": {
+                    "type": "nested",
+                    "properties": {
+                        "faculty_name": {
+                            "type": "text"
+                        },
+                        "faculty_description": {
+                            "type": "text"
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
