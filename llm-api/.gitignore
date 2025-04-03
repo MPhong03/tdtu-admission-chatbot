@@ -1,0 +1,26 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env
+.env.*
+
+# PyTorch / Huggingface cache
+.cache/
+models/
+*.bin
+
+# Logs and temp
+*.log
+*.tmp
+
+# VS Code / JetBrains IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

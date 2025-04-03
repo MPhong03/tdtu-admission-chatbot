@@ -4,9 +4,9 @@ const ElasticController = require("../controllers/elastic.controller");
 const router = express.Router();
 
 // GET
-router.get("/templates", ElasticController.getTemplates);
+router.get("/types", ElasticController.getAvailableTypes);
 router.get("/index/:type/search", ElasticController.search);
-router.get("/index/:indexName/all", ElasticController.getAllData);
+router.get("/index/:type/all", ElasticController.getAllData);
 
 // POST
 router.post("/index/:type", ElasticController.createIndex);

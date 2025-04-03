@@ -2,28 +2,18 @@ const elasticClient = require("../configs/elastic.config");
 const fs = require("fs");
 
 class ElasticRepository {
-    async createIndexTemplate(indexName, template) {
-        try {
-            await elasticClient.indices.putIndexTemplate({
-                name: `${indexName}_template`,
-                body: {
-                    index_patterns: [`${indexName}*`], // Chỉ định index áp dụng template
-                    settings: template.settings,
-                    mappings: template.mappings
-                }
-            });
-
-            console.log(`Index Template '${indexName}_template' đã được tạo.`);
-        } catch (error) {
-            throw new Error(`Lỗi khi tạo index template: ${error.message}`);
-        }
-    }
-
-    async createIndex(indexName) {
+    async createIndexWithMapping(indexName, mapping) {
         try {
             const exists = await elasticClient.indices.exists({ index: indexName });
-            if (!exists.body) {
-                await elasticClient.indices.create({ index: indexName });
+            if (!exists) {
+                await elasticClient.indices.create({
+                    index: indexName,
+                    body: {
+                        mappings: {
+                            properties: mapping
+                        }
+                    }
+                });
                 console.log(`Index '${indexName}' đã được tạo.`);
                 return true;
             }
@@ -57,7 +47,7 @@ class ElasticRepository {
 
     async addData(indexName, data) {
         try {
-            const body = data.flatMap(doc => [{ index: { _index: indexName, _id: doc.id } }, doc]);
+            const body = data.flatMap(doc => [{ index: { _index: indexName, _id: doc.id || doc._id } }, doc]);
             const bulkResponse = await elasticClient.bulk({ refresh: true, body });
 
             if (bulkResponse.errors) {
@@ -93,6 +83,30 @@ class ElasticRepository {
         }
     }
 
+    async searchByVector(indexName, queryVector, size = 3) {
+        try {
+            const result = await elasticClient.search({
+                index: indexName,
+                body: {
+                    size,
+                    query: {
+                        script_score: {
+                            query: { match_all: {} },
+                            script: {
+                                source: "cosineSimilarity(params.query_vector, 'embedding') + 1.0",
+                                params: { query_vector: queryVector }
+                            }
+                        }
+                    }
+                }
+            });
+
+            return result.hits.hits.map(hit => hit._source);
+        } catch (error) {
+            throw new Error(`Lỗi vector search: ${error.message}`);
+        }
+    }
+
     async getAllData(indexName, size = 1000) {
         try {
             const result = await elasticClient.search({
@@ -104,12 +118,12 @@ class ElasticRepository {
                     size
                 }
             });
-    
+
             return result.hits.hits.map(hit => hit._source);
         } catch (error) {
             throw new Error(`Lỗi khi lấy toàn bộ dữ liệu từ '${indexName}': ${error.message}`);
         }
-    }    
+    }
 }
 
 module.exports = new ElasticRepository();

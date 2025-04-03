@@ -3,16 +3,8 @@
         "index": "admission_methods_index",
         "template": "templates/admission_methods_template.json"
     },
-    "majors": {
-        "index": "majors_index",
-        "template": "templates/majors_template.json"
-    },
     "admission_regulations": {
         "index": "admission_regulations_index",
         "template": "templates/admission_regulations_template.json"
-    },
-    "university_info": {
-        "index": "university_info_index",
-        "template": "templates/university_info_template.json"
     }
 }

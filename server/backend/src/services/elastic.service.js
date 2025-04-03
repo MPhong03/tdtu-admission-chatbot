@@ -1,39 +1,32 @@
 const fs = require("fs");
 const path = require("path");
+const mongoose = require("mongoose");
 const ElasticRepository = require("../repositories/elastic.repository");
+const { convertSchemaToElasticMapping } = require("../utils/elastic.util");
 const HttpResponse = require("../data/responses/http.response");
 
+// Cấu hình schema (type → schema Mongoose)
+const SCHEMA_MAP = {
+    major: require("../models/Major"),
+    programme: require("../models/Programme"),
+    majorProgramme: require("../models/MajorProgramme"),
+    document: require("../models/Document"),
+    article: require("../models/Article")
+};
+
 class ElasticService {
-    constructor() {
-        // Cache templates vào bộ nhớ để tránh đọc file nhiều lần
-        this.templatesPath = path.join(__dirname, "../data/templates.json");
-        this.templates = this.loadTemplates();
+    getAvailableTypes() {
+        return Object.keys(SCHEMA_MAP);
     }
 
-    // Load templates từ file JSON
-    loadTemplates() {
-        try {
-            return JSON.parse(fs.readFileSync(this.templatesPath, "utf-8"));
-        } catch (error) {
-            console.error("Lỗi khi tải templates:", error);
-            return {};
-        }
+    getIndexName(type) {
+        if (!SCHEMA_MAP[type]) return null;
+        return `kag_${type}`;
     }
 
-    // Lấy danh sách các loại dữ liệu có thể index
-    getAvailableTemplates() {
-        return Object.keys(this.templates);
-    }
-
-    // Lấy index tương ứng từ templates.json
-    getIndexByType(type) {
-        return this.templates[type]?.index || null;
-    }
-
-    // Kiểm tra index tồn tại, nếu chưa thì tạo mới
     async ensureIndexExists(type) {
-        const indexName = this.getIndexByType(type);
-        if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
+        const indexName = this.getIndexName(type);
+        if (!indexName) return HttpResponse.error(`Không tìm thấy schema cho loại '${type}'.`);
 
         const exists = await ElasticRepository.checkIndexExists(indexName);
         if (!exists) {
@@ -42,38 +35,24 @@ class ElasticService {
         return HttpResponse.success(`Index '${indexName}' đã tồn tại.`);
     }
 
-    // Tạo index theo template
     async createIndex(type) {
         try {
-            const templateInfo = this.templates[type];
-            if (!templateInfo) {
-                return HttpResponse.error(`Template '${type}' không tồn tại.`);
-            }
+            const schema = SCHEMA_MAP[type];
+            if (!schema) return HttpResponse.error(`Schema '${type}' không tồn tại.`);
 
-            const templatePath = path.join(__dirname, "../data", templateInfo.template);
-            if (!fs.existsSync(templatePath)) {
-                return HttpResponse.error(`File template '${templateInfo.template}' không tồn tại.`);
-            }
+            const indexName = this.getIndexName(type);
+            const mapping = convertSchemaToElasticMapping(schema);
 
-            const template = JSON.parse(fs.readFileSync(templatePath, "utf-8"));
-
-            // Tạo Index Template trước
-            await ElasticRepository.createIndexTemplate(templateInfo.index, template);
-
-            // Sau đó tạo Index thực tế
-            const success = await ElasticRepository.createIndex(templateInfo.index);
-            return success
-                ? HttpResponse.success(`Index '${templateInfo.index}' đã được tạo thành công.`)
-                : HttpResponse.error(`Index '${templateInfo.index}' đã tồn tại.`);
+            await ElasticRepository.createIndexWithMapping(indexName, mapping);
+            return HttpResponse.success(`Index '${indexName}' đã được tạo.`);
         } catch (error) {
             return HttpResponse.error(`Lỗi khi tạo index '${type}': ${error.message}`);
         }
-    }  
+    }
 
-    // Xóa index theo loại dữ liệu
     async deleteIndex(type) {
         try {
-            const indexName = this.getIndexByType(type);
+            const indexName = this.getIndexName(type);
             if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
 
             const success = await ElasticRepository.deleteIndex(indexName);
@@ -85,10 +64,9 @@ class ElasticService {
         }
     }
 
-    // Thêm dữ liệu vào index (tự động tạo index nếu chưa tồn tại)
     async addData(type, data) {
         try {
-            const indexName = this.getIndexByType(type);
+            const indexName = this.getIndexName(type);
             if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
 
             await this.ensureIndexExists(type);
@@ -99,26 +77,9 @@ class ElasticService {
         }
     }
 
-    // Cập nhật dữ liệu trong index (cập nhật theo ID)
-    async updateData(type, id, newData) {
-        try {
-            const indexName = this.getIndexByType(type);
-            if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
-
-            await this.ensureIndexExists(type);
-            const success = await ElasticRepository.updateData(indexName, id, newData);
-            return success
-                ? HttpResponse.success(`Dữ liệu trong '${indexName}' đã được cập nhật.`)
-                : HttpResponse.error(`Không tìm thấy dữ liệu có ID '${id}' trong '${indexName}'.`);
-        } catch (error) {
-            return HttpResponse.error(`Lỗi khi cập nhật dữ liệu trong '${type}': ${error.message}`);
-        }
-    }
-
-    // Tìm kiếm dữ liệu trong index
     async search(type, query, fields = ["*"], from = 0, size = 10) {
         try {
-            const indexName = this.getIndexByType(type);
+            const indexName = this.getIndexName(type);
             if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
 
             const results = await ElasticRepository.search(indexName, query, fields, from, size);
@@ -130,15 +91,15 @@ class ElasticService {
 
     async getAllData(type) {
         try {
-            const indexName = this.getIndexByType(type);
+            const indexName = this.getIndexName(type);
             if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
-    
+
             const data = await ElasticRepository.getAllData(indexName);
             return HttpResponse.success(`Dữ liệu từ '${indexName}':`, data);
         } catch (error) {
             return HttpResponse.error(error.message);
         }
-    }    
+    }
 }
 
 module.exports = new ElasticService();

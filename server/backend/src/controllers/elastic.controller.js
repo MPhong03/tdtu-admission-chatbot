@@ -1,9 +1,9 @@
 const ElasticService = require("../services/elastic.service");
 
 class ElasticController {
-    async getTemplates(req, res) {
-        const templates = ElasticService.getAvailableTemplates();
-        res.json({ templates });
+    async getAvailableTypes(req, res) {
+        const types = ElasticService.getAvailableTypes();
+        res.json({ types });
     }
 
     async createIndex(req, res) {
@@ -33,10 +33,10 @@ class ElasticController {
     }
 
     async getAllData(req, res) {
-        const { indexName } = req.params;
-        const result = await ElasticService.getAllData(indexName);
+        const { type } = req.params;
+        const result = await ElasticService.getAllData(type);
         res.json(result);
-    }    
+    }
 }
 
 module.exports = new ElasticController();
