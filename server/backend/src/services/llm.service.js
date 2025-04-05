@@ -3,7 +3,7 @@ const fetch = require("node-fetch");
 class LLMService {
     constructor() {
         this.llmapi = process.env.LLM_API || "http://localhost:8000";
-        this.geminiApi = process.env.GEMINI_API_URL || "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent";
+        this.geminiApi = process.env.GEMINI_API_URL || "http://localhost:8000";
         this.apiKey = process.env.GEMINI_API_KEY;
     }
 
@@ -40,6 +40,15 @@ class LLMService {
     }
 
     // Tạo câu trả lời từ prompt qua Gemini API
+    /**
+     * 
+     * @param {
+        "contents": [{
+            "parts":[{"text": "Explain how AI works"}]
+            }]
+        } 
+     * @returns "Text"
+     */
     async generateAnswer(prompt) {
         try {
             const res = await fetch(`${this.geminiApi}?key=${this.apiKey}`, {
@@ -69,11 +78,16 @@ class LLMService {
         const bestIndex = scores.indexOf(Math.max(...scores));
         const bestContext = candidates[bestIndex];
 
-        const prompt = `Ngữ cảnh:
-                        ${bestContext}
+        const prompt = `
+            Bạn là một cố vấn tuyển sinh tại Trường Đại học Tôn Đức Thắng (TDTU). Dưới đây là một đoạn thông tin liên quan đến chương trình đào tạo:
 
-                        Câu hỏi: ${question}
-                        Trả lời:`;
+            ${bestContext}
+
+            Dựa trên nội dung trên, hãy trả lời câu hỏi sau một cách tự nhiên, rõ ràng, dễ hiểu:
+
+            Câu hỏi: ${question}
+            Trả lời:
+            `;
         return await this.generateAnswer(prompt);
     }
 }
