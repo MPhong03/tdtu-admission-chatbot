@@ -19,6 +19,17 @@ const convertSchemaToElasticMapping = (mongooseSchema) => {
     const fields = mongooseSchema.obj;
 
     for (const [field, value] of Object.entries(fields)) {
+        if (field === 'name' || field === 'description') {
+            mapping[field] = {
+                type: 'text',
+                analyzer: 'vi_analyzer',
+                fields: {
+                    keyword: { type: 'keyword' },
+                    suggest: { type: 'completion' }
+                }
+            };
+        }
+        
         if (Array.isArray(value)) {
             mapping[field] = { type: 'keyword' };
         }

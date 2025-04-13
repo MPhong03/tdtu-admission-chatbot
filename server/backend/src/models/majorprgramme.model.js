@@ -8,16 +8,13 @@ const MajorProgrammeSchema = new mongoose.Schema({
     majorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Major', required: true },
     programmeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Programme', required: true },
     code: { type: String, required: true },
-    degree: { type: String },
-    duration: { type: String },
-    programme: { type: String },
-    outcome: { type: String },
-    admission: { type: String },
-    nationalExamAdmission: { type: String },
-    startTerm: { type: String },
-    tuitionFee: { type: String },
+    content: {
+        type: Map,
+        of: String
+    }
 }, {
-    timestamps: true
+    timestamps: true,
+    strict: false
 });
 
-module.exports = mongoose.model("MajorProgramme", MajorProgramme);
+module.exports = mongoose.model("MajorProgramme", MajorProgrammeSchema);

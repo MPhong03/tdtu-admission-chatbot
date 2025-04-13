@@ -59,17 +59,16 @@ def crawl_major_detail(url):
         program = data['programs'][i]
         tt_block = content.find('div', class_='tab-chuong-trinh-tt')
         if tt_block:
+            # Lấy toàn bộ văn bản trong các thẻ <strong> rồi nối lại thành một chuỗi duy nhất
             strongs = [get_text_safe(s) for s in tt_block.find_all('strong') if get_text_safe(s)]
-            full_text = ' '.join(strongs).strip()
+            full_text = ''.join(strongs).strip()
 
-            # Regex tìm tên ngành và mã ngành, ví dụ:
-            # - Kỹ thuật phần mềm - Mã ngành: F7480103
-            # - Luật (Chuyên ngành...) - Mã ngành: F 7380101
-            match = re.search(r'^(.*?)\s*[-–—]?\s*Mã ngành[:：]?\s*([A-Z]{0,2}\s*\d{5,})', full_text, re.IGNORECASE)
+            # Cập nhật regex để tách tên ngành và mã ngành
+            match = re.search(r'^(.*?)\s*[-–—]?\s*Mã ngành[:：]?\s*([A-Z]{0,2}\s*\d{5,}[A-Z]?)', full_text, re.IGNORECASE)
 
             if match:
                 program['name'] = match.group(1).strip()
-                program['major_code'] = match.group(2).replace(" ", "").strip()  # Loại bỏ khoảng trắng
+                program['major_code'] = match.group(2).replace(" ", "").strip()
             else:
                 program['name'] = full_text
                 program['major_code'] = ''
@@ -143,7 +142,7 @@ def main():
     with open(os.path.join(OUTPUT_DIR, 'programme_types.json'), 'w', encoding='utf-8') as f:
         json.dump(sorted(list(program_set)), f, ensure_ascii=False, indent=2)
 
-    print("✅ Hoàn tất! Đã lưu vào thư mục 'output'")
+    print("Hoàn tất! Đã lưu vào thư mục 'output'")
 
 if __name__ == '__main__':
     main()

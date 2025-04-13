@@ -1,4 +1,4 @@
-const fetch = require("node-fetch");
+const axios = require("axios");
 
 class LLMService {
     constructor() {
@@ -10,13 +10,8 @@ class LLMService {
     // Gọi local API để lấy embedding vector
     async getEmbedding(text) {
         try {
-            const res = await fetch(`${this.llmapi}/embedding`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text })
-            });
-            const json = await res.json();
-            return json.embedding;
+            const res = await axios.post(`${this.llmapi}/embedding`, { text });
+            return res.data.embedding;
         } catch (err) {
             console.error("Embedding Error:", err);
             return null;
@@ -26,13 +21,8 @@ class LLMService {
     // Gọi local API để tính similarity giữa 1 câu với nhiều câu
     async compareSimilarity(source, targets = []) {
         try {
-            const res = await fetch(`${this.llmapi}/similarity`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ source, targets })
-            });
-            const json = await res.json();
-            return json.scores;
+            const res = await axios.post(`${this.llmapi}/similarity`, { source, targets });
+            return res.data.scores;
         } catch (err) {
             console.error("Similarity Error:", err);
             return [];
@@ -51,19 +41,14 @@ class LLMService {
      */
     async generateAnswer(prompt) {
         try {
-            const res = await fetch(`${this.geminiApi}?key=${this.apiKey}`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            parts: [{ text: prompt }]
-                        }
-                    ]
-                })
+            const res = await axios.post(`${this.geminiApi}?key=${this.apiKey}`, {
+                contents: [
+                    {
+                        parts: [{ text: prompt }]
+                    }
+                ]
             });
-            const json = await res.json();
-            return json.candidates?.[0]?.content?.parts?.[0]?.text || "[Không có câu trả lời]";
+            return res.data.candidates?.[0]?.content?.parts?.[0]?.text || "[Không có câu trả lời]";
         } catch (err) {
             console.error("Gemini Generate Error:", err);
             return "[Lỗi tạo câu trả lời]";
@@ -87,7 +72,8 @@ class LLMService {
 
             Câu hỏi: ${question}
             Trả lời:
-            `;
+        `;
+
         return await this.generateAnswer(prompt);
     }
 }

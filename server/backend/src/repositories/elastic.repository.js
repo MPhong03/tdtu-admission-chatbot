@@ -1,4 +1,5 @@
 const elasticClient = require("../configs/elastic.config");
+const { v4: uuidv4 } = require("uuid");
 const fs = require("fs");
 
 class ElasticRepository {
@@ -25,7 +26,7 @@ class ElasticRepository {
 
     async checkIndexExists(indexName) {
         try {
-            const { body } = await elasticClient.indices.exists({ index: indexName });
+            const body = await elasticClient.indices.exists({ index: indexName });
             return body;
         } catch (error) {
             throw new Error(`Error checking index: ${error.message}`);
@@ -47,13 +48,37 @@ class ElasticRepository {
 
     async addData(indexName, data) {
         try {
-            const body = data.flatMap(doc => [{ index: { _index: indexName, _id: doc.id || doc._id } }, doc]);
+            const body = data.flatMap(doc => {
+                const id = doc.id || uuidv4();
+                delete doc.id;
+
+                if (doc.embedding && Array.isArray(doc.embedding)) {
+                    doc.embedding = doc.embedding.map(v => parseFloat(v));
+                }
+
+                return [{ index: { _index: indexName, _id: id } }, doc];
+            });
+    
             const bulkResponse = await elasticClient.bulk({ refresh: true, body });
-
+    
             if (bulkResponse.errors) {
-                throw new Error("Bulk insert encountered errors.");
+                const erroredDocuments = [];
+                bulkResponse.items.forEach((action, i) => {
+                    const operation = Object.keys(action)[0];
+                    const status = action[operation].status;
+                    if (status >= 400) {
+                        erroredDocuments.push({
+                            status,
+                            error: action[operation].error,
+                            document: data[i]
+                        });
+                    }
+                });
+    
+                console.error("Lỗi khi bulk insert:", erroredDocuments);
+                throw new Error(`Bulk insert encountered errors. Số lỗi: ${erroredDocuments.length}`);
             }
-
+    
             return true;
         } catch (error) {
             throw new Error(`Error adding data: ${error.message}`);
@@ -69,7 +94,8 @@ class ElasticRepository {
                         multi_match: {
                             query,
                             fields,
-                            fuzziness: "AUTO"
+                            type: "best_fields",
+                            fuzziness: "AUTO",
                         }
                     },
                     from,
@@ -100,12 +126,18 @@ class ElasticRepository {
                     }
                 }
             });
-
-            return result.hits.hits.map(hit => hit._source);
+    
+            return result.hits.hits.map(hit => {
+                const { embedding, ...rest } = hit._source;  // loại bỏ embedding
+                return {
+                    ...rest,
+                    _score: hit._score
+                };
+            });            
         } catch (error) {
             throw new Error(`Lỗi vector search: ${error.message}`);
         }
-    }
+    }    
 
     async getAllData(indexName, size = 1000) {
         try {

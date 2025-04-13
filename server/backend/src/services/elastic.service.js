@@ -4,14 +4,17 @@ const mongoose = require("mongoose");
 const ElasticRepository = require("../repositories/elastic.repository");
 const { convertSchemaToElasticMapping } = require("../utils/elastic.util");
 const HttpResponse = require("../data/responses/http.response");
+const llmService = require("./llm.service");
+const { group } = require("console");
 
 // Cấu hình schema (type → schema Mongoose)
 const SCHEMA_MAP = {
-    major: require("../models/Major"),
-    programme: require("../models/Programme"),
-    majorProgramme: require("../models/MajorProgramme"),
-    document: require("../models/Document"),
-    article: require("../models/Article")
+    group: require("../models/group.model"),
+    major: require("../models/major.model"),
+    programme: require("../models/programme.model"),
+    majorProgramme: require("../models/majorprgramme.model"),
+    document: require("../models/document.model"),
+    article: require("../models/article.model")
 };
 
 class ElasticService {
@@ -68,9 +71,25 @@ class ElasticService {
         try {
             const indexName = this.getIndexName(type);
             if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
-
+    
             await this.ensureIndexExists(type);
-            await ElasticRepository.addData(indexName, data);
+    
+            const enrichedData = await Promise.all(data.map(async (doc) => {
+                const id = doc._id || doc.id || new mongoose.Types.ObjectId().toString();
+                delete doc._id;
+    
+                if (!doc.embedding) {
+                    const text = `${doc.name || ""} ${doc.description || ""} ${(doc.tag || []).join(" ")}`;
+                    const embedding = await llmService.getEmbedding(text);
+                    if (embedding) {
+                        doc.embedding = embedding;
+                    }
+                }
+    
+                return { ...doc, id };
+            }));
+    
+            await ElasticRepository.addData(indexName, enrichedData);
             return HttpResponse.success(`Dữ liệu đã được thêm vào '${indexName}' thành công.`);
         } catch (error) {
             return HttpResponse.error(`Lỗi khi thêm dữ liệu vào '${type}': ${error.message}`);
@@ -88,6 +107,24 @@ class ElasticService {
             return HttpResponse.error(`Lỗi khi tìm kiếm trong '${type}': ${error.message}`);
         }
     }
+
+    // VECTOR SEARCH
+    async searchByVector(type, queryText, size = 5) {
+        try {
+            const indexName = this.getIndexName(type);
+            if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
+    
+            // Lấy embedding từ văn bản truy vấn
+            const embedding = await llmService.getEmbedding(queryText);
+            if (!embedding) return HttpResponse.error("Không tạo được vector embedding từ truy vấn.");
+    
+            // Gọi tìm kiếm vector
+            const results = await ElasticRepository.searchByVector(indexName, embedding, size);
+            return HttpResponse.success("Kết quả tìm kiếm bằng vector:", results);
+        } catch (error) {
+            return HttpResponse.error(`Lỗi tìm kiếm vector cho '${type}': ${error.message}`);
+        }
+    }    
 
     async getAllData(type) {
         try {
