@@ -146,8 +146,9 @@ class Neo4jService {
         const session = getSession();
         try {
             let mainNodes = [];
-            const relatedSet = new Map();
+            let allRelatedNodes = [];
 
+            // Step 1: Tìm tất cả các main nodes cho mỗi label trong pairs
             for (const { label, vector } of pairs) {
                 const scoredNodes = await this.getScoredNodes(session, label, vector, topK);
 
@@ -159,28 +160,32 @@ class Neo4jService {
                         label
                     });
 
-                    const related = await this.getRelatedNodes(session, label, mainNode.id);
-                    for (const r of related) {
-                        if (!relatedSet.has(r.id)) {
-                            relatedSet.set(r.id, r);
-                        }
-                    }
+                    // Tìm các related nodes cho mỗi main node
+                    const relatedNodes = await this.getRelatedNodes(session, label, mainNode.id);
+                    allRelatedNodes.push(relatedNodes);
                 }
             }
 
-            mainNodes.sort((a, b) => b.similarity - a.similarity);
-            const relatedAll = Array.from(relatedSet.values()).slice(0, 3);
+            // Step 2: Lấy các node chung trong tất cả các relatedNodes
+            const commonRelatedNodes = this.getCommonRelatedNodes(allRelatedNodes);
 
-            return { mainNodes, relatedAll };
+            // Step 3: Sắp xếp mainNodes và relatedNodes
+            mainNodes.sort((a, b) => b.similarity - a.similarity);
+            commonRelatedNodes.sort((a, b) => b.similarity - a.similarity);
+
+            return { mainNodes, relatedCommon: commonRelatedNodes };
         } finally {
             await session.close();
         }
     }
 
+    /**
+     * Lấy các node đã được tính điểm similarity dựa trên vector embedding
+     */
     async getScoredNodes(session, label, vector, topK) {
         const result = await session.run(`
-            MATCH (n:${label}) WHERE n.embedding IS NOT NULL RETURN n
-        `);
+        MATCH (n:${label}) WHERE n.embedding IS NOT NULL RETURN n
+    `);
 
         const nodes = result.records.map(r => {
             const node = r.get('n');
@@ -198,63 +203,70 @@ class Neo4jService {
             .slice(0, topK);
     }
 
+    /**
+     * Lấy các related nodes cho một main node từ cơ sở dữ liệu Neo4j
+     */
     async getRelatedNodes(session, label, nodeId) {
-        // const relatedQuery = this.getTraversalQuery(label);
-        // if (!relatedQuery) return [];
+        const relatedQuery = this.getTraversalQuery(label);
+        if (!relatedQuery) return [];
 
-        // const relatedResult = await session.run(relatedQuery, { nodeId });
-        // return relatedResult.records[0]?.get('relatedNodes')?.map(rel => {
-        //     const { embedding, ...rest } = rel.properties;
-        //     return {
-        //         ...rest,
-        //         __label: rel.labels?.[0],
-        //         __identity: rel.identity?.toInt()
-        //     };
-        // }) || [];
-        return await this.traverseGeneric(session, nodeId, 1);
+        const relatedResult = await session.run(relatedQuery, { nodeId });
+        return relatedResult.records[0]?.get('relatedNodes')?.map(rel => {
+            const { embedding, ...rest } = rel.properties;
+            return {
+                ...rest,
+                __label: rel.labels?.[0],
+                __identity: rel.identity?.toInt()
+            };
+        }) || [];
     }
 
+    /**
+     * Truy vấn các node liên kết với một node dựa trên mối quan hệ trong cơ sở dữ liệu Neo4j
+     */
     getTraversalQuery(label) {
         switch (label) {
             case 'Major':
-                return `MATCH (n:Major {id: $nodeId})-[:HAS_PROGRAMME]->(:Programme)-[:IS_INSTANCE_OF]->(mp:MajorProgramme) RETURN collect(DISTINCT mp) AS relatedNodes`;
+                return `MATCH (m:Major {id: $nodeId})-[:HAS_PROGRAMME]->(p:Programme)-[:IS_INSTANCE_OF]->(mp:MajorProgramme)
+                        WHERE mp.name = m.name AND mp.tab = p.name
+                        RETURN collect(DISTINCT mp) AS relatedNodes`;
+    
             case 'Programme':
-                return `MATCH (n:Programme {id: $nodeId})-[:IS_INSTANCE_OF]->(mp:MajorProgramme) RETURN collect(DISTINCT mp) AS relatedNodes`;
+                return `MATCH (p:Programme {id: $nodeId})-[:IS_INSTANCE_OF]->(mp:MajorProgramme)
+                        RETURN collect(DISTINCT mp) AS relatedNodes`;
+    
+            // Các label khác
             case 'Group':
-                return `MATCH (n:Group {id: $nodeId})-[:HAS_MAJOR]->(m:Major) RETURN collect(DISTINCT m) AS relatedNodes`;
+                return `MATCH (g:Group {id: $nodeId})-[:HAS_MAJOR]->(m:Major)
+                        RETURN collect(DISTINCT m) AS relatedNodes`;
+                
             case 'MajorProgramme':
-                return `MATCH (mp:MajorProgramme {id: $nodeId})<-[:IS_INSTANCE_OF]-(:Programme)<-[:HAS_PROGRAMME]-(m:Major) RETURN collect(DISTINCT m) AS relatedNodes`;
+                return `MATCH (mp:MajorProgramme {id: $nodeId})<-[:IS_INSTANCE_OF]-(p:Programme)<-[:HAS_PROGRAMME]-(m:Major)
+                        RETURN collect(DISTINCT m) AS relatedNodes`;
+    
             default:
                 return null;
         }
     }
 
     /**
-     * Truy vấn các node liên kết với một node bất kỳ theo chiều tự do và độ sâu mong muốn.
-     *
-     * @param {Object} session - Neo4j session đang sử dụng.
-     * @param {string} nodeId - ID của node gốc muốn truy vấn.
-     * @param {number} depth - Độ sâu tối đa của traversal (mặc định = 2).
-     * @returns {Array} Danh sách các node liên kết (loại bỏ embedding).
+     * Tìm các related nodes chung cho tất cả các danh sách related nodes
+     * Chỉ lấy các node có trong tất cả các danh sách related nodes.
      */
-    async traverseGeneric(session, nodeId, targetLabel = '', depth = 2) {
-        const result = await session.run(`
-            MATCH (startNode {id: $nodeId})-[:HAS_MAJOR|HAS_PROGRAMME|IS_INSTANCE_OF*1..${depth}]->(related)
-            WHERE related.id IS NOT NULL
-            RETURN collect(DISTINCT related) AS relatedNodes
-        `, { nodeId });
-    
-        return result.records[0]?.get('relatedNodes')?.map(node => {
-            const { embedding, ...props } = node.properties;
-            return {
-                ...props,
-                __label: node.labels?.[0],
-                __identity: node.identity.toInt()
-            };
-        }) || [];
-    }        
+    getCommonRelatedNodes(allRelatedNodes) {
+        // Nếu không có related nodes, trả về mảng rỗng
+        if (allRelatedNodes.length === 0) return [];
 
-    //#endregion
+        // Lấy liên kết chung giữa các danh sách related nodes
+        let commonRelated = allRelatedNodes[0]; // Lấy danh sách đầu tiên
+        for (let i = 1; i < allRelatedNodes.length; i++) {
+            commonRelated = commonRelated.filter(node =>
+                allRelatedNodes[i].some(relatedNode => relatedNode.id === node.id)
+            );
+        }
+
+        return commonRelated;
+    }
 }
 
 module.exports = new Neo4jService();
