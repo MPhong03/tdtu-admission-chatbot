@@ -46,6 +46,22 @@ class ReasoningController {
             res.json(HttpResponse.error("Lỗi khi truy ngược ngành-hệ", -1, err.message));
         }
     }
+
+    async findSimilarByVectors(req, res) {
+        try {
+            const { pairs, topK } = req.body; // [{ label, vector }]
+
+            if (!Array.isArray(pairs) || pairs.length === 0) {
+                return res.json(HttpResponse.error("Thiếu dữ liệu vector để truy vấn"));
+            }
+
+            const results = await Neo4jService.findMultipleVectorSimilarities(pairs, topK || 5);
+            return res.json(HttpResponse.success("Tìm kiếm tương tự thành công", results));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi khi tìm kiếm tương tự", -1, err.message));
+        }
+    }
 }
 
 module.exports = new ReasoningController();

@@ -21,6 +21,24 @@ class BaseRepository {
         }
     }
 
+    // Cập nhật node theo id
+    async update(id, data) {
+        const session = getSession();
+        try {
+            const result = await session.run(
+                `
+                    MATCH (n:${this.label} {id: $id})
+                    SET n += $props
+                    RETURN n
+                    `,
+                { id, props: data }
+            );
+            return result.records[0]?.get('n').properties || null;
+        } finally {
+            await session.close();
+        }
+    }
+
     // Lấy danh sách node
     async getAll() {
         const session = getSession();
@@ -51,6 +69,20 @@ class BaseRepository {
         const session = getSession();
         try {
             await session.run(`MATCH (n:${this.label} {id: $id}) DETACH DELETE n`, { id });
+        } finally {
+            await session.close();
+        }
+    }
+
+    // Lấy node theo name
+    async getByName(name) {
+        const session = getSession();
+        try {
+            const result = await session.run(
+                `MATCH (p:${this.label} {name: $name}) RETURN p LIMIT 1`,
+                { name }
+            );
+            return result.records[0]?.get("p").properties || null;
         } finally {
             await session.close();
         }

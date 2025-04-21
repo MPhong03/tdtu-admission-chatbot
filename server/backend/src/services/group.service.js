@@ -3,6 +3,9 @@ class GroupService {
     async create(data) {
         return await repo.create(data);
     }
+    async update(id, data) {
+        return await repo.update(id, data);
+    }
     async getAll() {
         return await repo.getAll();
     }
@@ -14,6 +17,9 @@ class GroupService {
     }
     async getMajors(groupId) {
         return [];
+    }
+    async getByName(name) {
+        return await repo.getByName(name);
     }
 }
 module.exports = new GroupService();

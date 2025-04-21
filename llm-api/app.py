@@ -20,12 +20,15 @@ class SimilarityInput(BaseModel):
     targets: List[str]
 
 class AnalysisOutput(BaseModel):
-    intent: str
     entities: List[dict]
+
+class MultiTextInput(BaseModel):
+    texts: List[str]
 
 # ======== METHODS =========
 def extract_entities(text: str):
     doc = ner_nlp(text)
+    # Các nhãn bao gồm: Major, Programme, Group
     return [
         {
             "text": ent.text,
@@ -42,6 +45,13 @@ def get_embedding(body: TextInput):
     vec = model.encode(body.text).tolist()
     return {"embedding": vec}
 
+# ========= NEW MULTI-EMBEDDING ENDPOINT =========
+@app.post("/embeddings")
+def get_embeddings(body: MultiTextInput):
+    vectors = model.encode(body.texts).tolist()
+    return [{"text": text, "embedding": vec} for text, vec in zip(body.texts, vectors)]
+
+# ========= SIMILARITY ENDPOINT =========
 @app.post("/similarity")
 def get_similarity(body: SimilarityInput):
     sentences = [body.source] + body.targets
@@ -54,7 +64,7 @@ def get_similarity(body: SimilarityInput):
 
     return {"scores": scores}
 
-# ========= RULE-BASED INTENT + ENTITY =========
+# ========= RULE-BASED ENTITY =========
 @app.post("/analyze", response_model=AnalysisOutput)
 def analyze(body: TextInput):
     text = body.text

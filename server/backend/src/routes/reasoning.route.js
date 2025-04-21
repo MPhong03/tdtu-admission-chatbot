@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const ReasoningController = require('../controllers/reasoning.controller');
 
+// ============= API RESONING ============= //
 // Truy ngành theo nhóm ngành
 router.get('/group/:id/majors', ReasoningController.getMajorsByGroup);
 
@@ -16,5 +17,9 @@ router.get('/programme/:id/full-path', ReasoningController.getFullPathFromProgra
 
 // Truy ngược chuỗi từ ngành-hệ
 router.get('/major-programme/:id/full-path', ReasoningController.getFullPathFromMajorProgramme);
+
+// ============= API QUERY ============= //
+// Tìm kiếm node bằng vector embedding
+router.post('/query/node', ReasoningController.findSimilarByVectors);
 
 module.exports = router;

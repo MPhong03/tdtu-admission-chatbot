@@ -29,6 +29,17 @@ class LLMService {
         }
     }
 
+    // Gọi local API để tìm thấy entity trong text
+    async analyzeEntity(text) {
+        try {
+            const res = await axios.post(`${this.llmapi}/analyze`, { text });
+            return res.data.entities;
+        } catch (err) {
+            console.error("Analyze Error:", err);
+            return [];
+        }
+    }
+
     // Tạo câu trả lời từ prompt qua Gemini API
     /**
      * 

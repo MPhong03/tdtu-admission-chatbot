@@ -3,6 +3,9 @@ class ProgrammeService {
     async create(data) {
         return await repo.create(data);
     }
+    async update(id, data) {
+        return await repo.update(id, data);
+    }
     async getAll() {
         return await repo.getAll();
     }
