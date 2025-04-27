@@ -1,10 +1,10 @@
 const repo = require('../repositories/group.repository');
 class GroupService {
     async create(data) {
-        return await repo.create(data);
+        return await repo.create({ ...data, entityType: "Group" });
     }
     async update(id, data) {
-        return await repo.update(id, data);
+        return await repo.update(id, { ...data, entityType: "Group" });
     }
     async getAll() {
         return await repo.getAll();

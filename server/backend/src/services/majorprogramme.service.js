@@ -1,10 +1,10 @@
 const repo = require('../repositories/majorprogramme.repository');
 class MajorProgrammeService {
     async create(data) {
-        return await repo.create(data);
+        return await repo.create({ ...data, entityType: "MajorProgramme" });
     }
     async update(id, data) {
-        return await repo.update(id, data);
+        return await repo.update(id, { ...data, entityType: "MajorProgramme" });
     }
     async getAll() {
         return await repo.getAll();
@@ -17,6 +17,9 @@ class MajorProgrammeService {
     }
     async getByName(name) {
         return await repo.getByName(name);
+    }
+    async getByNameAndTab(name, tab) {
+        return await repo.getByNameAndTab(name, tab);
     }
 }
 module.exports = new MajorProgrammeService();

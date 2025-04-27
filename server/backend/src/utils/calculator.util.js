@@ -1,8 +1,11 @@
-const cosineSimilarity = (vecA, vecB) => {
-    const dot = vecA.reduce((sum, a, i) => sum + a * vecB[i], 0);
-    const normA = Math.sqrt(vecA.reduce((sum, a) => sum + a * a, 0));
-    const normB = Math.sqrt(vecB.reduce((sum, b) => sum + b * b, 0));
+/**
+ * Tính cosine similarity giữa hai vector
+ */
+function cosineSimilarity(vec1, vec2) {
+    const dot = vec1.reduce((sum, val, idx) => sum + val * vec2[idx], 0);
+    const normA = Math.sqrt(vec1.reduce((sum, val) => sum + val * val, 0));
+    const normB = Math.sqrt(vec2.reduce((sum, val) => sum + val * val, 0));
     return dot / (normA * normB);
-};
+}
 
 module.exports = { cosineSimilarity };

@@ -1,10 +1,10 @@
 const repo = require('../repositories/programme.repository');
 class ProgrammeService {
     async create(data) {
-        return await repo.create(data);
+        return await repo.create({ ...data, entityType: "Programme" });
     }
     async update(id, data) {
-        return await repo.update(id, data);
+        return await repo.update(id, { ...data, entityType: "Programme" });
     }
     async getAll() {
         return await repo.getAll();

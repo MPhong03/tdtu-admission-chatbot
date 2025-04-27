@@ -1,7 +1,31 @@
 const { getSession } = require('../configs/neo4j.config');
 const { cosineSimilarity } = require('../utils/calculator.util');
+const LLMService = require('./llm.service');
 
 class Neo4jService {
+    // Hàm get node theo label và id
+    async getById(label, id) {
+        const session = getSession();
+        try {
+            const result = await session.run(
+                `
+                MATCH (n:${label} {id: $id})
+                RETURN n
+                `,
+                { id }
+            );
+
+            const record = result.records[0];
+            if (record) {
+                const node = record.get('n');
+                return node.properties;
+            }
+            return null;
+        } finally {
+            await session.close();
+        }
+    }
+    
     // Tìm kiếm ngành theo nhóm ngành
     async findMajorsByGroup(groupId) {
         const session = getSession();
@@ -76,43 +100,49 @@ class Neo4jService {
         }
     }
 
-    // Kết nói ngành với nhóm ngành
+    async linkNodes(startId, startLabel, relType, endId, endLabel, relProps = {}) {
+        const session = getSession();
+        try {
+            await session.run(
+                `
+                MATCH (a:${startLabel} {id: $startId})
+                MATCH (b:${endLabel} {id: $endId})
+                MERGE (a)-[r:${relType}]->(b)
+                SET r += $relProps
+                RETURN r
+                `,
+                { startId, endId, relProps }
+            );
+        } finally {
+            await session.close();
+        }
+    }
+
     async linkGroupToMajor(groupId, majorId) {
-        const session = getSession();
-        try {
-            await session.run(`
-                MATCH (g:Group {id: $groupId}), (m:Major {id: $majorId})
-                MERGE (g)-[:HAS_MAJOR]->(m)
-            `, { groupId, majorId });
-        } finally {
-            await session.close();
-        }
+        const description = 'Group chứa Major';
+        const embedding = await LLMService.getEmbedding(description);
+        return await this.linkNodes(groupId, 'Group', 'HAS_MAJOR', majorId, 'Major', {
+            description,
+            embedding
+        });
     }
 
-    // Kết nói ngành với hệ đào tạo
     async linkMajorToProgramme(majorId, programmeId) {
-        const session = getSession();
-        try {
-            await session.run(`
-                MATCH (m:Major {id: $majorId}), (p:Programme {id: $programmeId})
-                MERGE (m)-[:HAS_PROGRAMME]->(p)
-            `, { majorId, programmeId });
-        } finally {
-            await session.close();
-        }
+        const description = 'Major đào tạo Programme';
+        const embedding = await LLMService.getEmbedding(description);
+        return await this.linkNodes(majorId, 'Major', 'HAS_PROGRAMME', programmeId, 'Programme', {
+            description,
+            embedding
+        });
     }
 
-    // Kết nói hệ đào tạo với ngành hệ
     async linkProgrammeToMajorProgramme(programmeId, majorProgrammeId) {
-        const session = getSession();
-        try {
-            await session.run(`
-                MATCH (p:Programme {id: $programmeId}), (mp:MajorProgramme {id: $majorProgrammeId})
-                MERGE (p)-[:IS_INSTANCE_OF]->(mp)
-            `, { programmeId, majorProgrammeId });
-        } finally {
-            await session.close();
-        }
+        const description = 'Programme chi tiết bởi MajorProgramme';
+        const embedding = await LLMService.getEmbedding(description);
+        return await this.linkNodes(programmeId, 'Programme', 'IS_INSTANCE_OF', majorProgrammeId, 'MajorProgramme', {
+            description,
+            embedding
+        });
     }
 
     // Tìm kiếm node theo label va field
