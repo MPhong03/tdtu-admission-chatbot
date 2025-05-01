@@ -88,7 +88,7 @@ class IntentRecognizer {
 
                 for (const sample of intent.samples) {
                     try {
-                        const embedding = await LLMService.getEmbedding(sample);
+                        const embedding = await LLMService.getEmbeddingV2(sample);
                         if (embedding && Array.isArray(embedding)) {
                             embeddings.push(embedding);
                         }
@@ -109,7 +109,7 @@ class IntentRecognizer {
     async recognizeIntent(question) {
         await this.initEmbeddings();
         const lowerQ = question.toLowerCase();
-        const questionEmbedding = await LLMService.getEmbedding(question);
+        const questionEmbedding = await LLMService.getEmbeddingV2(question);
         if (!questionEmbedding) return { intents: ["general_info"], fields: [] };
 
         const matchedIntents = await scoreIntent(

@@ -120,7 +120,7 @@ class Neo4jService {
 
     async linkGroupToMajor(groupId, majorId) {
         const description = 'Group chứa Major';
-        const embedding = await LLMService.getEmbedding(description);
+        const embedding = await LLMService.getEmbeddingV2(description);
         return await this.linkNodes(groupId, 'Group', 'HAS_MAJOR', majorId, 'Major', {
             description,
             embedding
@@ -129,7 +129,7 @@ class Neo4jService {
 
     async linkMajorToProgramme(majorId, programmeId) {
         const description = 'Major đào tạo Programme';
-        const embedding = await LLMService.getEmbedding(description);
+        const embedding = await LLMService.getEmbeddingV2(description);
         return await this.linkNodes(majorId, 'Major', 'HAS_PROGRAMME', programmeId, 'Programme', {
             description,
             embedding
@@ -138,7 +138,7 @@ class Neo4jService {
 
     async linkProgrammeToMajorProgramme(programmeId, majorProgrammeId) {
         const description = 'Programme chi tiết bởi MajorProgramme';
-        const embedding = await LLMService.getEmbedding(description);
+        const embedding = await LLMService.getEmbeddingV2(description);
         return await this.linkNodes(programmeId, 'Programme', 'IS_INSTANCE_OF', majorProgrammeId, 'MajorProgramme', {
             description,
             embedding

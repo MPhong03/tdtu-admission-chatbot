@@ -33,7 +33,11 @@ class RetrieverService {
      * @returns {string} answer
      */
     async chatWithBot(question) {
+        console.time("⏱️ Total chatWithBot");
+
+        console.time("🧠 Intent recognition");
         const { intents } = await IntentRecognizer.recognizeIntent(question);
+        console.timeEnd("🧠 Intent recognition");
 
         if (intents.length === 1 && intents[0] === 'general_info') {
             const prompt = `
@@ -47,25 +51,38 @@ class RetrieverService {
                 ${question}
                 
                 Trả lời:
-          `;
+            `;
+            console.time("✍️ Gemini generate answer (general_info)");
             const answer = await LLMService.generateAnswer(prompt);
+            console.timeEnd("✍️ Gemini generate answer (general_info)");
+
+            console.timeEnd("⏱️ Total chatWithBot");
             return { prompt, answer };
         }
 
+        console.time("📦 Retrieve context");
         const { contextNodes } = await this.retrieveContext(question);
+        console.timeEnd("📦 Retrieve context");
 
         if (!contextNodes.length) {
             const fallbackPrompt = `
                 Bạn là chatbot tuyển sinh. Hiện không có thông tin từ hệ thống.
                 Câu hỏi: ${question}
                 Hãy trả lời khéo léo và giữ thái độ thân thiện.`;
+            console.time("✍️ Gemini generate answer (fallback)");
             const answer = await LLMService.generateAnswer(fallbackPrompt);
+            console.timeEnd("✍️ Gemini generate answer (fallback)");
+    
+            console.timeEnd("⏱️ Total chatWithBot");
             return { prompt: fallbackPrompt, answer };
         }
 
-        // const filteredNodes = await scoreContextRelevance(question, contextNodes);
         const prompt = buildPromptWithContext(question, contextNodes);
+        console.time("✍️ Gemini generate answer (with context)");
         const answer = await LLMService.generateAnswer(prompt);
+        console.timeEnd("✍️ Gemini generate answer (with context)");
+
+        console.timeEnd("⏱️ Total chatWithBot");
 
         return { prompt, answer, contextNodes };
     }

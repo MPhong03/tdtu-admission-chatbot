@@ -5,7 +5,7 @@ async function scoreContextRelevance(question, nodes, topN = 10, minScore = 0.5)
         (node) => `${node.name} ${node.tab || ""}`.trim()
     );
 
-    const scores = await LLMService.compareSimilarity(question, targets);
+    const scores = await LLMService.compareSimilarityV2(question, targets);
 
     return nodes
         .map((node, idx) => ({ ...node, _score: scores[idx] }))

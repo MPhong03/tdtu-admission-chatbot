@@ -88,6 +88,17 @@ class ChatbotController {
             return res.json(HttpResponse.error("Error: ", -1, err.message));
         }
     }
+
+    async getEmbedding(req, res) {
+        try {
+            const { text } = req.body;
+            const embedding = await LLMService.getEmbeddingV2(text);
+            return res.json(HttpResponse.success("Nhận kết quả: ", embedding));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Error: ", -1, err.message));
+        }
+    }   
 }
 
 module.exports = new ChatbotController();

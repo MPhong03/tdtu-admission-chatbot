@@ -26,14 +26,14 @@ class Neo4jController {
 
             for (const group of majorsData) {
                 const groupName = group.group_name;
-                const groupEmbedding = await LLMService.getEmbedding(groupName);
+                const groupEmbedding = await LLMService.getEmbeddingV2(groupName);
                 const existingGroup = await GroupService.getByName?.(groupName);
                 const g = existingGroup
                     ? await GroupService.update(existingGroup.id, { name: groupName, embedding: groupEmbedding })
                     : await GroupService.create({ name: groupName, embedding: groupEmbedding });
 
                 for (const major of group.majors) {
-                    const majorEmbedding = await LLMService.getEmbedding(major.name);
+                    const majorEmbedding = await LLMService.getEmbeddingV2(major.name);
                     const existingMajor = await MajorService.getByName?.(major.name);
                     const m = existingMajor
                         ? await MajorService.update(existingMajor.id, { name: major.name, embedding: majorEmbedding })
@@ -45,7 +45,7 @@ class Neo4jController {
                     if (!detailData) continue;
 
                     for (const prog of detailData.programs || []) {
-                        const progEmbedding = await LLMService.getEmbedding(prog.tab);
+                        const progEmbedding = await LLMService.getEmbeddingV2(prog.tab);
                         const existingProgramme = await ProgrammeService.getByName?.(prog.tab);
                         const p = existingProgramme
                             ? await ProgrammeService.update(existingProgramme.id, { name: prog.tab, embedding: progEmbedding })
@@ -64,7 +64,7 @@ class Neo4jController {
                             tab: prog.tab,
                             description: prog.description,
                             major_code: prog.major_code,
-                            embedding: await LLMService.getEmbedding(embedText.trim()),
+                            embedding: await LLMService.getEmbeddingV2(embedText.trim()),
                             ...prog.content,
                         };
                         const existingMP = await MajorProgrammeService.getByNameAndTab?.(prog.name, prog.tab);

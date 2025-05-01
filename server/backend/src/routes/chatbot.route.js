@@ -11,4 +11,7 @@ router.post("/retrieve-context", ChatbotController.retrieveContext);
 // ============= API HISTORY ============= //
 router.get("/history/:chatId", verifyToken, ChatbotController.getHistory);
 
+// ============ API LLM ============= //
+router.post("/llm/embedding", ChatbotController.getEmbedding);
+
 module.exports = router;

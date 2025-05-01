@@ -80,7 +80,7 @@ class ElasticService {
     
                 if (!doc.embedding) {
                     const text = `${doc.name || ""} ${doc.description || ""} ${(doc.tag || []).join(" ")}`;
-                    const embedding = await llmService.getEmbedding(text);
+                    const embedding = await llmService.getEmbeddingV2(text);
                     if (embedding) {
                         doc.embedding = embedding;
                     }
@@ -115,7 +115,7 @@ class ElasticService {
             if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
     
             // Lấy embedding từ văn bản truy vấn
-            const embedding = await llmService.getEmbedding(queryText);
+            const embedding = await llmService.getEmbeddingV2(queryText);
             if (!embedding) return HttpResponse.error("Không tạo được vector embedding từ truy vấn.");
     
             // Gọi tìm kiếm vector

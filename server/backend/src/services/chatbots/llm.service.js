@@ -1,3 +1,4 @@
+const { pipeline } = require('@xenova/transformers');
 const axios = require("axios");
 
 class LLMService {
@@ -5,6 +6,16 @@ class LLMService {
         this.llmapi = process.env.LLM_API || "http://localhost:8000";
         this.geminiApi = process.env.GEMINI_API_URL || "http://localhost:8000";
         this.apiKey = process.env.GEMINI_API_KEY;
+        this.embeddingModel = null;
+    }
+
+    async init() {
+        if (!this.embeddingModel) {
+            this.embeddingModel = await pipeline(
+                'feature-extraction',
+                'Xenova/all-MiniLM-L6-v2'
+            );
+        }
     }
 
     // Gọi local API để lấy embedding vector
@@ -14,6 +25,23 @@ class LLMService {
             return res.data.embedding;
         } catch (err) {
             console.error("Embedding Error:", err);
+            return null;
+        }
+    }
+
+    // Trích xuất embedding vector từ text
+    async getEmbeddingV2(text) {
+        try {
+            await this.init();
+            const output = await this.embeddingModel(text, {
+                pooling: 'mean',
+                normalize: true
+            });
+            return Array.isArray(output.data)
+                ? output.data
+                : Object.values(output.data);
+        } catch (err) {
+            console.error("Embedding Error (NodeJS):", err);
             return null;
         }
     }
@@ -29,7 +57,28 @@ class LLMService {
         }
     }
 
-    // Gọi local API để tìm thấy entity trong text
+    // So sánh 1 câu với danh sách nhiều câu
+    async compareSimilarityV2(source, targets = []) {
+        try {
+            await this.init();
+
+            const [sourceEmbedding, ...targetEmbeddings] = await Promise.all([
+                this.embeddingModel(source, { pooling: 'mean', normalize: true }),
+                ...targets.map(t =>
+                    this.embeddingModel(t, { pooling: 'mean', normalize: true })
+                )
+            ]);
+
+            const sourceVec = sourceEmbedding.data;
+            const results = targetEmbeddings.map(te => cosineSimilarity(sourceVec, te.data));
+            return results;
+        } catch (err) {
+            console.error("Similarity Error:", err);
+            return [];
+        }
+    }
+
+    // Gọi local API để tìm thấy entity trong text - KHÔNG SỬ DỤNG
     async analyzeEntity(text) {
         try {
             const res = await axios.post(`${this.llmapi}/analyze`, { text });

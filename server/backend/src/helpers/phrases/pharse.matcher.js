@@ -11,7 +11,7 @@ class PhraseMatcher {
         const results = [];
 
         for (const phrase of phrases) {
-            const phraseEmbedding = await LLMService.getEmbedding(phrase);
+            const phraseEmbedding = await LLMService.getEmbeddingV2(phrase);
             if (!phraseEmbedding) continue;
 
             const scored = candidates.map(c => {
