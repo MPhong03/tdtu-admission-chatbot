@@ -1,5 +1,5 @@
 const { cosineSimilarity } = require('../../utils/calculator.util');
-const LLMService = require('../../services/llm.service');
+const LLMService = require('../../services/chatbots/llm.service');
 
 class PhraseMatcher {
     /**

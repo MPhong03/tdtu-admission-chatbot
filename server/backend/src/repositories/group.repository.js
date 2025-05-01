@@ -1,7 +1,7 @@
-const BaseRepository = require('./base.repository');
+const Neo4JRepository = require('./neo4j.repository');
 
 // Nhóm ngành
-class GroupRepository extends BaseRepository {
+class GroupRepository extends Neo4JRepository {
     constructor() {
         super('Group');
     }

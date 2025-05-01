@@ -1,4 +1,4 @@
-const GroupService = require('../services/group.service');
+const GroupService = require('../services/chatbots/group.service');
 const HttpResponse = require('../data/responses/http.response');
 
 class GroupController {

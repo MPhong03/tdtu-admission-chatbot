@@ -1,5 +1,5 @@
-const { getSession } = require('../configs/neo4j.config');
-const { cosineSimilarity } = require('../utils/calculator.util');
+const { getSession } = require('../../configs/neo4j.config');
+const { cosineSimilarity } = require('../../utils/calculator.util');
 const LLMService = require('./llm.service');
 
 class Neo4jService {

@@ -1,4 +1,4 @@
-const Neo4jService = require('../services/neo4j.service');
+const Neo4jService = require('../services/chatbots/neo4j.service');
 const HttpResponse = require('../data/responses/http.response');
 
 class ReasoningController {

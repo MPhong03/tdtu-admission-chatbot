@@ -1,6 +1,6 @@
 const mongoose = require("mongoose"); 
-const ElasticService = require("../services/elastic.service");
-const llmService = require("../services/llm.service");
+const ElasticService = require("../services/chatbots/elastic.service");
+const llmService = require("../services/chatbots/llm.service");
 
 class ElasticController {
     async getAvailableTypes(req, res) {

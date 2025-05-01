@@ -65,7 +65,7 @@ def get_similarity(body: SimilarityInput):
     return {"scores": scores}
 
 # ========= RULE-BASED ENTITY =========
-@app.post("/analyze", response_model=AnalysisOutput)
+@app.post("/analyze", response_model=AnalysisOutput) # CÓ THỂ KHÔNG CÒN DÙNG
 def analyze(body: TextInput):
     text = body.text
     

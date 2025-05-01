@@ -1,4 +1,4 @@
-const LLMService = require('../../services/llm.service');
+const LLMService = require('../../services/chatbots/llm.service');
 const nlp = require('compromise');
 
 class PhraseExtractor {

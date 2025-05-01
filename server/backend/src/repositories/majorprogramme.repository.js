@@ -1,8 +1,8 @@
 const { getSession } = require('../configs/neo4j.config');
-const BaseRepository = require('./base.repository');
+const Neo4JRepository = require('./neo4j.repository');
 
 // Hệ ngành đào tạo
-class MajorProgrammeRepository extends BaseRepository {
+class MajorProgrammeRepository extends Neo4JRepository {
     constructor() {
         super('MajorProgramme');
     }

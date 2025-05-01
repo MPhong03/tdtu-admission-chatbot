@@ -1,11 +1,11 @@
 const fs = require("fs");
 const path = require("path");
-const GroupService = require("../services/group.service");
-const MajorService = require("../services/major.service");
-const ProgrammeService = require("../services/programme.service");
-const MajorProgrammeService = require("../services/majorprogramme.service");
-const Neo4jService = require("../services/neo4j.service");
-const LLMService = require("../services/llm.service");
+const GroupService = require("../services/chatbots/group.service");
+const MajorService = require("../services/chatbots/major.service");
+const ProgrammeService = require("../services/chatbots/programme.service");
+const MajorProgrammeService = require("../services/chatbots/majorprogramme.service");
+const Neo4jService = require("../services/chatbots/neo4j.service");
+const LLMService = require("../services/chatbots/llm.service");
 const HttpResponse = require("../data/responses/http.response");
 
 class Neo4jController {

@@ -1,10 +1,10 @@
-const repo = require('../repositories/programme.repository');
-class ProgrammeService {
+const repo = require('../../repositories/group.repository');
+class GroupService {
     async create(data) {
-        return await repo.create({ ...data, entityType: "Programme" });
+        return await repo.create({ ...data, entityType: "Group" });
     }
     async update(id, data) {
-        return await repo.update(id, { ...data, entityType: "Programme" });
+        return await repo.update(id, { ...data, entityType: "Group" });
     }
     async getAll() {
         return await repo.getAll();
@@ -15,10 +15,11 @@ class ProgrammeService {
     async delete(id) {
         return await repo.delete(id);
     }
-
-    // Lấy hệ đào tạo theo name
+    async getMajors(groupId) {
+        return [];
+    }
     async getByName(name) {
         return await repo.getByName(name);
     }
 }
-module.exports = new ProgrammeService();
+module.exports = new GroupService();

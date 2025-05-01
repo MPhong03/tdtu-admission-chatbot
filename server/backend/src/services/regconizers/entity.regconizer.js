@@ -1,13 +1,13 @@
 const { cosineSimilarity } = require("../../utils/calculator.util");
-const LLMService = require("../llm.service");
-const GroupService = require('../group.service');
-const MajorService = require('../major.service');
-const ProgrammeService = require('../programme.service');
-const MajorProgrammeService = require('../majorprogramme.service');
+const LLMService = require("../chatbots/llm.service");
+const GroupService = require('../chatbots/group.service');
+const MajorService = require('../chatbots/major.service');
+const ProgrammeService = require('../chatbots/programme.service');
+const MajorProgrammeService = require('../chatbots/majorprogramme.service');
 
 // Phrase Helper
-const PhraseExtractor = require("../../helpers/phrase/phrase.extractor");
-const PhraseMatcher = require("../../helpers/phrase/pharse.matcher");
+const PhraseExtractor = require("../../helpers/phrases/phrase.extractor");
+const PhraseMatcher = require("../../helpers/phrases/pharse.matcher");
 
 class EntityRecognizer {
     /**

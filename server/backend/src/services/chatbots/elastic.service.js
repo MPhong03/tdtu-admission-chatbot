@@ -1,20 +1,20 @@
 const fs = require("fs");
 const path = require("path");
 const mongoose = require("mongoose");
-const ElasticRepository = require("../repositories/elastic.repository");
-const { convertSchemaToElasticMapping } = require("../utils/elastic.util");
-const HttpResponse = require("../data/responses/http.response");
+const ElasticRepository = require("../../repositories/elastic.repository");
+const { convertSchemaToElasticMapping } = require("../../utils/elastic.util");
+const HttpResponse = require("../../data/responses/http.response");
 const llmService = require("./llm.service");
 const { group } = require("console");
 
 // Cấu hình schema (type → schema Mongoose)
 const SCHEMA_MAP = {
-    group: require("../models/group.model"),
-    major: require("../models/major.model"),
-    programme: require("../models/programme.model"),
-    majorProgramme: require("../models/majorprgramme.model"),
-    document: require("../models/document.model"),
-    article: require("../models/article.model")
+    group: require("../../models/group.model"),
+    major: require("../../models/major.model"),
+    programme: require("../../models/programme.model"),
+    majorProgramme: require("../../models/majorprgramme.model"),
+    document: require("../../models/document.model"),
+    article: require("../../models/article.model")
 };
 
 class ElasticService {

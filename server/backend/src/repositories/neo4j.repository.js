@@ -1,7 +1,7 @@
 const { getSession } = require('../configs/neo4j.config');
 const { v4: uuidv4 } = require('uuid');
 
-class BaseRepository {
+class Neo4JRepository {
     constructor(label) {
         this.label = label;
     }
@@ -89,4 +89,4 @@ class BaseRepository {
     }
 }
 
-module.exports = BaseRepository;
+module.exports = Neo4JRepository;

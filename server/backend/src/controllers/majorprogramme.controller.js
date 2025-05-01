@@ -1,4 +1,4 @@
-const MajorProgrammeService = require('../services/major-programme.service');
+const MajorProgrammeService = require('../services/chatbots/major-programme.service');
 const HttpResponse = require('../data/responses/http.response');
 
 class MajorProgrammeController {

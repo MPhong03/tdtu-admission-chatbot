@@ -1,5 +1,6 @@
+const { scoreIntent } = require('../../helpers/improvements/intent.scoring');
 const { cosineSimilarity } = require('../../utils/calculator.util');
-const LLMService = require('../llm.service');
+const LLMService = require('../chatbots/llm.service');
 
 class IntentRecognizer {
     constructor() {
@@ -84,7 +85,7 @@ class IntentRecognizer {
         for (const intent of this.intentSamples) {
             if (!this.cacheEmbeddings[intent.intent]) {
                 const embeddings = [];
-    
+
                 for (const sample of intent.samples) {
                     try {
                         const embedding = await LLMService.getEmbedding(sample);
@@ -96,7 +97,7 @@ class IntentRecognizer {
                         // Continue silently
                     }
                 }
-    
+
                 // Chỉ cache nếu thực sự có ít nhất 1 embedding valid
                 if (embeddings.length > 0) {
                     this.cacheEmbeddings[intent.intent] = embeddings;
@@ -111,23 +112,13 @@ class IntentRecognizer {
         const questionEmbedding = await LLMService.getEmbedding(question);
         if (!questionEmbedding) return { intents: ["general_info"], fields: [] };
 
-        const matchedIntents = [];
+        const matchedIntents = await scoreIntent(
+            questionEmbedding,
+            this.intentSamples,
+            this.cacheEmbeddings,
+            this.threshold
+        );
 
-        // 1. Semantic Matching
-        for (const intent of this.intentSamples) {
-            for (const emb of this.cacheEmbeddings[intent.intent]) {
-                const score = cosineSimilarity(questionEmbedding, emb);
-                if (score >= this.threshold) {
-                    matchedIntents.push({
-                        intent: intent.intent,
-                        fields: intent.fields,
-                        score
-                    });
-                }
-            }
-        }
-
-        // 2. Keyword Spotting fallback
         for (const [keyword, mappedIntent] of Object.entries(this.intentKeywords)) {
             if (lowerQ.includes(keyword)) {
                 if (!matchedIntents.some(m => m.intent === mappedIntent)) {
@@ -135,7 +126,7 @@ class IntentRecognizer {
                     matchedIntents.push({
                         intent: mappedIntent,
                         fields,
-                        score: 0.65 // Fallback keyword match score
+                        score: 0.65
                     });
                 }
             }
@@ -145,9 +136,7 @@ class IntentRecognizer {
             return { intents: ["general_info"], fields: [] };
         }
 
-        // 3. Sort matched intents by score
         matchedIntents.sort((a, b) => b.score - a.score);
-
         return {
             intents: [...new Set(matchedIntents.map(m => m.intent))],
             fields: [...new Set(matchedIntents.flatMap(m => m.fields))]

@@ -1,4 +1,4 @@
-const repo = require('../repositories/majorprogramme.repository');
+const repo = require('../../repositories/majorprogramme.repository');
 class MajorProgrammeService {
     async create(data) {
         return await repo.create({ ...data, entityType: "MajorProgramme" });

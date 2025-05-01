@@ -1,7 +1,7 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
-const UserRepository = require("../repositories/user.repository");
-const HttpResponse = require("../data/responses/http.response");
+const UserRepository = require("../../repositories/user.repository");
+const HttpResponse = require("../../data/responses/http.response");
 
 class AuthService {
     constructor() {

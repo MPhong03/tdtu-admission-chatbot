@@ -1,4 +1,4 @@
-const ProgrammeService = require('../services/programme.service');
+const ProgrammeService = require('../services/chatbots/programme.service');
 const HttpResponse = require('../data/responses/http.response');
 
 class ProgrammeController {

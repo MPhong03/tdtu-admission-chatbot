@@ -1,5 +1,5 @@
 const HttpResponse = require("../data/responses/http.response");
-const AuthService = require("../services/auth.service");
+const AuthService = require("../services/users/auth.service");
 const TurndownService = require("turndown");
 
 class AuthController {

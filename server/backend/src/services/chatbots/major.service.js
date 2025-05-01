@@ -1,10 +1,10 @@
-const repo = require('../repositories/group.repository');
-class GroupService {
+const repo = require('../../repositories/major.repository');
+class MajorService {
     async create(data) {
-        return await repo.create({ ...data, entityType: "Group" });
+        return await repo.create({ ...data, entityType: "Major" });
     }
     async update(id, data) {
-        return await repo.update(id, { ...data, entityType: "Group" });
+        return await repo.update(id, { ...data, entityType: "Major" });
     }
     async getAll() {
         return await repo.getAll();
@@ -15,11 +15,8 @@ class GroupService {
     async delete(id) {
         return await repo.delete(id);
     }
-    async getMajors(groupId) {
-        return [];
-    }
     async getByName(name) {
         return await repo.getByName(name);
     }
 }
-module.exports = new GroupService();
+module.exports = new MajorService();
