@@ -1,10 +1,14 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const http = require("http");
+const socketIO = require("socket.io");
+
 const connectDB = require("./configs/db.config");
 const apiRoutes = require("./routes/index.route");
 const Logger = require("./utils/logger.util");
 const HttpResponse = require("./data/responses/http.response");
+const initSocketHandler = require("./handlers/socket.handler");
 
 dotenv.config();
 connectDB();
@@ -30,6 +34,16 @@ app.use((req, res, next) => {
 // ROUTE
 app.use("/api", apiRoutes);
 
+// WEB SOCKET 
+const server = http.createServer(app);
+const io = new socketIO.Server(server, {
+    cors: {
+        origin: "*", // hoặc ghi cụ thể như "http://127.0.0.1:5500"
+        methods: ["GET", "POST"]
+    }
+});
+
+initSocketHandler(io);
 
 // EXCEPTION
 app.use((err, req, res, next) => {
@@ -41,4 +55,4 @@ app.use((req, res, next) => {
     res.status(404).json(HttpResponse.error("Route Not Found"));
 });
 
-module.exports = app;
+module.exports = { app, server };

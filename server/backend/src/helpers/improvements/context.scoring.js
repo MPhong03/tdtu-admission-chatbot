@@ -1,17 +1,28 @@
 const LLMService = require("../../services/chatbots/llm.service");
+const { cosineSimilarity } = require("../../utils/calculator.util");
 
-async function scoreContextRelevance(question, nodes, topN = 10, minScore = 0.5) {
-    const targets = nodes.map(
-        (node) => `${node.name} ${node.tab || ""}`.trim()
-    );
+async function scoreContextRelevance(question, contextNodes, topK = 5) {
+    const questionEmbedding = await LLMService.getEmbeddingV2(question);
+    if (!questionEmbedding) return contextNodes;
 
-    const scores = await LLMService.compareSimilarityV2(question, targets);
+    const scored = [];
 
-    return nodes
-        .map((node, idx) => ({ ...node, _score: scores[idx] }))
-        .sort((a, b) => b._score - a._score)
-        .filter((n) => n._score >= minScore)
-        .slice(0, topN);
+    for (const node of contextNodes) {
+        const contentText = [
+            node.name,
+            node.description,
+            ...Object.values(node.fields || {})
+        ].join("\n");
+
+        const contentEmbedding = await LLMService.getEmbeddingV2(contentText);
+        if (!contentEmbedding) continue;
+
+        const score = cosineSimilarity(questionEmbedding, contentEmbedding);
+        scored.push({ ...node, score });
+    }
+
+    // Sort theo độ tương đồng giảm dần và lấy topK
+    return scored.sort((a, b) => b.score - a.score).slice(0, topK);
 }
 
 module.exports = { scoreContextRelevance };

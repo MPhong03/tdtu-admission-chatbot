@@ -61,7 +61,8 @@ class RetrieverService {
         }
 
         console.time("📦 Retrieve context");
-        const { contextNodes } = await this.retrieveContext(question);
+        const rawContext = await this.retrieveContext(question);
+        const contextNodes = await scoreContextRelevance(question, rawContext.contextNodes);
         console.timeEnd("📦 Retrieve context");
 
         if (!contextNodes.length) {

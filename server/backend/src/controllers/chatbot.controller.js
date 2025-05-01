@@ -99,6 +99,17 @@ class ChatbotController {
             return res.json(HttpResponse.error("Error: ", -1, err.message));
         }
     }   
+
+    async getEmbeddings(req, res) {
+        try {
+            const { source, targets } = req.body;
+            const results = await LLMService.compareSimilarityV2(source, targets);
+            return res.json(HttpResponse.success("Nhận kết quả: ", results));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Error: ", -1, err.message));
+        }
+    }   
 }
 
 module.exports = new ChatbotController();

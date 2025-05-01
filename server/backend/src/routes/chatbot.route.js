@@ -13,5 +13,6 @@ router.get("/history/:chatId", verifyToken, ChatbotController.getHistory);
 
 // ============ API LLM ============= //
 router.post("/llm/embedding", ChatbotController.getEmbedding);
+router.post("/llm/embeddings", ChatbotController.getEmbeddings);
 
 module.exports = router;

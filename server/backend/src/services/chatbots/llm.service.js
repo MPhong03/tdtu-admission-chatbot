@@ -1,5 +1,6 @@
 const { pipeline } = require('@xenova/transformers');
 const axios = require("axios");
+const { cosineSimilarity } = require('../../utils/calculator.util');
 
 class LLMService {
     constructor() {
@@ -7,6 +8,16 @@ class LLMService {
         this.geminiApi = process.env.GEMINI_API_URL || "http://localhost:8000";
         this.apiKey = process.env.GEMINI_API_KEY;
         this.embeddingModel = null;
+        this.fallbackMessage = `**Xin lỗi bạn nhé, hiện tại hệ thống đang quá tải nên chưa thể phản hồi chính xác.**
+
+👉 Bạn có thể liên hệ trực tiếp với bộ phận tư vấn tuyển sinh qua:
+
+- **Fanpage TDTU**: [https://www.facebook.com/tonducthanguniversity](https://www.facebook.com/tonducthanguniversity)
+- **Hotline**: 1900 2024 (nhấn phím 2)
+- **Email**: [tuyensinh@tdtu.edu.vn](mailto:tuyensinh@tdtu.edu.vn)
+
+_Cảm ơn bạn đã thông cảm!_`;
+
     }
 
     async init() {
@@ -108,10 +119,10 @@ class LLMService {
                     }
                 ]
             });
-            return res.data.candidates?.[0]?.content?.parts?.[0]?.text || "[Không có câu trả lời]";
+            return res.data.candidates?.[0]?.content?.parts?.[0]?.text || this.fallbackMessage;
         } catch (err) {
-            console.error("Gemini Generate Error:", err);
-            return "[Lỗi tạo câu trả lời]";
+            console.error("Gemini Generate Error:", err.message);
+            return this.fallbackMessage;
         }
     }
 }
