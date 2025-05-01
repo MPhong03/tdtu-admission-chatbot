@@ -2,7 +2,7 @@
 FROM node:20-alpine
 
 # Set working directory inside container
-WORKDIR /src
+WORKDIR /app
 
 # Copy package.json and package-lock.json (if exists)
 COPY package*.json ./
@@ -16,7 +16,7 @@ COPY . .
 # Expose the port (Render will bind automatically)
 EXPOSE 5000
 
-# Define environment variables for safety (optional, Render overrides from dashboard anyway)
+# Define environment variables (optional, Render overrides)
 ENV NODE_ENV=production
 
 # Start the application
