@@ -145,6 +145,15 @@ class Neo4jService {
         });
     }
 
+    async linkMajorProgrammeToMajor(mpId, majorId) {
+        const description = 'MajorProgramme thuộc về Major';
+        const embedding = await LLMService.getEmbeddingV2(description);
+        return await this.linkNodes(mpId, 'MajorProgramme', 'BELONGS_TO', majorId, 'Major', {
+            description,
+            embedding
+        });
+    }      
+
     // Tìm kiếm node theo label va field
     async searchNodeByLabelAndField(label, field, keyword) {
         const session = getSession();
@@ -296,6 +305,54 @@ class Neo4jService {
         }
 
         return commonRelated;
+    }
+
+    /**
+     * Truy vấn Cypher động
+     */
+    async query(cypher, params = {}) {
+        const session = getSession();
+        try {
+            const result = await session.run(cypher, params);
+            return result.records; // trả raw Record
+        } finally {
+            await session.close();
+        }
+    }    
+
+    /**
+     * Đếm số lượng node theo filter
+     * @param {string} label
+     * @param {Object} filters – e.g. { major: "CNTT" }
+     * @returns {number}
+     */
+    async countNodes(label, filters = {}) {
+        const session = getSession();
+        try {
+            let whereClause = "";
+            const cypherParams = {};
+
+            const filterEntries = Object.entries(filters).flatMap(([key, vals]) => {
+                if (!Array.isArray(vals)) return [[key, vals]];
+                return vals.map(v => [key, v]);
+            });
+
+            const conditions = filterEntries.map(([key, val], idx) => {
+                const paramKey = `param${idx}`;
+                cypherParams[paramKey] = val;
+                return `n.${key} = $${paramKey}`;
+            });
+
+            if (conditions.length > 0) {
+                whereClause = `WHERE ${conditions.join(" AND ")}`;
+            }
+
+            const cypher = `MATCH (n:${label}) ${whereClause} RETURN count(n) AS count`;
+            const result = await session.run(cypher, cypherParams);
+            return result.records[0]?.get("count").toInt() || 0;
+        } finally {
+            await session.close();
+        }
     }
 }
 

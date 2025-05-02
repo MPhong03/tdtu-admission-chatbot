@@ -32,6 +32,7 @@ class EntityRecognizer {
                 name: item.name,
                 tab: item.tab || '', // thêm tab để dễ liên kết sau
                 majorId: item.majorId || '', // nếu cần liên kết
+                description: item.description || '',
                 embedding: item.embedding
             }));
 

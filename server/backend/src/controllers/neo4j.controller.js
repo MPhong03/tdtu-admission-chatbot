@@ -73,6 +73,7 @@ class Neo4jController {
                             : await MajorProgrammeService.create(mpData);
 
                         await Neo4jService.linkProgrammeToMajorProgramme(p.id, mp.id);
+                        await Neo4jService.linkMajorProgrammeToMajor(mp.id, m.id);
                     }
                 }
             }

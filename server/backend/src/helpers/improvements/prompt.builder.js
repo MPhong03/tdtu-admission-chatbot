@@ -1,25 +1,50 @@
-function buildPromptWithContext(question, contextNodes) {
-    const contextStrings = contextNodes.map((node, idx) => {
-        const lines = [`#${idx + 1}. ${node.label}: ${node.name}`];
-        if (node.description) lines.push(`Mô tả: ${node.description}`);
-        for (const [key, value] of Object.entries(node.content || {})) {
-            lines.push(`${key}: ${value}`);
-        }
-        return lines.join("\n");
-    });
+class PromptBuilder {
+    /**
+     * Xây dựng prompt chuẩn cho LLM (Gemini) từ câu hỏi và node ngữ cảnh
+     * @param {string} question
+     * @param {Array} contextNodes
+     * @returns {string}
+     */
+    build(question, contextNodes) {
+        const lines = [];
 
-    return `
-        Bạn là chatbot tuyển sinh của Trường Đại học Tôn Đức Thắng (TDTU).
-        
-        Dưới đây là các ngữ cảnh về ngành học, chương trình đào tạo:
-        
-        ${contextStrings.join("\n\n")}
-        
-        Câu hỏi:
-        ${question}
-        
-        Trả lời:
-    `.trim();
+        // Section 1: Câu hỏi người dùng
+        lines.push("## 📌 Câu hỏi người dùng:");
+        lines.push(question.trim());
+        lines.push("");
+
+        // Section 2: Tri thức hệ thống truy xuất được
+        lines.push("## 📚 Dữ liệu liên quan:");
+        for (const node of contextNodes) {
+            lines.push(this.formatNodeBlock(node));
+        }
+
+        // Section 3: Hướng dẫn Gemini trả lời
+        lines.push("");
+        lines.push("## ✍️ Hướng dẫn:");
+        lines.push(`Bạn là một chatbot tư vấn tuyển sinh của Trường Đại học Tôn Đức Thắng (TDTU).`);
+        lines.push(`Dựa vào dữ liệu trên, hãy trả lời đúng trọng tâm câu hỏi của người dùng.`);
+        lines.push(`Trả lời bằng giọng văn thân thiện, rõ ràng, không bịa đặt nếu thiếu thông tin.`);
+
+        return lines.join("\n");
+    }
+
+    /**
+     * Biến 1 node thành markdown dạng đẹp
+     * @param {*} node
+     * @returns {string}
+     */
+    formatNodeBlock(node) {
+        const header = `### 🔹 ${node.label}: ${node.name}`;
+        const desc = node.description ? `> ${node.description.trim()}` : "";
+        const tab = node.tab ? `- Hệ đào tạo: ${node.tab}` : "";
+
+        const fields = Object.entries(node.content || {})
+            .map(([key, val]) => `- ${key}: ${val}`)
+            .join("\n");
+
+        return [header, desc, tab, fields].filter(Boolean).join("\n");
+    }
 }
 
-module.exports = { buildPromptWithContext };
+module.exports = new PromptBuilder();

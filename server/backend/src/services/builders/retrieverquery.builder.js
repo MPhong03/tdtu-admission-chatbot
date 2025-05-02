@@ -5,57 +5,113 @@ class RetrieverQueryBuilder {
     /**
      * Truy vấn Neo4j từ các thực thể được nhận diện
      */
-    async retrieve(entities, intentFields) {
+    async retrieve(entities) {
         const result = [];
+        const visited = new Set();
 
         for (const entity of entities) {
+            const key = `${entity.label}-${entity.id}`;
+            if (visited.has(key)) continue;
+            visited.add(key);
+
             switch (entity.label) {
-                case 'Major':
-                case 'Programme':
                 case 'Group':
-                case 'MajorProgramme':
-                    const node = await Neo4jService.getById(entity.label, entity.id);
-                    if (node) {
-                        const { id, name, description, tab = '', content = {}, ...rest } = node;
-
-                        // Các field nào không cố định thì gom vào content
-                        const dynamicContent = {};
-                        for (const [key, value] of Object.entries(rest)) {
-                            if (!['embedding', 'entityType', 'major_code'].includes(key)) {
-                                dynamicContent[key] = value;
-                            }
-                        }
-
-                        result.push({
-                            label: entity.label,
-                            id: id,
-                            name: name,
-                            description: description || '',
-                            tab: tab,
-                            content: { ...content, ...dynamicContent }, // merge lại
-                            fields: this.extractFields(node, intentFields)
-                        });
-                    }
+                    result.push(...await this.resolveGroup(entity));
                     break;
+                case 'Major':
+                    result.push(...await this.resolveMajor(entity));
+                    break;
+                case 'Programme':
+                    result.push(...await this.resolveProgramme(entity));
+                    break;
+                case 'MajorProgramme':
+                    result.push(...await this.resolveMajorProgramme(entity));
+                    break;
+                default:
+                    console.warn(`[RetrieverQueryBuilder] Unhandled entity: ${entity.label}`);
             }
         }
 
+        const deduplicated = Object.values(
+            result.reduce((acc, item) => {
+                const key = `${item.label}-${item.id}`;
+                if (!acc[key]) acc[key] = item;
+                return acc;
+            }, {})
+        );
+        
+        return deduplicated;
+    }
+
+    async resolveGroup(entity) {
+        const records = await Neo4jService.query(`
+            MATCH (g:Group {id: $id})-[:HAS_MAJOR]->(m:Major)
+            RETURN m
+        `, { id: entity.id });
+    
+        const nodes = [];
+        for (const rec of records) {
+            const majorNode = rec.get('m');
+            const major = majorNode.properties;
+            nodes.push(this.formatNode(major, 'Major'));
+            nodes.push(...await this.resolveMajor(major)); // Deep resolve
+        }
+    
+        return nodes;
+    }    
+
+    async resolveMajor(entity) {
+        const data = await Neo4jService.query(`
+            MATCH (m:Major {id: $id})
+            OPTIONAL MATCH (m)<-[:BELONGS_TO]-(mp:MajorProgramme)
+            OPTIONAL MATCH (m)-[:HAS_PROGRAMME]->(p:Programme)
+            RETURN m, collect(DISTINCT mp) AS majorProgrammes, collect(DISTINCT p) AS programmes
+        `, { id: entity.id });
+    
+        const record = data[0]; // Neo4jService.query sẽ cần trả ra result.records
+    
+        const m = record.get('m').properties;
+        const mpList = record.get('majorProgrammes').map(n => n.properties);
+        const pList = record.get('programmes').map(n => n.properties);
+    
+        const result = [this.formatNode(m, 'Major')];
+        for (const mp of mpList) result.push(this.formatNode(mp, 'MajorProgramme'));
+        for (const p of pList) result.push(this.formatNode(p, 'Programme'));
+    
         return result;
+    }    
+
+    async resolveProgramme(entity) {
+        const node = await Neo4jService.getById('Programme', entity.id);
+        return node ? [this.formatNode(node, 'Programme')] : [];
+    }
+
+    async resolveMajorProgramme(entity) {
+        const node = await Neo4jService.getById('MajorProgramme', entity.id);
+        return node ? [this.formatNode(node, 'MajorProgramme')] : [];
     }
 
     /**
-     * Extract thông tin các trường cần thiết theo intent
+     * Chuẩn hóa dữ liệu node về dạng tối ưu cho LLM
      */
-    extractFields(node, intentFields = []) {
-        if (!intentFields.length || !node.content) return {};
+    formatNode(raw, label) {
+        const { id, name, description, tab = '', content = {}, ...rest } = raw;
+        const cleanedContent = {};
 
-        const fields = {};
-        for (const field of intentFields) {
-            if (node.content[field]) {
-                fields[field] = node.content[field];
+        for (const [key, value] of Object.entries({ ...content, ...rest })) {
+            if (!['embedding', 'entityType', 'major_code'].includes(key)) {
+                cleanedContent[key] = value;
             }
         }
-        return fields;
+
+        return {
+            id,
+            label,
+            name,
+            description: description || '',
+            tab,
+            content: cleanedContent
+        };
     }
 }
 

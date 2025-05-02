@@ -5,43 +5,36 @@ class PhraseMatcher {
     /**
      * @param {Array} phrases - List of extracted phrases
      * @param {Array} candidates - All entity nodes with embedding
-     * @param {Array} detectedMajors - IDs of Majors already detected (optional)
+     * @param {Array} detectedMajors
+     * @param {Array} detectedProgrammes
      */
     async matchPhrasesToEntities(phrases, candidates, detectedMajors = [], detectedProgrammes = []) {
-        const results = [];
+        const allResults = [];
 
         for (const phrase of phrases) {
             const phraseEmbedding = await LLMService.getEmbeddingV2(phrase);
             if (!phraseEmbedding) continue;
 
             const scored = candidates.map(c => {
-                let baseScore = cosineSimilarity(phraseEmbedding, c.embedding);
+                let score = cosineSimilarity(phraseEmbedding, c.embedding);
 
-                // Boost theo loại entity
-                if (c.label === 'MajorProgramme') baseScore += 0.15;
-                else if (c.label === 'Major') baseScore += 0.10;
-                else if (c.label === 'Programme') baseScore += 0.05;
-                else if (c.label === 'Group') baseScore += 0;
-
-                // Exact match boost cực mạnh
+                // Exact match boost
                 if (phrase.trim().toLowerCase() === c.name.toLowerCase()) {
-                    baseScore += 0.3;
-                }
-                // Partial match boost nhẹ
-                else if (phrase.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(phrase)) {
-                    baseScore += 0.02;
+                    score += 0.3;
+                } else if (phrase.toLowerCase().includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(phrase.toLowerCase())) {
+                    score += 0.05;
                 }
 
-                return { ...c, similarity: baseScore };
+                return { ...c, similarity: score };
             });
 
-            const strongMatches = scored.filter(c => c.similarity >= 0.75);
-            results.push(...strongMatches);
+            const strongMatches = scored.filter(c => c.similarity >= 0.5);
+            allResults.push(...strongMatches);
         }
 
-        // Aggregate matches
+        // Giữ best per ID
         const unique = {};
-        for (const r of results) {
+        for (const r of allResults) {
             if (!unique[r.id] || unique[r.id].similarity < r.similarity) {
                 unique[r.id] = r;
             }
@@ -49,14 +42,14 @@ class PhraseMatcher {
 
         let allMatches = Object.values(unique);
 
-        // boost mạnh nếu MajorProgramme đúng Major.name + Programme.name
-        if (detectedMajors.length > 0 && detectedProgrammes.length > 0) {
+        // Boost mạnh nếu MajorProgramme đúng cả Major + Programme
+        if (detectedMajors.length && detectedProgrammes.length) {
             allMatches = allMatches.map(item => {
                 if (item.label === 'MajorProgramme') {
-                    const matchMajor = detectedMajors.includes(item.name);  // Major.name == MajorProgramme.name
-                    const matchProgramme = detectedProgrammes.includes(item.tab); // Programme.name == MajorProgramme.tab
+                    const matchMajor = detectedMajors.includes(item.name);
+                    const matchProgramme = detectedProgrammes.includes(item.tab);
                     if (matchMajor && matchProgramme) {
-                        return { ...item, similarity: item.similarity + 0.5 }; // Boost cực mạnh
+                        return { ...item, similarity: item.similarity + 0.5 };
                     }
                 }
                 return item;
@@ -70,9 +63,7 @@ class PhraseMatcher {
             return acc;
         }, {});
 
-        // Select top N per label
         const finalResults = [];
-
         const topPerLabel = {
             MajorProgramme: 2,
             Major: 1,
@@ -81,7 +72,9 @@ class PhraseMatcher {
         };
 
         for (const [label, items] of Object.entries(grouped)) {
-            const topItems = items.sort((a, b) => b.similarity - a.similarity);
+            const topItems = items
+                .sort((a, b) => b.similarity - a.similarity)
+                .slice(0, topPerLabel[label] || 1); // default fallback = 1
             finalResults.push(...topItems);
         }
 
