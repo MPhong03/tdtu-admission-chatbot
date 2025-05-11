@@ -7,7 +7,7 @@ dotenv.config();
 
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
-const MODEL_ZIP_URL = process.env.MODEL_ZIP_URL;
+const MODEL_ZIP_URL = "https://www.dropbox.com/scl/fi/tzcxzka3nc8zs9lhuy4fk/ner_onnx.zip?rlkey=hzelvgpgrh6r3ynxcr83r7bsd&st=h4p1ofe7&dl=1";
 const zipPath = path.resolve(__dirname, '../../../tmp/ner_onnx.zip');
 const extractTo = path.resolve(__dirname, '../../resources/ner_onnx');
 
