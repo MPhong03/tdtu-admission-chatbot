@@ -15,6 +15,7 @@ async function downloadFile(url, dest) {
     if (!res.ok) throw new Error(`Download failed: ${res.status}`);
 
     await new Promise((resolve, reject) => {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
         const file = fs.createWriteStream(dest);
         res.body.pipe(file);
         res.body.on('error', reject);

@@ -4,6 +4,8 @@ FROM node:20-bullseye
 # Set working directory inside container
 WORKDIR /app
 
+RUN mkdir -p /app/tmp
+
 # Copy package.json and package-lock.json (if exists)
 COPY package*.json ./
 
