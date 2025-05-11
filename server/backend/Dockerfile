@@ -5,6 +5,7 @@ FROM node:20-bullseye
 WORKDIR /app
 
 RUN mkdir -p /app/tmp
+RUN mkdir -p /app/src/resources/ner_onnx
 
 # Copy package.json and package-lock.json (if exists)
 COPY package*.json ./
