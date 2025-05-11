@@ -32,6 +32,7 @@ class LLMService {
 _Cảm ơn bạn đã thông cảm!_`;
 
         // NER
+        this.embeddingModel = null;
         this.nerModel = null;
         this.nerInitPromise = null;
     }
@@ -45,58 +46,21 @@ _Cảm ơn bạn đã thông cảm!_`;
             this.nerInitPromise = (async () => {
                 console.log("🟡 Warming up NER pipeline...");
 
-                await this.copyNERModelFiles();
-
                 const timeout = setTimeout(() => {
                     console.warn("⏳ NER warmup taking too long...");
-                }, 15_000);
+                }, 15000);
 
-                this.nerModel = await pipeline('token-classification', MODEL_ID, {
-                    local_files_only: true,
+                this.nerModel = await pipeline('token-classification', process.env.LLM_MODEL_ID, {
+                    use_onnx: true,
                     quantized: false,
-                    use_onnx: true
                 });
 
                 clearTimeout(timeout);
-
                 console.log("🟢 NER pipeline is ready.");
             })();
         }
 
         return this.nerInitPromise;
-    }
-
-    async copyNERModelFiles() {
-        const filesRoot = [
-            'config.json',
-            'tokenizer.json',
-            'tokenizer_config.json',
-            'special_tokens_map.json',
-            'vocab.txt'
-        ];
-        const filesOnnx = ['model.onnx'];
-
-        try {
-            await fsp.mkdir(TARGET_MODEL_DIR, { recursive: true });
-            await fsp.mkdir(path.join(TARGET_MODEL_DIR, 'onnx'), { recursive: true });
-
-            for (const file of filesRoot) {
-                const src = path.join(LOCAL_MODEL_DIR, file);
-                const dest = path.join(TARGET_MODEL_DIR, file);
-                if (!fs.existsSync(dest)) await fsp.copyFile(src, dest);
-            }
-
-            for (const file of filesOnnx) {
-                const src = path.join(LOCAL_MODEL_DIR, file);
-                const dest = path.join(TARGET_MODEL_DIR, 'onnx', file);
-                if (!fs.existsSync(dest)) await fsp.copyFile(src, dest);
-            }
-
-            console.log(`📦 Copied model files to: ${TARGET_MODEL_DIR}`);
-        } catch (err) {
-            console.error("❌ Failed to copy NER model files:", err);
-            throw err;
-        }
     }
 
     async inferNER(text) {

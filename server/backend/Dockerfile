@@ -16,8 +16,6 @@ RUN npm install --production
 # Copy the rest of the project files
 COPY . .
 
-RUN npm run prepare-model
-
 # Expose the port (Render will bind automatically)
 EXPOSE 5000
 
