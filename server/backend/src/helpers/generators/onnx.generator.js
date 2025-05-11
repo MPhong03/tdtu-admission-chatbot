@@ -1,26 +1,29 @@
 const fs = require('fs');
-const https = require('https');
 const path = require('path');
 const unzipper = require('unzipper');
+const dotenv = require("dotenv");
 
+dotenv.config();
+
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const MODEL_ZIP_URL = process.env.MODEL_ZIP_URL;
 const zipPath = path.resolve(__dirname, '../../../tmp/ner_onnx.zip');
 const extractTo = path.resolve(__dirname, '../../resources/ner_onnx');
 
 async function downloadFile(url, dest) {
-    return new Promise((resolve, reject) => {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+
+    await new Promise((resolve, reject) => {
         const file = fs.createWriteStream(dest);
-        https.get(url, response => {
-            if (response.statusCode !== 200) {
-                return reject(`Download failed: ${response.statusCode}`);
-            }
-            response.pipe(file);
-            file.on('finish', () => file.close(resolve));
-        }).on('error', reject);
+        res.body.pipe(file);
+        res.body.on('error', reject);
+        file.on('finish', resolve);
     });
 }
 
 async function unzipFile(zip, dest) {
+    console.log('✅ File downloaded, size:', fs.statSync(dest).size);
     return fs.createReadStream(zip).pipe(unzipper.Extract({ path: dest })).promise();
 }
 
