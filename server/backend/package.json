@@ -5,7 +5,7 @@
   "main": "src/server.js",
   "scripts": {
     "prepare-model": "node src/helpers/generators/onnx.generator.js",
-    "start": "npm run prepare-model && node src/server.js",
+    "start": "node src/server.js",
     "dev": "nodemon --exec node src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
