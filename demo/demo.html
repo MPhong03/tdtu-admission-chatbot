@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot Realtime Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f0f2f5;
+        }
+
+        .chat-container {
+            max-width: 600px;
+            margin: 40px auto;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            height: 80vh;
+        }
+
+        .chat-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            display: flex;
+        }
+
+        .message.bot .content {
+            background-color: #e4e6eb;
+            color: #000;
+            border-radius: 15px 15px 15px 0;
+            margin-right: auto;
+        }
+
+        .message.user .content {
+            background-color: #0084ff;
+            color: #fff;
+            border-radius: 15px 15px 0 15px;
+            margin-left: auto;
+        }
+
+        .content {
+            padding: 10px 15px;
+            max-width: 80%;
+            word-wrap: break-word;
+        }
+
+        .chat-input {
+            border-top: 1px solid #ddd;
+            padding: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="chat-container">
+        <div id="chatBody" class="chat-body"></div>
+        <div class="chat-input d-flex">
+            <input type="text" id="questionInput" class="form-control me-2" placeholder="Nhập câu hỏi...">
+            <button id="sendBtn" class="btn btn-primary">Gửi</button>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY3ZGJhMzY2MTMzMThhZGMxMTczOTc5OCIsInJvbGUiOiJ1c2VyIiwiaWF0IjoxNzQ2MTY5NzY2LCJleHAiOjE3NDYyNTYxNjZ9.NKlLTwuQ2rYBOVKHU3Hr5n_fpdrUW5-d16D9FpEbDfo";
+        const chatId = "68131866261c30e97456c683";
+        // const userId = "67dba36613318adc11739798"; // Hardcode cho demo
+        const apiUrl = "https://tdtu-admission-chatbot-server.onrender.com";
+
+        let page = 1;
+        const size = 10;
+        let hasMore = true;
+        const chatBody = $('#chatBody');
+        const socket = io(apiUrl);
+
+        function renderMessage(role, text) {
+            const messageDiv = $('<div>').addClass(`message ${role}`);
+            const contentDiv = $('<div>').addClass('content').html(marked.parse(text));
+            messageDiv.append(contentDiv);
+            chatBody.append(messageDiv);
+        }
+
+        function loadHistory(initial = false) {
+            if (!hasMore) return;
+            $.ajax({
+                url: `${apiUrl}/api/chatbot/history/${chatId}?page=${page}&size=${size}`,
+                method: 'GET',
+                headers: { Authorization: `Bearer ${token}` },
+                success: function (res) {
+                    if (res?.Data?.Data?.items?.length > 0) {
+                        const messages = res.Data.Data.items.reverse();
+                        for (const msg of messages) {
+                            renderMessage('user', msg.question);
+                            renderMessage('bot', msg.answer);
+                        }
+                        hasMore = res.Data.Data.pagination.hasMore;
+                        page++;
+                        if (initial) {
+                            chatBody.scrollTop(chatBody[0].scrollHeight);
+                        }
+                    }
+                }
+            });
+        }
+
+        function sendMessage() {
+            const question = $('#questionInput').val().trim();
+            if (!question) return;
+            $('#questionInput').val('');
+            renderMessage('user', question);
+
+            $.ajax({
+                url: `${apiUrl}/api/chatbot/chat`,
+                method: 'POST',
+                contentType: 'application/json',
+                headers: { Authorization: `Bearer ${token}` },
+                data: JSON.stringify({ question, chatId }),
+                success: function (res) {
+                    if (res?.Data?.answer) {
+                        renderMessage('bot', res.Data.answer);
+                        chatBody.scrollTop(chatBody[0].scrollHeight);
+
+                        // Emit socket event
+                        socket.emit("chat:send", {
+                            // userId,
+                            chatId,
+                            question,
+                            answer: res.Data.answer
+                        });
+                    }
+                }
+            });
+        }
+
+        $('#sendBtn').click(sendMessage);
+        $('#questionInput').keypress(function (e) {
+            if (e.which === 13) sendMessage();
+        });
+
+        // Realtime message receive
+        socket.on("chat:receive", (data) => {
+            if (data.chatId === chatId) {
+                renderMessage('user', data.question);
+                renderMessage('bot', data.answer);
+                chatBody.scrollTop(chatBody[0].scrollHeight);
+            }
+        });
+
+        // Load initial chat history
+        loadHistory(true);
+    </script>
+</body>
+
+</html>

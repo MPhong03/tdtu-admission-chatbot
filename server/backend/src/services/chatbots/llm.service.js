@@ -1,15 +1,27 @@
-const { pipeline } = require('@xenova/transformers');
-const axios = require("axios");
+const fs = require('fs');
+const fsp = fs.promises;
+const path = require('path');
+const axios = require('axios');
+const { pipeline, AutoTokenizer } = require('@xenova/transformers');
 const { cosineSimilarity } = require('../../utils/calculator.util');
+
+require('dotenv').config();
+
+// === Hằng số mô hình ===
+const MODEL_ID = process.env.LLM_MODEL_ID || '';
+const LOCAL_MODEL_DIR = path.resolve(__dirname, process.env.LLM_MODEL_LOCAL_DIR || '');
+const TARGET_MODEL_DIR = path.resolve(__dirname, `../../../node_modules/@xenova/transformers/models/${MODEL_ID}`);
 
 class LLMService {
     constructor() {
+        // Embed + Gemini
         this.llmapi = process.env.LLM_API || "http://localhost:8000";
         this.geminiApi = process.env.GEMINI_API_URL || "http://localhost:8000";
         this.apiKey = process.env.GEMINI_API_KEY;
+
         this.embeddingModel = null;
         this.fallbackMessage = `**Xin lỗi bạn nhé, hiện tại hệ thống đang quá tải nên chưa thể phản hồi chính xác.**
-
+        
 👉 Bạn có thể liên hệ trực tiếp với bộ phận tư vấn tuyển sinh qua:
 
 - **Fanpage TDTU**: [https://www.facebook.com/tonducthanguniversity](https://www.facebook.com/tonducthanguniversity)
@@ -18,18 +30,82 @@ class LLMService {
 
 _Cảm ơn bạn đã thông cảm!_`;
 
+        // NER
+        this.nerModel = null;
+        this.nerInitPromise = null;
     }
 
-    async init() {
-        if (!this.embeddingModel) {
-            this.embeddingModel = await pipeline(
-                'feature-extraction',
-                'Xenova/all-MiniLM-L6-v2'
-            );
+    // === NER ===
+
+    async initNER() {
+        if (this.nerModel) return;
+
+        if (!this.nerInitPromise) {
+            this.nerInitPromise = (async () => {
+                console.log("🟡 Warming up NER pipeline...");
+
+                await this.copyNERModelFiles();
+
+                this.nerModel = await pipeline('token-classification', MODEL_ID, {
+                    local_files_only: true,
+                    quantized: false,
+                    use_onnx: true
+                });
+
+                console.log("🟢 NER pipeline is ready.");
+            })();
+        }
+
+        return this.nerInitPromise;
+    }
+
+    async copyNERModelFiles() {
+        const filesRoot = [
+            'config.json',
+            'tokenizer.json',
+            'tokenizer_config.json',
+            'special_tokens_map.json',
+            'vocab.txt'
+        ];
+        const filesOnnx = ['model.onnx'];
+
+        try {
+            await fsp.mkdir(TARGET_MODEL_DIR, { recursive: true });
+            await fsp.mkdir(path.join(TARGET_MODEL_DIR, 'onnx'), { recursive: true });
+
+            for (const file of filesRoot) {
+                const src = path.join(LOCAL_MODEL_DIR, file);
+                const dest = path.join(TARGET_MODEL_DIR, file);
+                if (!fs.existsSync(dest)) await fsp.copyFile(src, dest);
+            }
+
+            for (const file of filesOnnx) {
+                const src = path.join(LOCAL_MODEL_DIR, file);
+                const dest = path.join(TARGET_MODEL_DIR, 'onnx', file);
+                if (!fs.existsSync(dest)) await fsp.copyFile(src, dest);
+            }
+
+            console.log(`📦 Copied model files to: ${TARGET_MODEL_DIR}`);
+        } catch (err) {
+            console.error("❌ Failed to copy NER model files:", err);
+            throw err;
         }
     }
 
-    // Gọi local API để lấy embedding vector
+    async inferNER(text) {
+        await this.initNER();
+        const results = await this.nerModel(text);
+        return results.map(r => ({ token: r.word, label: r.entity }));
+    }
+
+    // === EMBEDDING ===
+
+    async initEmbeddingModel() {
+        if (!this.embeddingModel) {
+            this.embeddingModel = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        }
+    }
+
     async getEmbedding(text) {
         try {
             const res = await axios.post(`${this.llmapi}/embedding`, { text });
@@ -40,24 +116,20 @@ _Cảm ơn bạn đã thông cảm!_`;
         }
     }
 
-    // Trích xuất embedding vector từ text
     async getEmbeddingV2(text) {
         try {
-            await this.init();
+            await this.initEmbeddingModel();
             const output = await this.embeddingModel(text, {
                 pooling: 'mean',
                 normalize: true
             });
-            return Array.isArray(output.data)
-                ? output.data
-                : Object.values(output.data);
+            return Array.isArray(output.data) ? output.data : Object.values(output.data);
         } catch (err) {
             console.error("Embedding Error (NodeJS):", err);
             return null;
         }
     }
 
-    // Gọi local API để tính similarity giữa 1 câu với nhiều câu
     async compareSimilarity(source, targets = []) {
         try {
             const res = await axios.post(`${this.llmapi}/similarity`, { source, targets });
@@ -68,11 +140,9 @@ _Cảm ơn bạn đã thông cảm!_`;
         }
     }
 
-    // So sánh 1 câu với danh sách nhiều câu
     async compareSimilarityV2(source, targets = []) {
         try {
-            await this.init();
-
+            await this.initEmbeddingModel();
             const [sourceEmbedding, ...targetEmbeddings] = await Promise.all([
                 this.embeddingModel(source, { pooling: 'mean', normalize: true }),
                 ...targets.map(t =>
@@ -81,43 +151,19 @@ _Cảm ơn bạn đã thông cảm!_`;
             ]);
 
             const sourceVec = sourceEmbedding.data;
-            const results = targetEmbeddings.map(te => cosineSimilarity(sourceVec, te.data));
-            return results;
+            return targetEmbeddings.map(te => cosineSimilarity(sourceVec, te.data));
         } catch (err) {
             console.error("Similarity Error:", err);
             return [];
         }
     }
 
-    // Gọi local API để tìm thấy entity trong text - KHÔNG SỬ DỤNG
-    async analyzeEntity(text) {
-        try {
-            const res = await axios.post(`${this.llmapi}/analyze`, { text });
-            return res.data.entities;
-        } catch (err) {
-            console.error("Analyze Error:", err);
-            return [];
-        }
-    }
+    // === GEMINI ===
 
-    // Tạo câu trả lời từ prompt qua Gemini API
-    /**
-     * 
-     * @param {
-        "contents": [{
-            "parts":[{"text": "Explain how AI works"}]
-            }]
-        } 
-     * @returns "Text"
-     */
     async generateAnswer(prompt) {
         try {
             const res = await axios.post(`${this.geminiApi}?key=${this.apiKey}`, {
-                contents: [
-                    {
-                        parts: [{ text: prompt }]
-                    }
-                ]
+                contents: [{ parts: [{ text: prompt }] }]
             });
             return res.data.candidates?.[0]?.content?.parts?.[0]?.text || this.fallbackMessage;
         } catch (err) {

@@ -2,8 +2,23 @@ const HttpResponse = require("../data/responses/http.response");
 const LLMService = require("../services/chatbots/llm.service");
 const RetrieverService = require('../services/chatbots/retriever.service');
 const HistoryService = require("../services/users/history.service");
+const EntityRecognizer = require('../services/regconizers/entity.regconizer');
 
 class ChatbotController {
+    async retrieveEntities(req, res) {
+        try {
+            const { question } = req.body;
+            if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
+
+            const entities = await EntityRecognizer.recognizeEntities(question);
+
+            return res.json(HttpResponse.success("Nhận kết quả: ", entities));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
+        }
+    }
+
     async retrieveContext(req, res) {
         try {
             const { question } = req.body;
@@ -14,7 +29,7 @@ class ChatbotController {
             return res.json(HttpResponse.success("Nhận kết quả: ", context));
         } catch (err) {
             console.error(err);
-            return res.json(HttpResponse.error("Tạo nhóm ngành thất bại", -1, err.message));
+            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
     }
 
@@ -51,7 +66,7 @@ class ChatbotController {
             );
         } catch (err) {
             console.error(err);
-            return res.json(HttpResponse.error("Error: ", -1, err.message));
+            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
     }
 
@@ -65,7 +80,7 @@ class ChatbotController {
             return res.json(HttpResponse.success("Nhận kết quả: ", answer));
         } catch (err) {
             console.error(err);
-            return res.json(HttpResponse.error("Error: ", -1, err.message));
+            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
     }
 
@@ -85,7 +100,7 @@ class ChatbotController {
             return res.json(HttpResponse.success("Nhận kết quả: ", history));
         } catch (err) {
             console.error(err);
-            return res.json(HttpResponse.error("Error: ", -1, err.message));
+            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
     }
 
@@ -96,7 +111,7 @@ class ChatbotController {
             return res.json(HttpResponse.success("Nhận kết quả: ", embedding));
         } catch (err) {
             console.error(err);
-            return res.json(HttpResponse.error("Error: ", -1, err.message));
+            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
     }   
 
@@ -107,7 +122,7 @@ class ChatbotController {
             return res.json(HttpResponse.success("Nhận kết quả: ", results));
         } catch (err) {
             console.error(err);
-            return res.json(HttpResponse.error("Error: ", -1, err.message));
+            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
     }   
 }

@@ -7,6 +7,7 @@ const { verifyToken } = require('../middlewares/auth.middleware');
 router.post("/chat", verifyToken, ChatbotController.chatWithBot);
 router.post("/test-chat", ChatbotController.testChat);
 router.post("/retrieve-context", ChatbotController.retrieveContext);
+router.post("/retrieve-entities", ChatbotController.retrieveEntities);
 
 // ============= API HISTORY ============= //
 router.get("/history/:chatId", verifyToken, ChatbotController.getHistory);

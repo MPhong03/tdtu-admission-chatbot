@@ -3,6 +3,34 @@ const { cosineSimilarity } = require('../../utils/calculator.util');
 const LLMService = require('./llm.service');
 
 class Neo4jService {
+    async getByName(label, name) {
+        const session = getSession();
+
+        // Lấy embedding cho name (từ LLMService)
+        const embedding = await LLMService.getEmbeddingV2(name);
+        if (!embedding) return null;
+
+        // B1: Lấy toàn bộ nodes + embedding
+        const result = await session.run(`
+            MATCH (n:${label})
+            WHERE n.embedding IS NOT NULL
+            RETURN n
+        `);
+
+        const candidates = result.records.map(r => r.get('n').properties);
+
+        // B2: Tính cosine bằng NodeJS
+        const scores = await Promise.all(
+            candidates.map(async c => {
+                const score = cosineSimilarity(c.embedding, embedding);
+                return { ...c, score };
+            })
+        );
+
+        const best = scores.sort((a, b) => b.score - a.score)[0];
+        return best || null;
+    }
+
     // Hàm get node theo label và id
     async getById(label, id) {
         const session = getSession();
@@ -25,7 +53,7 @@ class Neo4jService {
             await session.close();
         }
     }
-    
+
     // Tìm kiếm ngành theo nhóm ngành
     async findMajorsByGroup(groupId) {
         const session = getSession();
@@ -319,41 +347,6 @@ class Neo4jService {
             await session.close();
         }
     }    
-
-    /**
-     * Đếm số lượng node theo filter
-     * @param {string} label
-     * @param {Object} filters – e.g. { major: "CNTT" }
-     * @returns {number}
-     */
-    async countNodes(label, filters = {}) {
-        const session = getSession();
-        try {
-            let whereClause = "";
-            const cypherParams = {};
-
-            const filterEntries = Object.entries(filters).flatMap(([key, vals]) => {
-                if (!Array.isArray(vals)) return [[key, vals]];
-                return vals.map(v => [key, v]);
-            });
-
-            const conditions = filterEntries.map(([key, val], idx) => {
-                const paramKey = `param${idx}`;
-                cypherParams[paramKey] = val;
-                return `n.${key} = $${paramKey}`;
-            });
-
-            if (conditions.length > 0) {
-                whereClause = `WHERE ${conditions.join(" AND ")}`;
-            }
-
-            const cypher = `MATCH (n:${label}) ${whereClause} RETURN count(n) AS count`;
-            const result = await session.run(cypher, cypherParams);
-            return result.records[0]?.get("count").toInt() || 0;
-        } finally {
-            await session.close();
-        }
-    }
 }
 
 module.exports = new Neo4jService();

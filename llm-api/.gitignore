@@ -24,3 +24,6 @@ models/
 # OS files
 .DS_Store
 Thumbs.db
+
+onnx/
+ner-bert-multilingual/
