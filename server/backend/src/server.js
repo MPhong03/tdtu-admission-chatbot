@@ -9,5 +9,7 @@ server.listen(PORT, async () => {
   await User.createDefaultAdmin();
 
   // Làm nóng mô hình
-  await LLMService.initNER();
+  LLMService.initNER()
+    .then(() => console.log("✅ NER loaded"))
+    .catch((e) => console.error("❌ NER failed:", e));
 });

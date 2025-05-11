@@ -47,11 +47,17 @@ _Cảm ơn bạn đã thông cảm!_`;
 
                 await this.copyNERModelFiles();
 
+                const timeout = setTimeout(() => {
+                    console.warn("⏳ NER warmup taking too long...");
+                }, 15_000);
+
                 this.nerModel = await pipeline('token-classification', MODEL_ID, {
                     local_files_only: true,
                     quantized: false,
                     use_onnx: true
                 });
+
+                clearTimeout(timeout);
 
                 console.log("🟢 NER pipeline is ready.");
             })();
