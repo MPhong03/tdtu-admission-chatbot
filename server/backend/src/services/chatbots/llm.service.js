@@ -9,9 +9,6 @@ require('dotenv').config();
 
 // === Hằng số mô hình ===
 const MODEL_ID = process.env.LLM_MODEL_ID || '';
-// const LOCAL_MODEL_DIR = path.resolve(__dirname, process.env.LLM_MODEL_LOCAL_DIR || '');
-const LOCAL_MODEL_DIR = path.resolve(process.cwd(), process.env.LLM_MODEL_LOCAL_DIR || '');
-const TARGET_MODEL_DIR = path.resolve(__dirname, `../../../node_modules/@xenova/transformers/models/${MODEL_ID}`);
 
 class LLMService {
     constructor() {
@@ -50,7 +47,7 @@ _Cảm ơn bạn đã thông cảm!_`;
                     console.warn("⏳ NER warmup taking too long...");
                 }, 15000);
 
-                this.nerModel = await pipeline('token-classification', process.env.LLM_MODEL_ID, {
+                this.nerModel = await pipeline('token-classification', MODEL_ID, {
                     use_onnx: true,
                     quantized: false,
                 });
