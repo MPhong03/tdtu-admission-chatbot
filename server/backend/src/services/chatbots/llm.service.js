@@ -30,40 +30,62 @@ _Cảm ơn bạn đã thông cảm!_`;
 
         // NER
         this.embeddingModel = null;
-        this.nerModel = null;
-        this.nerInitPromise = null;
+        // this.nerModel = null; // Comment: Không cần nerModel cục bộ
+        // this.nerInitPromise = null; // Comment: Không cần nerInitPromise
+        this.nerApi = process.env.NER_API || 'http://localhost:8000'; // Địa chỉ API FastAPI
     }
 
     // === NER ===
 
+    // async initNER() {
+    //     if (this.nerModel) return;
+    //
+    //     if (!this.nerInitPromise) {
+    //         this.nerInitPromise = (async () => {
+    //             console.log("🟡 Warming up NER pipeline...");
+    //
+    //             const timeout = setTimeout(() => {
+    //                 console.warn("⏳ NER warmup taking too long...");
+    //             }, 15000);
+    //
+    //             this.nerModel = await pipeline('token-classification', MODEL_ID, {
+    //                 use_onnx: true,
+    //                 quantized: false,
+    //             });
+    //
+    //             clearTimeout(timeout);
+    //             console.log("🟢 NER pipeline is ready.");
+    //         })();
+    //     }
+    //
+    //     return this.nerInitPromise;
+    // }
+
     async initNER() {
-        if (this.nerModel) return;
-
-        if (!this.nerInitPromise) {
-            this.nerInitPromise = (async () => {
-                console.log("🟡 Warming up NER pipeline...");
-
-                const timeout = setTimeout(() => {
-                    console.warn("⏳ NER warmup taking too long...");
-                }, 15000);
-
-                this.nerModel = await pipeline('token-classification', MODEL_ID, {
-                    use_onnx: true,
-                    quantized: false,
-                });
-
-                clearTimeout(timeout);
-                console.log("🟢 NER pipeline is ready.");
-            })();
+        // Không cần khởi tạo pipeline cục bộ, chỉ kiểm tra NER_API
+        if (!this.nerApi) {
+            throw new Error('NER_API environment variable is not set');
         }
-
-        return this.nerInitPromise;
+        console.log(`🟢 NER API is configured at ${this.nerApi}`);
     }
 
     async inferNER(text) {
-        await this.initNER();
-        const results = await this.nerModel(text);
-        return results.map(r => ({ token: r.word, label: r.entity }));
+        // await this.initNER();
+        // const results = await this.nerModel(text);
+        // return results.map(r => ({ token: r.word, label: r.entity }));
+
+        try {
+            const response = await axios.post(`${this.nerApi}/ner`, { text }, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+            return response.data.entities.map(entity => ({
+                token: entity.word,
+                label: entity.entity_group
+            }));
+        } catch (err) {
+            console.error('NER API Error:', err.message);
+            throw new Error(`Failed to call NER API: ${err.message}`);
+        }
     }
 
     // === EMBEDDING ===

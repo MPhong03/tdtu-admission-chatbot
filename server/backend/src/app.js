@@ -38,7 +38,7 @@ app.use("/api", apiRoutes);
 const server = http.createServer(app);
 const io = new socketIO.Server(server, {
     cors: {
-        origin: "*", // hoặc ghi cụ thể như "http://127.0.0.1:5500"
+        origin: "*",
         methods: ["GET", "POST"]
     }
 });
