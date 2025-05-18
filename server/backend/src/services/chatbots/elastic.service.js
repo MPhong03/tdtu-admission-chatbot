@@ -18,125 +18,125 @@ const SCHEMA_MAP = {
 };
 
 class ElasticService {
-    getAvailableTypes() {
-        return Object.keys(SCHEMA_MAP);
-    }
+    // getAvailableTypes() {
+    //     return Object.keys(SCHEMA_MAP);
+    // }
 
-    getIndexName(type) {
-        if (!SCHEMA_MAP[type]) return null;
-        return `kag_${type}`;
-    }
+    // getIndexName(type) {
+    //     if (!SCHEMA_MAP[type]) return null;
+    //     return `kag_${type}`;
+    // }
 
-    async ensureIndexExists(type) {
-        const indexName = this.getIndexName(type);
-        if (!indexName) return HttpResponse.error(`Không tìm thấy schema cho loại '${type}'.`);
+    // async ensureIndexExists(type) {
+    //     const indexName = this.getIndexName(type);
+    //     if (!indexName) return HttpResponse.error(`Không tìm thấy schema cho loại '${type}'.`);
 
-        const exists = await ElasticRepository.checkIndexExists(indexName);
-        if (!exists) {
-            return await this.createIndex(type);
-        }
-        return HttpResponse.success(`Index '${indexName}' đã tồn tại.`);
-    }
+    //     const exists = await ElasticRepository.checkIndexExists(indexName);
+    //     if (!exists) {
+    //         return await this.createIndex(type);
+    //     }
+    //     return HttpResponse.success(`Index '${indexName}' đã tồn tại.`);
+    // }
 
-    async createIndex(type) {
-        try {
-            const schema = SCHEMA_MAP[type];
-            if (!schema) return HttpResponse.error(`Schema '${type}' không tồn tại.`);
+    // async createIndex(type) {
+    //     try {
+    //         const schema = SCHEMA_MAP[type];
+    //         if (!schema) return HttpResponse.error(`Schema '${type}' không tồn tại.`);
 
-            const indexName = this.getIndexName(type);
-            const mapping = convertSchemaToElasticMapping(schema);
+    //         const indexName = this.getIndexName(type);
+    //         const mapping = convertSchemaToElasticMapping(schema);
 
-            await ElasticRepository.createIndexWithMapping(indexName, mapping);
-            return HttpResponse.success(`Index '${indexName}' đã được tạo.`);
-        } catch (error) {
-            return HttpResponse.error(`Lỗi khi tạo index '${type}': ${error.message}`);
-        }
-    }
+    //         await ElasticRepository.createIndexWithMapping(indexName, mapping);
+    //         return HttpResponse.success(`Index '${indexName}' đã được tạo.`);
+    //     } catch (error) {
+    //         return HttpResponse.error(`Lỗi khi tạo index '${type}': ${error.message}`);
+    //     }
+    // }
 
-    async deleteIndex(type) {
-        try {
-            const indexName = this.getIndexName(type);
-            if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
+    // async deleteIndex(type) {
+    //     try {
+    //         const indexName = this.getIndexName(type);
+    //         if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
 
-            const success = await ElasticRepository.deleteIndex(indexName);
-            return success
-                ? HttpResponse.success(`Index '${indexName}' đã được xóa.`)
-                : HttpResponse.error(`Index '${indexName}' không tồn tại.`);
-        } catch (error) {
-            return HttpResponse.error(`Lỗi khi xóa index '${type}': ${error.message}`);
-        }
-    }
+    //         const success = await ElasticRepository.deleteIndex(indexName);
+    //         return success
+    //             ? HttpResponse.success(`Index '${indexName}' đã được xóa.`)
+    //             : HttpResponse.error(`Index '${indexName}' không tồn tại.`);
+    //     } catch (error) {
+    //         return HttpResponse.error(`Lỗi khi xóa index '${type}': ${error.message}`);
+    //     }
+    // }
 
-    async addData(type, data) {
-        try {
-            const indexName = this.getIndexName(type);
-            if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
+    // async addData(type, data) {
+    //     try {
+    //         const indexName = this.getIndexName(type);
+    //         if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
     
-            await this.ensureIndexExists(type);
+    //         await this.ensureIndexExists(type);
     
-            const enrichedData = await Promise.all(data.map(async (doc) => {
-                const id = doc._id || doc.id || new mongoose.Types.ObjectId().toString();
-                delete doc._id;
+    //         const enrichedData = await Promise.all(data.map(async (doc) => {
+    //             const id = doc._id || doc.id || new mongoose.Types.ObjectId().toString();
+    //             delete doc._id;
     
-                if (!doc.embedding) {
-                    const text = `${doc.name || ""} ${doc.description || ""} ${(doc.tag || []).join(" ")}`;
-                    const embedding = await llmService.getEmbeddingV2(text);
-                    if (embedding) {
-                        doc.embedding = embedding;
-                    }
-                }
+    //             if (!doc.embedding) {
+    //                 const text = `${doc.name || ""} ${doc.description || ""} ${(doc.tag || []).join(" ")}`;
+    //                 const embedding = await llmService.getEmbeddingV2(text);
+    //                 if (embedding) {
+    //                     doc.embedding = embedding;
+    //                 }
+    //             }
     
-                return { ...doc, id };
-            }));
+    //             return { ...doc, id };
+    //         }));
     
-            await ElasticRepository.addData(indexName, enrichedData);
-            return HttpResponse.success(`Dữ liệu đã được thêm vào '${indexName}' thành công.`);
-        } catch (error) {
-            return HttpResponse.error(`Lỗi khi thêm dữ liệu vào '${type}': ${error.message}`);
-        }
-    }
+    //         await ElasticRepository.addData(indexName, enrichedData);
+    //         return HttpResponse.success(`Dữ liệu đã được thêm vào '${indexName}' thành công.`);
+    //     } catch (error) {
+    //         return HttpResponse.error(`Lỗi khi thêm dữ liệu vào '${type}': ${error.message}`);
+    //     }
+    // }
 
-    async search(type, query, fields = ["*"], from = 0, size = 10) {
-        try {
-            const indexName = this.getIndexName(type);
-            if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
+    // async search(type, query, fields = ["*"], from = 0, size = 10) {
+    //     try {
+    //         const indexName = this.getIndexName(type);
+    //         if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
 
-            const results = await ElasticRepository.search(indexName, query, fields, from, size);
-            return HttpResponse.success("Kết quả tìm kiếm:", results);
-        } catch (error) {
-            return HttpResponse.error(`Lỗi khi tìm kiếm trong '${type}': ${error.message}`);
-        }
-    }
+    //         const results = await ElasticRepository.search(indexName, query, fields, from, size);
+    //         return HttpResponse.success("Kết quả tìm kiếm:", results);
+    //     } catch (error) {
+    //         return HttpResponse.error(`Lỗi khi tìm kiếm trong '${type}': ${error.message}`);
+    //     }
+    // }
 
-    // VECTOR SEARCH
-    async searchByVector(type, queryText, size = 5) {
-        try {
-            const indexName = this.getIndexName(type);
-            if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
+    // // VECTOR SEARCH
+    // async searchByVector(type, queryText, size = 5) {
+    //     try {
+    //         const indexName = this.getIndexName(type);
+    //         if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
     
-            // Lấy embedding từ văn bản truy vấn
-            const embedding = await llmService.getEmbeddingV2(queryText);
-            if (!embedding) return HttpResponse.error("Không tạo được vector embedding từ truy vấn.");
+    //         // Lấy embedding từ văn bản truy vấn
+    //         const embedding = await llmService.getEmbeddingV2(queryText);
+    //         if (!embedding) return HttpResponse.error("Không tạo được vector embedding từ truy vấn.");
     
-            // Gọi tìm kiếm vector
-            const results = await ElasticRepository.searchByVector(indexName, embedding, size);
-            return HttpResponse.success("Kết quả tìm kiếm bằng vector:", results);
-        } catch (error) {
-            return HttpResponse.error(`Lỗi tìm kiếm vector cho '${type}': ${error.message}`);
-        }
-    }    
+    //         // Gọi tìm kiếm vector
+    //         const results = await ElasticRepository.searchByVector(indexName, embedding, size);
+    //         return HttpResponse.success("Kết quả tìm kiếm bằng vector:", results);
+    //     } catch (error) {
+    //         return HttpResponse.error(`Lỗi tìm kiếm vector cho '${type}': ${error.message}`);
+    //     }
+    // }    
 
-    async getAllData(type) {
-        try {
-            const indexName = this.getIndexName(type);
-            if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
+    // async getAllData(type) {
+    //     try {
+    //         const indexName = this.getIndexName(type);
+    //         if (!indexName) return HttpResponse.error(`Không tìm thấy index cho loại '${type}'.`);
 
-            const data = await ElasticRepository.getAllData(indexName);
-            return HttpResponse.success(`Dữ liệu từ '${indexName}':`, data);
-        } catch (error) {
-            return HttpResponse.error(error.message);
-        }
-    }
+    //         const data = await ElasticRepository.getAllData(indexName);
+    //         return HttpResponse.success(`Dữ liệu từ '${indexName}':`, data);
+    //     } catch (error) {
+    //         return HttpResponse.error(error.message);
+    //     }
+    // }
 }
 
 module.exports = new ElasticService();
