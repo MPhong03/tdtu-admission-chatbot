@@ -88,6 +88,59 @@ _Cảm ơn bạn đã thông cảm!_`;
         }
     }
 
+    /**
+     * Gọi API NER để nhận diện thực thể và mối quan hệ
+     * @param {string} text - Văn bản đầu vào
+     * @returns {Object} - { entities: Array, relationships: Array }
+     * @throws {Error} - Nếu gọi API thất bại hoặc dữ liệu không hợp lệ
+     */
+    async inferNER_V2(text) {
+        try {
+            // Kiểm tra input
+            if (!text || typeof text !== 'string' || text.trim() === '') {
+                console.warn('[LLMService] Invalid input text:', text);
+                throw new Error('Input text must be a non-empty string');
+            }
+
+            console.debug('[LLMService] Calling NER API with text:', text);
+
+            // Gọi API NER
+            const response = await axios.post(
+                `${this.nerApi}/ner`,
+                { text },
+                { headers: { 'Content-Type': 'application/json' } }
+            );
+
+            // Kiểm tra response
+            if (!response.data || !response.data.entities || !response.data.relationships) {
+                console.error('[LLMService] Invalid NER API response:', response.data);
+                throw new Error('NER API returned invalid or incomplete data');
+            }
+
+            // Ánh xạ entities
+            const entities = response.data.entities.map(entity => ({
+                name: entity.text,
+                label: entity.label,
+                score: entity.score,
+                start: entity.start,
+                end: entity.end
+            }));
+
+            // Ánh xạ relationships
+            const relationships = response.data.relationships.map(rel => ({
+                relation: rel.relation,
+                score: rel.score
+            }));
+
+            console.debug('[LLMService] NER API response processed:', { entities, relationships });
+
+            return { entities, relationships };
+        } catch (err) {
+            console.error('[LLMService] NER API Error:', err.message);
+            throw new Error(`Failed to call NER API: ${err.message}`);
+        }
+    }
+
     // === EMBEDDING ===
 
     async initEmbeddingModel() {

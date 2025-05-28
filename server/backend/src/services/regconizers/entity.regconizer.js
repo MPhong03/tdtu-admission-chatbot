@@ -37,6 +37,35 @@ class EntityRecognizer {
         }
     }
 
+    /**
+     * Phân tích thực thể và mối quan hệ trong câu hỏi bằng API NER mới
+     * @param {string} question
+     * @returns {Object} { entities: Array, relationships: Array }
+     */
+    async recognizeEntities_V2(question) {
+        try {
+            const response = await LLMService.inferNER_V2(question);
+            const entities = response.entities.map(entity => ({
+                name: entity.name,
+                label: entity.label,
+                score: entity.score,
+                start: entity.start,
+                end: entity.end
+            }));
+            const relationships = response.relationships.map(rel => ({
+                relation: rel.relation,
+                score: rel.score
+            }));
+
+            console.debug('[EntityRecognizer] Recognized entities:', entities);
+            console.debug('[EntityRecognizer] Recognized relationships:', relationships);
+
+            return { entities, relationships };
+        } catch (err) {
+            console.error('[EntityRecognizer] Error:', err.message);
+            return { entities: [], relationships: [] };
+        }
+    }
 }
 
 module.exports = new EntityRecognizer();

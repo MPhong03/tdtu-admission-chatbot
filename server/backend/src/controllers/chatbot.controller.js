@@ -10,7 +10,7 @@ class ChatbotController {
             const { question } = req.body;
             if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
-            const entities = await EntityRecognizer.recognizeEntities(question);
+            const entities = await EntityRecognizer.recognizeEntities_V2(question);
 
             return res.json(HttpResponse.success("Nhận kết quả: ", entities));
         } catch (err) {

@@ -25,43 +25,80 @@ class RetrieverService {
         const rawContext = await RetrieverQueryBuilder.retrieve(entities);
         console.timeEnd("Retrieve related nodes");
 
-        // Step 3: Score context relevance
-        console.time("Score context relevance");
-        const contextNodes = await scoreContextRelevance(question, rawContext, 10); // top 5
-        console.timeEnd("Score context relevance");
+        // // Step 3: Score context relevance
+        // console.time("Score context relevance");
+        // const contextNodes = await scoreContextRelevance(question, rawContext, 10); // top 5
+        // console.timeEnd("Score context relevance");
 
-        return { entities, contextNodes };
+        return { entities, contextNodes: rawContext };
     }
 
     /**
-     * Tổng pipeline từ câu hỏi → context data
+     * Nhận diện thực thể, mối quan hệ và lấy context relevance (phiên bản V2)
+     * @param {string} question
+     * @returns {Object} { entities, relationships, contextNodes }
+     */
+    async processQuestion_V2(question) {
+        console.time('Entity recognition');
+        const { entities, relationships } = await EntityRecognizer.recognizeEntities_V2(question);
+        console.timeEnd('Entity recognition');
+
+        // Kiểm tra relationships: chỉ cần tồn tại và không rỗng
+        if (!Array.isArray(relationships) || relationships.length === 0) {
+            console.warn('[RetrieverService] No valid relationships found. Skipping retrieval.');
+            return { entities, relationships, contextNodes: [] };
+        }
+
+        // Giờ relationships không có head/tail, nên chuyển thẳng entities + relations cho retriever
+        console.time('Retrieve related nodes');
+        const contextNodes = await RetrieverQueryBuilder.retrieve_V2({ entities, relationships });
+        console.timeEnd('Retrieve related nodes');
+
+        return { entities, relationships, contextNodes };
+    }
+
+    /**
+     * Tổng pipeline lấy context dữ liệu từ câu hỏi
+     * @param {string} question
+     * @returns {Object} {
+     *   question: string,
+     *   entities: Array,
+     *   relationships: Array,
+     *   contextNodes: Array
+     * }
      */
     async retrieveContext(question) {
-        const { entities, contextNodes } = await this.processQuestion(question);
+        try {
+            const { entities, relationships, contextNodes } = await this.processQuestion_V2(question);
 
-        return {
-            question,
-            entities,
-            contextNodes
-        };
+            // Có thể bổ sung kiểm tra fallback nếu không có contextNodes
+
+            return {
+                question,
+                entities,
+                relationships,
+                contextNodes
+            };
+        } catch (err) {
+            console.error('[RetrieverService] Error in retrieveContext:', err);
+            throw err;
+        }
     }
 
     /**
-     * Nhận câu hỏi và trả về câu trả lời tự nhiên từ Gemini dựa vào context.
+     * Trả lời câu hỏi bằng chatbot dựa trên context đã lấy
      * @param {string} question
-     * @returns {string} answer
+     * @returns {Object} { prompt, answer, contextNodes }
      */
     async chatWithBot(question) {
         console.time("Total chatWithBot");
 
-        // Step 1 & 2: Nhận diện thực thể và truy vấn dữ liệu liên quan
-        const { entities, contextNodes } = await this.processQuestion(question);
+        const { entities, relationships, contextNodes } = await this.processQuestion_V2(question);
 
-        // Step 3: Nếu không có dữ liệu → fallback
         if (!contextNodes.length) {
             const fallbackPrompt = `Bạn là chatbot tuyển sinh. Hiện không có thông tin từ hệ thống.
-            Câu hỏi: ${question}
-            Hãy trả lời khéo léo và giữ thái độ thân thiện.`;
+                                    Câu hỏi: ${question}
+                                    Hãy trả lời khéo léo và giữ thái độ thân thiện, tránh việc trả lời bịa đặt.`;
 
             console.time("Gemini generate answer (fallback)");
             const answer = await LLMService.generateAnswer(fallbackPrompt);
@@ -71,8 +108,7 @@ class RetrieverService {
             return { prompt: fallbackPrompt, answer };
         }
 
-        // Step 4: Dùng PromptBuilder mới
-        const prompt = PromptBuilder.build(question, contextNodes);
+        const prompt = require('../../helpers/improvements/prompt.builder').build(question, contextNodes);
 
         console.time("Gemini generate answer (with context)");
         const answer = await LLMService.generateAnswer(prompt);
