@@ -180,7 +180,7 @@ class Neo4jService {
             description,
             embedding
         });
-    }      
+    }
 
     // Tìm kiếm node theo label va field
     async searchNodeByLabelAndField(label, field, keyword) {
@@ -297,20 +297,20 @@ class Neo4jService {
                 return `MATCH (m:Major {id: $nodeId})-[:HAS_PROGRAMME]->(p:Programme)-[:IS_INSTANCE_OF]->(mp:MajorProgramme)
                         WHERE mp.name = m.name AND mp.tab = p.name
                         RETURN collect(DISTINCT mp) AS relatedNodes`;
-    
+
             case 'Programme':
                 return `MATCH (p:Programme {id: $nodeId})-[:IS_INSTANCE_OF]->(mp:MajorProgramme)
                         RETURN collect(DISTINCT mp) AS relatedNodes`;
-    
+
             // Các label khác
             case 'Group':
                 return `MATCH (g:Group {id: $nodeId})-[:HAS_MAJOR]->(m:Major)
                         RETURN collect(DISTINCT m) AS relatedNodes`;
-                
+
             case 'MajorProgramme':
                 return `MATCH (mp:MajorProgramme {id: $nodeId})<-[:IS_INSTANCE_OF]-(p:Programme)<-[:HAS_PROGRAMME]-(m:Major)
                         RETURN collect(DISTINCT m) AS relatedNodes`;
-    
+
             default:
                 return null;
         }
@@ -346,7 +346,38 @@ class Neo4jService {
         } finally {
             await session.close();
         }
-    }    
+    }
+
+    async searchNodesByEmbedding(label, queryEmbedding, threshold = 0.8, limit = 10) {
+        // Query lấy node và embedding
+        const query = `
+            MATCH (n:${label})
+            WHERE n.embedding IS NOT NULL
+            RETURN n.embedding AS embedding, n
+            LIMIT 1000
+        `;
+
+        const records = await this.query(query);
+
+        // Lọc node theo cosine similarity
+        const candidates = [];
+
+        for (const record of records) {
+            const nodeEmbedding = record.get('embedding'); // giả sử là array số
+            const node = record.get('n').properties;
+
+            const similarity = cosineSimilarity(queryEmbedding, nodeEmbedding);
+
+            if (similarity >= threshold) {
+                candidates.push({ node, similarity });
+            }
+        }
+
+        // Sắp xếp giảm dần theo similarity và lấy limit top
+        candidates.sort((a, b) => b.similarity - a.similarity);
+
+        return candidates.slice(0, limit).map(c => c.node);
+    }
 }
 
 module.exports = new Neo4jService();

@@ -149,68 +149,145 @@ class RetrieverQueryBuilder {
      * @param {Object} input - { entities: Array, relationships: Array }
      * @returns {Array} danh sách node liên quan
      */
-    async retrieve_V2({ entities, relationships }) {
+    async retrieve_V2({ entities }) {
         const result = [];
         const visited = new Set();
 
-        console.debug('[RetrieverQueryBuilderV2] Input entities:', entities);
-        console.debug('[RetrieverQueryBuilderV2] Input relationships:', relationships);
-
-        // Bước 1: Xử lý các thực thể
-        for (const entity of entities) {
-            const key = `${entity.label}-${entity.name}`;
-            if (visited.has(key)) continue;
-            if (entity.label === 'MajorProgramme') continue;
-            visited.add(key);
-
-            console.debug(`[RetrieverQueryBuilderV2] Processing entity: ${key}`);
-            const node = await Neo4jService.getByName(entity.label, entity.name);
-            if (!node) {
-                console.warn(`[RetrieverQueryBuilderV2] Node not found: ${key}`);
-                continue;
+        const addNode = (node, label) => {
+            const key = `${label}-${node.name || node.id}`;
+            if (!visited.has(key)) {
+                visited.add(key);
+                result.push(this.formatNode(node, label));
             }
+        };
 
-            result.push(this.formatNode(node, entity.label));
-        }
+        // Helper tìm node tương tự theo embedding
+        const findSimilarNodes = async (label, name) => {
+            const emb = await LLMService.getEmbeddingV2(name);
+            return await Neo4jService.searchNodesByEmbedding(label, emb, 0.85, 5);
+        };
 
-        // Bước 2: Xử lý quan hệ dựa trên relation + entities
-        for (const rel of relationships) {
-            // Kiểm tra quan hệ IS_INSTANCE_OF giữa Major và Programme
-            if (rel.relation === "IS_INSTANCE_OF") {
-                // Tìm xem nếu có Major và Programme thì không cần thêm MajorProgramme nữa
-                const majorEntity = result.find(e => e.label === "Major");
-                const programmeEntity = result.find(e => e.label === "Programme");
-
-                if (majorEntity && programmeEntity) {
-                    const nodes = await this.resolveMajorProgrammeRelationship(majorEntity, programmeEntity);
-                    result.push(...nodes);
-                }
-            }
-
-            // Xử lý các quan hệ khác
-            else {
-                // Tìm các entity source-target dựa trên mối quan hệ
-                const sourceEntity = entities.find(e => e.name === rel.head);
-                const targetEntity = entities.find(e => e.name === rel.tail);
-
-                if (sourceEntity && targetEntity) {
-                    const nodes = await this.resolveRelationship(sourceEntity, targetEntity, rel.relation);
-                    result.push(...nodes);
-                }
+        // Lấy Group
+        const groups = entities.filter(e => e.label === 'Group');
+        for (const groupEntity of groups) {
+            const similarGroups = await findSimilarNodes('Group', groupEntity.name);
+            for (const groupNode of similarGroups) {
+                addNode(groupNode, 'Group');
+                // Lấy Major của groupNode
+                const majorsOfGroup = await Neo4jService.query(
+                    `MATCH (g:Group)-[:HAS_MAJOR]->(m:Major) WHERE g.id = $id RETURN m`,
+                    { id: groupNode.id }
+                );
+                for (const rec of majorsOfGroup) addNode(rec.get('m').properties, 'Major');
             }
         }
 
-        // Bước 3: Loại bỏ trùng lặp
-        const deduplicated = Object.values(
-            result.reduce((acc, item) => {
-                const key = `${item.label}-${item.id}`;
-                if (!acc[key]) acc[key] = item;
-                return acc;
-            }, {})
-        );
+        // Lấy Major
+        const majors = entities.filter(e => e.label === 'Major');
+        const programmes = entities.filter(e => e.label === 'Programme');
 
-        console.debug('[RetrieverQueryBuilderV2] Final nodes:', deduplicated);
-        return deduplicated;
+        const programmeSet = new Set(programmes.map(p => p.name.toLowerCase()));
+
+        // for (const majorEntity of majors) {
+        //     const similarMajors = await findSimilarNodes('Major', majorEntity.name);
+        //     for (const majorNode of similarMajors) {
+        //         addNode(majorNode, 'Major');
+        //         // Lấy Programme của majorNode
+        //         const programmesOfMajor = await Neo4jService.query(
+        //             `MATCH (m:Major)-[:HAS_PROGRAMME]->(p:Programme) WHERE m.id = $id RETURN p`,
+        //             { id: majorNode.id }
+        //         );
+        //         for (const rec of programmesOfMajor) addNode(rec.get('p').properties, 'Programme');
+        //     }
+        // }
+
+        // // Lấy Programme
+        // for (const programmeEntity of programmes) {
+        //     const similarProgrammes = await findSimilarNodes('Programme', programmeEntity.name);
+        //     for (const progNode of similarProgrammes) {
+        //         addNode(progNode, 'Programme');
+        //         // Lấy Major liên quan qua MajorProgramme
+        //         const majorsOfProgramme = await Neo4jService.query(
+        //             `MATCH (p:Programme)-[:IS_INSTANCE_OF]->(mp:MajorProgramme)-[:BELONGS_TO]->(m:Major) WHERE p.id = $id RETURN m`,
+        //             { id: progNode.id }
+        //         );
+        //         for (const rec of majorsOfProgramme) addNode(rec.get('m').properties, 'Major');
+        //     }
+        // }
+
+        // 1. Xử lý Major A
+        for (const majorEntity of majors) {
+            const similarMajors = await findSimilarNodes('Major', majorEntity.name);
+            for (const majorNode of similarMajors) {
+                addNode(majorNode, 'Major');
+
+                // Lấy chương trình của Major mà cũng nằm trong input Programme (lọc theo tên)
+                const programmesOfMajor = await Neo4jService.query(
+                    `MATCH (m:Major)-[:HAS_PROGRAMME]->(p:Programme) WHERE m.id = $id RETURN p`,
+                    { id: majorNode.id }
+                );
+
+                for (const rec of programmesOfMajor) {
+                    const progNode = rec.get('p').properties;
+                    if (programmeSet.has(progNode.name.toLowerCase())) {
+                        addNode(progNode, 'Programme');
+                    }
+                }
+            }
+        }
+
+        // 2. Xử lý Programme B
+        const majorSet = new Set(majors.map(m => m.name.toLowerCase()));
+
+        for (const programmeEntity of programmes) {
+            const similarProgrammes = await findSimilarNodes('Programme', programmeEntity.name);
+            for (const progNode of similarProgrammes) {
+                addNode(progNode, 'Programme');
+
+                // Lấy Major liên quan qua MajorProgramme nhưng chỉ lấy Major cũng nằm trong input Major
+                const majorsOfProgramme = await Neo4jService.query(
+                    `MATCH (p:Programme)-[:IS_INSTANCE_OF]->(mp:MajorProgramme)-[:BELONGS_TO]->(m:Major) WHERE p.id = $id RETURN m`,
+                    { id: progNode.id }
+                );
+
+                for (const rec of majorsOfProgramme) {
+                    const majorNode = rec.get('m').properties;
+                    if (majorSet.has(majorNode.name.toLowerCase())) {
+                        addNode(majorNode, 'Major');
+                    }
+                }
+            }
+        }
+
+        // Nếu có Major và Programme cùng lúc, lấy MajorProgramme trung gian
+        if (majors.length && programmes.length) {
+            for (const majorEntity of majors) {
+                const similarMajors = await findSimilarNodes('Major', majorEntity.name);
+                for (const majorNode of similarMajors) {
+                    for (const programmeEntity of programmes) {
+                        const similarProgrammes = await findSimilarNodes('Programme', programmeEntity.name);
+                        for (const progNode of similarProgrammes) {
+                            const mpNodes = await this.resolveMajorProgrammeRelationship(
+                                { id: majorNode.id, name: majorNode.name, label: 'Major' },
+                                { id: progNode.id, name: progNode.name, label: 'Programme' }
+                            );
+                            mpNodes.forEach(mpNode => addNode(mpNode, 'MajorProgramme'));
+                        }
+                    }
+                }
+            }
+        }
+
+        // Xử lý MajorProgramme trực tiếp trong entities
+        const majorProgrammes = entities.filter(e => e.label === 'MajorProgramme');
+        for (const mpEntity of majorProgrammes) {
+            const similarMPs = await findSimilarNodes('MajorProgramme', mpEntity.name);
+            for (const mpNode of similarMPs) {
+                addNode(mpNode, 'MajorProgramme');
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -221,36 +298,30 @@ class RetrieverQueryBuilder {
      */
     async resolveMajorProgrammeRelationship(majorEntity, programmeEntity) {
         const query = `
-            MATCH (programme:Programme {name: $programmeName})
-            MATCH (major:Major {name: $majorName})
+            MATCH (programme:Programme {id: $programmeId})
+            MATCH (major:Major {id: $majorId})
             MATCH (programme)-[:IS_INSTANCE_OF]->(mp:MajorProgramme)-[:BELONGS_TO]->(major)
-            RETURN programme, mp, major
+            RETURN mp, major, programme
         `;
-        const params = { programmeName: programmeEntity.name, majorName: majorEntity.name };
-
-        console.debug('[RetrieverQueryBuilderV2] MajorProgramme query:', query, 'Params:', params);
+        const params = { programmeId: programmeEntity.id, majorId: majorEntity.id };
 
         try {
             const records = await Neo4jService.query(query, params);
             const nodes = [];
 
             for (const record of records) {
-                const programmeNode = record.get('programme').properties;
-                const majorProgrammeNode = record.get('mp').properties;
+                const mpNode = record.get('mp').properties;
                 const majorNode = record.get('major').properties;
+                const programmeNode = record.get('programme').properties;
 
-                // Chỉ đơn giản trả về các node mà không tính similarity
-                nodes.push(this.formatNode(programmeNode, 'Programme'));
+                nodes.push(this.formatNode(mpNode, 'MajorProgramme'));
                 nodes.push(this.formatNode(majorNode, 'Major'));
-                nodes.push(this.formatNode(majorProgrammeNode, 'MajorProgramme'));
+                nodes.push(this.formatNode(programmeNode, 'Programme'));
             }
 
             return nodes;
         } catch (err) {
-            console.error(
-                `[RetrieverQueryBuilderV2] Query error for MajorProgramme ${majorEntity.name} -> ${programmeEntity.name}:`,
-                err.message
-            );
+            console.error('resolveMajorProgrammeRelationship error:', err);
             return [];
         }
     }
