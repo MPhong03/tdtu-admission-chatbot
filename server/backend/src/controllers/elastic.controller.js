@@ -1,97 +1,129 @@
-const mongoose = require("mongoose"); 
-const ElasticService = require("../services/chatbots/elastic.service");
-const llmService = require("../services/chatbots/llm.service");
+const elasticService = require("../services/chatbots/elastic.service");
 
 class ElasticController {
-    // async getAvailableTypes(req, res) {
-    //     const types = ElasticService.getAvailableTypes();
-    //     res.json({ types });
-    // }
+    /**
+     * Tạo mới một index trên Elasticsearch.
+     * Nếu index chưa tồn tại, sẽ tạo mới với mapping chuẩn.
+     * Query param: index (tuỳ chọn, mặc định là 'documents')
+     */
+    async createIndex(req, res) {
+        try {
+            const index = req.query.index || undefined;
+            await elasticService.createIndex(index);
+            res.status(200).json({ message: `Index created or already exists${index ? `: ${index}` : ""}` });
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
 
-    // async createIndex(req, res) {
-    //     const { type } = req.params;
-    //     const result = await ElasticService.createIndex(type);
-    //     res.json(result);
-    // }
+    /**
+     * Lưu một tài liệu vào Elasticsearch, sẽ tự động chunk theo câu.
+     * Body: { title, content } hoặc { docId, title, content }
+     * Query param: index (tuỳ chọn, mặc định là 'documents')
+     */
+    async saveDocument(req, res) {
+        // docId là tùy chọn
+        const { docId, title, content } = req.body;
+        const index = req.query.index || undefined;
+        try {
+            const result = await elasticService.saveDocument(docId, title, content, index);
+            res.status(201).json(result);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
 
-    // async deleteIndex(req, res) {
-    //     const { type } = req.params;
-    //     const result = await ElasticService.deleteIndex(type);
-    //     res.json(result);
-    // }
+    /**
+     * Lấy toàn bộ các chunk của một tài liệu theo docId.
+     * Route param: docId
+     * Query param: index (tuỳ chọn, mặc định là 'documents')
+     */
+    async getDocument(req, res) {
+        const { docId } = req.params;
+        const index = req.query.index || undefined;
+        try {
+            const result = await elasticService.getDocument(docId, index);
+            res.status(200).json(result);
+        } catch (error) {
+            res.status(404).json({ error: error.message });
+        }
+    }
 
-    // async addData(req, res) {
-    //     const { type } = req.params;
-    //     const data = req.body;
-    //     const result = await ElasticService.addData(type, data);
-    //     res.json(result);
-    // }
+    /**
+     * Lấy toàn bộ dữ liệu của một index (tối đa 1000 documents/chunks).
+     * Query param: index (tùy chọn, mặc định là 'documents'), size (tùy chọn)
+     */
+    async getAllDocuments(req, res) {
+        const index = req.query.index || undefined;
+        const size = req.query.size ? Number(req.query.size) : 1000;
+        try {
+            const result = await elasticService.getAllDocuments(index, size);
+            res.status(200).json(result);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
 
-    // async search(req, res) {
-    //     const { type } = req.params;
-    //     const { query } = req.query;
-    //     const result = await ElasticService.search(type, query);
-    //     res.json(result);
-    // }
+    /**
+     * Trả về danh sách các index hiện có trong Elasticsearch.
+     */
+    async listIndices(req, res) {
+        try {
+            const indices = await elasticService.listIndices();
+            res.status(200).json(indices);
+        } catch (error) {
+            res.status(500).json({ error: error.message });
+        }
+    }
 
-    // async getAllData(req, res) {
-    //     const { type } = req.params;
-    //     const result = await ElasticService.getAllData(type);
-    //     res.json(result);
-    // }
+    /**
+     * Cập nhật tài liệu (xóa toàn bộ chunk cũ và lưu lại chunk mới).
+     * Route param: docId
+     * Body: { title, content }
+     * Query param: index (tuỳ chọn, mặc định là 'documents')
+     */
+    async updateDocument(req, res) {
+        const { docId } = req.params;
+        const { title, content } = req.body;
+        const index = req.query.index || undefined;
+        try {
+            const result = await elasticService.updateDocument(docId, title, content, index);
+            res.status(200).json(result);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
 
-    // // FROM JSON
-    // async addDataFromJson(req, res) {
-    //     const { type } = req.params;
-    //     const data = [];
-    
-    //     if (!Array.isArray(req.body)) {
-    //         return res.status(400).json({
-    //             Code: -1,
-    //             Message: "Dữ liệu truyền vào phải là một mảng JSON"
-    //         });
-    //     }
-    
-    //     for (const item of req.body) {
-    //         if (type === "majorProgramme" && item.content) {
-    //             for (const [key, value] of Object.entries(item.content)) {
-    //                 const normalizedKey = key
-    //                     .toLowerCase()
-    //                     .replace(/[^a-z0-9]/gi, '_')
-    //                     .replace(/_+/g, '_')
-    //                     .replace(/^_|_$/g, '');
-    //                 item[normalizedKey] = value;
-    //             }
-    //         }
-    
-    //         if (!item._id) {
-    //             item.id = new mongoose.Types.ObjectId().toString(); // dùng new + toString
-    //         } else {
-    //             item.id = item._id.toString(); // dùng lại id cũ nếu có
-    //         }
-    //         delete item._id;
-    
-    //         data.push(item);
-    //     }
-    
-    //     try {
-    //         const result = await ElasticService.addData(type, data);
-    //         return res.json(result);
-    //     } catch (error) {
-    //         return res.status(500).json({
-    //             Code: -1,
-    //             Message: `Lỗi khi index dữ liệu: ${error.message}`
-    //         });
-    //     }
-    // }
+    /**
+     * Xóa toàn bộ chunk của một tài liệu theo docId.
+     * Route param: docId
+     * Query param: index (tuỳ chọn, mặc định là 'documents')
+     */
+    async deleteDocument(req, res) {
+        const { docId } = req.params;
+        const index = req.query.index || undefined;
+        try {
+            const result = await elasticService.deleteDocument(docId, index);
+            res.status(200).json(result);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
 
-    // // VECTOR SEARCH
-    // async searchByVector(req, res) {
-    //     const { type } = req.params;
-    //     const { query } = req.query;
-    //     const result = await ElasticService.searchByVector(type, query);
-    //     res.json(result);
-    // }
+    /**
+     * Tìm kiếm tài liệu (theo từ khoá, semantic, hybrid, custom cosine).
+     * Query string: query, searchType, size, index (index tuỳ chọn)
+     */
+    async searchDocuments(req, res) {
+        const { query, searchType, size } = req.query;
+        const index = req.query.index || undefined;
+        try {
+            const result = await elasticService.searchDocuments(query, searchType, Number(size) || 5, index);
+            res.status(200).json(result);
+        } catch (error) {
+            res.status(400).json({ error: error.message });
+        }
+    }
 }
 
 module.exports = new ElasticController();

@@ -4,6 +4,7 @@ const path = require('path');
 const axios = require('axios');
 const { pipeline, AutoTokenizer } = require('@xenova/transformers');
 const { cosineSimilarity } = require('../../utils/calculator.util');
+const logger = require('../../utils/logger.util');
 
 require('dotenv').config();
 
@@ -42,10 +43,10 @@ _Cảm ơn bạn đã thông cảm!_`;
     //
     //     if (!this.nerInitPromise) {
     //         this.nerInitPromise = (async () => {
-    //             console.log("🟡 Warming up NER pipeline...");
+    //             console.log("Warming up NER pipeline...");
     //
     //             const timeout = setTimeout(() => {
-    //                 console.warn("⏳ NER warmup taking too long...");
+    //                 console.warn("NER warmup taking too long...");
     //             }, 15000);
     //
     //             this.nerModel = await pipeline('token-classification', MODEL_ID, {
@@ -54,7 +55,7 @@ _Cảm ơn bạn đã thông cảm!_`;
     //             });
     //
     //             clearTimeout(timeout);
-    //             console.log("🟢 NER pipeline is ready.");
+    //             console.log("NER pipeline is ready.");
     //         })();
     //     }
     //
@@ -66,7 +67,7 @@ _Cảm ơn bạn đã thông cảm!_`;
         if (!this.nerApi) {
             throw new Error('NER_API environment variable is not set');
         }
-        console.log(`🟢 NER API is configured at ${this.nerApi}`);
+        logger.info(`## NER API is configured at ${this.nerApi}`);
     }
 
     async inferNER(text) {
@@ -208,10 +209,19 @@ _Cảm ơn bạn đã thông cảm!_`;
             const res = await axios.post(`${this.geminiApi}?key=${this.apiKey}`, {
                 contents: [{ parts: [{ text: prompt }] }]
             });
-            return res.data.candidates?.[0]?.content?.parts?.[0]?.text || this.fallbackMessage;
+
+            const text = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            return {
+                answer: text || this.fallbackMessage,
+                isError: !text
+            };
         } catch (err) {
             console.error("Gemini Generate Error:", err.message);
-            return this.fallbackMessage;
+            return {
+                answer: this.fallbackMessage,
+                isError: true
+            };
         }
     }
 }

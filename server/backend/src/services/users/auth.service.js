@@ -64,6 +64,32 @@ class AuthService {
             return HttpResponse.error("Internal Server Error");
         }
     }
+
+    async changePassword({ userId, oldPassword, newPassword }) {
+        try {
+            const user = await this.userRepo.findById(userId);
+            if (!user) {
+                return HttpResponse.error("User not found");
+            }
+
+            const isMatch = await bcrypt.compare(oldPassword, user.password);
+            if (!isMatch) {
+                return HttpResponse.error("Old password is incorrect");
+            }
+
+            const hashedPassword = await bcrypt.hash(newPassword, 10);
+            const updatedUser = await this.userRepo.updatePasswordById(userId, hashedPassword);
+
+            if (!updatedUser) {
+                return HttpResponse.error("Failed to change password");
+            }
+
+            return HttpResponse.success("Password changed successfully");
+        } catch (error) {
+            console.error("Error in changePassword:", error);
+            return HttpResponse.error("Internal Server Error");
+        }
+    }
 }
 
 module.exports = AuthService;

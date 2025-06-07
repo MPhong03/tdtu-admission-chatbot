@@ -1,15 +1,55 @@
 const { app, server } = require("./app");
+const elasticClient = require("./configs/elastic.config");
 const User = require("./models/users/user.model");
 const LLMService = require("./services/chatbots/llm.service");
+const logger = require("./utils/logger.util");
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, async () => { 
-  console.log(`Server running on port ${PORT}`);
 
-  await User.createDefaultAdmin();
+const checkElasticConnection = async () => {
+  try {
+    const health = await elasticClient.cluster.health();
+    logger.info("ElasticSearch connection established", {
+      status: health.status,
+      module: "ElasticSearch",
+    });
+  } catch (error) {
+    logger.error("Failed to connect to ElasticSearch", {
+      error: error.message,
+      stack: error.stack,
+      module: "ElasticSearch",
+    });
+    // Có thể thêm logic fallback hoặc thoát ứng dụng
+    // process.exit(1);
+  }
+};
+
+server.listen(PORT, async () => {
+  logger.info("Server started", { port: PORT, env: process.env.NODE_ENV });
+
+  try {
+    await User.createDefaultAdmin();
+    logger.info("Default admin user created", { module: "User" });
+  } catch (error) {
+    logger.error("Failed to create default admin user", {
+      error: error.message,
+      stack: error.stack,
+      module: "User",
+    });
+  }
 
   // Làm nóng mô hình
-  LLMService.initNER()
-    .then(() => console.log("✅ NER loaded"))
-    .catch((e) => console.error("❌ NER failed:", e));
+  try {
+    await LLMService.initNER();
+    logger.info("NER model initialized successfully", { module: "LLMService" });
+  } catch (error) {
+    logger.error("Failed to initialize NER model", {
+      error: error.message,
+      stack: error.stack,
+      module: "LLMService",
+    });
+  }
+
+  // Kiểm tra ElasticSearch
+  await checkElasticConnection();
 });

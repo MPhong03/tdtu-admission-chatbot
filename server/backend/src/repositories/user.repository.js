@@ -28,6 +28,15 @@ class UserRepository {
             return null;
         }
     }
+
+    async updatePasswordById(id, newPassword) {
+        try {
+            return await User.findByIdAndUpdate(id, { password: newPassword }, { new: true });
+        } catch (error) {
+            console.error("Error updating user password:", error);
+            return null;
+        }
+    }
 }
 
 module.exports = new UserRepository();

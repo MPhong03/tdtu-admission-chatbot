@@ -24,7 +24,7 @@ function initSocketHandler(io) {
 
             try {
                 // Xử lý chatbot
-                const { answer, prompt, contextNodes } = await RetrieverService.chatWithBot(question);
+                const { answer, prompt, contextNodes, isError } = await RetrieverService.chatWithBot(question);
 
                 // Lưu lịch sử
                 const saveResult = await HistoryService.saveChat({
@@ -32,6 +32,7 @@ function initSocketHandler(io) {
                     chatId,
                     question,
                     answer,
+                    isError
                 });
 
                 // Phản hồi cho client

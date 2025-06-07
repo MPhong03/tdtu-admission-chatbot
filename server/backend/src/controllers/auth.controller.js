@@ -45,6 +45,23 @@ class AuthController {
             res.status(500).json(HttpResponse.error("Internal Server Error"));
         }
     }
+
+    async changePassword(req, res) {
+        try {
+            const { oldPassword, newPassword } = req.body;
+            if (!oldPassword || !newPassword) {
+                return res.status(400).json(HttpResponse.error("Old and new password are required"));
+            }
+            const result = await this.authService.changePassword({
+                userId: req.user.id,
+                oldPassword,
+                newPassword
+            });
+            res.json(result);
+        } catch (error) {
+            res.status(500).json(HttpResponse.error("Internal Server Error"));
+        }
+    }
 }
 
 module.exports = new AuthController();

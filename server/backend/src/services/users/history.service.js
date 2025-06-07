@@ -8,7 +8,7 @@ const ChatRepo = new BaseRepository(Chat);
 const HistoryRepo = new BaseRepository(History);
 
 class HistoryService {
-    async saveChat({ userId, chatId, question, answer }) {
+    async saveChat({ userId, chatId, question, answer, isError }) {
         try {
             let chat;
 
@@ -32,7 +32,8 @@ class HistoryService {
                 userId,
                 chatId: chat._id,
                 question,
-                answer
+                answer,
+                status: isError ? "error" : "success"
             });
 
             return HttpResponse.success("Lưu tin nhắn thành công", { chatId: chat._id, history });
@@ -68,6 +69,38 @@ class HistoryService {
                     size: Number(size),
                     hasMore: page * size < total,
                     totalItems: total,
+                }
+            });
+        } catch (error) {
+            console.error("Error fetching chat history:", error);
+            return HttpResponse.error("Lỗi hệ thống khi lấy lịch sử chat");
+        }
+    }
+
+    // =========== ADMIN ==========
+    async getAllChat({ page = 1, size = 10 }) {
+        try {
+            const skip = (page - 1) * size;
+
+            const query = HistoryRepo.asQueryable()
+                .populate("userId", "username email")
+                .populate("chatId", "name")
+                .sort({ createdAt: -1 })
+                .skip(skip)
+                .limit(size);
+
+            const [histories, totalItems] = await Promise.all([
+                query.exec(),
+                HistoryRepo.count()
+            ]);
+
+            return HttpResponse.success("Lịch sử Q&A", {
+                items: histories,
+                pagination: {
+                    page,
+                    size,
+                    totalItems,
+                    hasMore: page * size < totalItems
                 }
             });
         } catch (error) {

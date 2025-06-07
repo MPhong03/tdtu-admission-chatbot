@@ -4,6 +4,7 @@ const RetrieverQueryBuilder = require('../builders/retrieverquery.builder');
 const LLMService = require('./llm.service');
 const { scoreContextRelevance } = require('../../helpers/improvements/context.scoring');
 const PromptBuilder = require('../../helpers/improvements/prompt.builder');
+const elasticService = require('./elastic.service');
 
 class RetrieverService {
     /**
@@ -51,8 +52,22 @@ class RetrieverService {
 
         // Giờ relationships không có head/tail, nên chuyển thẳng entities + relations cho retriever
         console.time('Retrieve related nodes');
-        const contextNodes = await RetrieverQueryBuilder.retrieve_V2({ entities, relationships });
+        let contextNodes = await RetrieverQueryBuilder.retrieve_V2({ entities, relationships });
         console.timeEnd('Retrieve related nodes');
+
+        // Nếu không tìm thấy context nodes nào trong KG, fallback sang ElasticSearch documents index
+        if (contextNodes.length === 0) {
+            console.warn('[RetrieverService] No context nodes found in KG. Falling back to document search.');
+            try {
+                const elasticResults = await elasticService.searchDocuments(question, 'semantic', 5, 'documents');
+                contextNodes = elasticResults.map(doc => ({
+                    name: doc.title || '',
+                    content: doc.content,
+                }));
+            } catch (err) {
+                console.error('[RetrieverService] Fallback search failed:', err);
+            }
+        }
 
         return { entities, relationships, contextNodes };
     }
@@ -101,22 +116,22 @@ class RetrieverService {
                                     Hãy trả lời khéo léo và giữ thái độ thân thiện, tránh việc trả lời bịa đặt.`;
 
             console.time("Gemini generate answer (fallback)");
-            const answer = await LLMService.generateAnswer(fallbackPrompt);
+            const { answer, isError } = await LLMService.generateAnswer(fallbackPrompt);
             console.timeEnd("Gemini generate answer (fallback)");
 
             console.timeEnd("Total chatWithBot");
-            return { prompt: fallbackPrompt, answer };
+            return { prompt: fallbackPrompt, answer, isError };
         }
 
         const prompt = require('../../helpers/improvements/prompt.builder').build(question, contextNodes);
 
         console.time("Gemini generate answer (with context)");
-        const answer = await LLMService.generateAnswer(prompt);
+        const { answer, isError } = await LLMService.generateAnswer(prompt);
         console.timeEnd("Gemini generate answer (with context)");
 
         console.timeEnd("Total chatWithBot");
 
-        return { prompt, answer, contextNodes };
+        return { prompt, answer, contextNodes, isError };
     }
 }
 

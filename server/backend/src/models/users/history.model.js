@@ -6,6 +6,11 @@ const HistorySchema = new mongoose.Schema({
     chatId: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', required: true },
     question: { type: String, required: true },
     answer: { type: String, required: true },
+    status: {
+        type: String,
+        enum: ['success', 'unanswered', 'error'],
+        default: 'success'
+    }
 }, {
     timestamps: true
 });

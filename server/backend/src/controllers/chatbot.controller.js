@@ -41,14 +41,15 @@ class ChatbotController {
             if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
             // 1. Gọi AI để lấy câu trả lời
-            const { answer, prompt, contextNodes } = await RetrieverService.chatWithBot(question);
+            const { answer, prompt, contextNodes, isError } = await RetrieverService.chatWithBot(question);
 
             // 2. Lưu vào lịch sử chat
             const saveResult = await HistoryService.saveChat({
                 userId,
                 chatId,
                 question,
-                answer
+                answer,
+                isError
             });
 
             if (saveResult.Code !== 1) {
@@ -75,7 +76,7 @@ class ChatbotController {
             const { question } = req.body;
             if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
-            const answer = await LLMService.generateAnswer(question);
+            const { answer, isError } = await LLMService.generateAnswer(question);
 
             return res.json(HttpResponse.success("Nhận kết quả: ", answer));
         } catch (err) {

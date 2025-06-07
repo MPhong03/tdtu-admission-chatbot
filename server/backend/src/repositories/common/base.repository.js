@@ -72,6 +72,10 @@ class BaseRepository {
         return this.model.exists(filter);
     }
 
+    async aggregate(pipeline = []) {
+        return this.model.aggregate(pipeline).exec();
+    }
+
     // ======= PAGINATION =======
     /**
      * Phân trang kết quả
