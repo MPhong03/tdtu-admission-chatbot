@@ -59,7 +59,7 @@ class RetrieverService {
         if (contextNodes.length === 0) {
             console.warn('[RetrieverService] No context nodes found in KG. Falling back to document search.');
             try {
-                const elasticResults = await elasticService.searchDocuments(question, 'semantic', 5, 'documents');
+                const elasticResults = await elasticService.searchDocuments(question, 'semantic', 10, 'documents');
                 contextNodes = elasticResults.map(doc => ({
                     name: doc.title || '',
                     content: doc.content,

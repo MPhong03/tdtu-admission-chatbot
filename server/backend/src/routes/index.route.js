@@ -9,6 +9,7 @@ const folderRoutes = require("./folder.route");
 const historyRoutes = require("./history.route");
 const statisticRoutes = require("./statistic.route");
 const userRoutes = require("./user.route");
+const commonRoutes = require("./common.route");
 // Config routes here
 
 const router = express.Router();
@@ -24,6 +25,7 @@ router.use("/folders", folderRoutes);
 router.use("/histories", historyRoutes);
 router.use("/statistics", statisticRoutes);
 router.use("/users", userRoutes);
+router.use("/systemconfigs", commonRoutes);
 //...
 
 module.exports = router;

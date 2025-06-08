@@ -5,11 +5,9 @@ const axios = require('axios');
 const { pipeline, AutoTokenizer } = require('@xenova/transformers');
 const { cosineSimilarity } = require('../../utils/calculator.util');
 const logger = require('../../utils/logger.util');
+const CommonRepo = require('../../repositories/systemconfigs/common.repository');
 
 require('dotenv').config();
-
-// === Hằng số mô hình ===
-const MODEL_ID = process.env.LLM_MODEL_ID || '';
 
 class LLMService {
     constructor() {
@@ -36,31 +34,25 @@ _Cảm ơn bạn đã thông cảm!_`;
         this.nerApi = process.env.NER_API || 'http://localhost:8000'; // Địa chỉ API FastAPI
     }
 
-    // === NER ===
+    // === LOAD CONFIG ===
+    async loadGeminiConfig() {
+        // Nếu đã có cấu hình trong env thì ưu tiên dùng
+        if (!process.env.GEMINI_API_URL || !process.env.GEMINI_API_KEY) {
+            const config = await CommonRepo.getValues(['gemini_api_url', 'gemini_api_key']);
 
-    // async initNER() {
-    //     if (this.nerModel) return;
-    //
-    //     if (!this.nerInitPromise) {
-    //         this.nerInitPromise = (async () => {
-    //             console.log("Warming up NER pipeline...");
-    //
-    //             const timeout = setTimeout(() => {
-    //                 console.warn("NER warmup taking too long...");
-    //             }, 15000);
-    //
-    //             this.nerModel = await pipeline('token-classification', MODEL_ID, {
-    //                 use_onnx: true,
-    //                 quantized: false,
-    //             });
-    //
-    //             clearTimeout(timeout);
-    //             console.log("NER pipeline is ready.");
-    //         })();
-    //     }
-    //
-    //     return this.nerInitPromise;
-    // }
+            if (!this.geminiApi && config.gemini_api_url) {
+                this.geminiApi = config.gemini_api_url;
+                logger.info(`Loaded geminiApi: ${this.geminiApi}`);
+            }
+
+            if (!this.apiKey && config.gemini_api_key) {
+                this.apiKey = config.gemini_api_key;
+                logger.info(`Loaded Gemini API key`);
+            }
+        }
+    }
+
+    // === NER ===
 
     async initNER() {
         // Không cần khởi tạo pipeline cục bộ, chỉ kiểm tra NER_API
@@ -206,6 +198,8 @@ _Cảm ơn bạn đã thông cảm!_`;
 
     async generateAnswer(prompt) {
         try {
+            await this.loadGeminiConfig();
+            
             const res = await axios.post(`${this.geminiApi}?key=${this.apiKey}`, {
                 contents: [{ parts: [{ text: prompt }] }]
             });

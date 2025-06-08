@@ -43,6 +43,9 @@ class ChatService {
             if (folderId) {
                 filter.folderId = folderId;
             }
+            else {
+                // filter.folderId = { $ne: null || "" };
+            }
             const chats = await this.chatRepo.getAll(filter, ["folderId"]);
             return HttpResponse.success("Chats retrieved successfully", chats);
         } catch (error) {

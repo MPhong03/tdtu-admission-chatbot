@@ -83,7 +83,7 @@ class ElasticService {
     /**
      * Chia nhỏ văn bản thành các đoạn theo số câu.
      */
-    splitTextBySentences(text, maxSentences = 5) {
+    splitTextBySentences(text, maxSentences = 20) {
         if (!text) return [];
         const sentences = text.match(/[^.!?。？！]+[.!?。？！]+/g) || [text];
         const chunks = [];
@@ -242,7 +242,7 @@ class ElasticService {
      * @param {number} size
      * @param {string} index - Tên index muốn search (mặc định là 'documents')
      */
-    async searchDocuments(query, searchType = "semantic", size = 5, index = DEFAULT_INDEX) {
+    async searchDocuments(query, searchType = "semantic", size = 10, index = DEFAULT_INDEX) {
         if (!query) throw new Error("Query is required");
         let searchQuery;
         if (searchType === "keyword") {

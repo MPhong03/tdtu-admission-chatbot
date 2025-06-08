@@ -1,5 +1,6 @@
 const BaseRepository = require("../../repositories/common/base.repository");
 const Folder = require("../../models/users/folder.model");
+const Chat = require("../../models/users/chat.model");
 const HttpResponse = require("../../data/responses/http.response");
 
 class FolderService {

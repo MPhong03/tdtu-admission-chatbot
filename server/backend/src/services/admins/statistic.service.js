@@ -48,7 +48,7 @@ class StatisticService {
         };
     }
 
-    async getSummaryStats(startDate, endDate ) {
+    async getSummaryStats(startDate, endDate) {
         const [totalUsers, totalInteractions, answerStats] = await Promise.all([
             this.getTotalUsers(startDate, endDate),
             this.getTotalInteractions(startDate, endDate),
@@ -100,7 +100,7 @@ class StatisticService {
             { $match: match },
             {
                 $group: {
-                    _id: "$status",
+                    _id: { $ifNull: ["$status", "unknown"] },
                     count: { $sum: 1 }
                 }
             }

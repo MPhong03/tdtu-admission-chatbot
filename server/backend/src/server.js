@@ -1,6 +1,7 @@
 const { app, server } = require("./app");
 const elasticClient = require("./configs/elastic.config");
 const User = require("./models/users/user.model");
+const seedCommonConfigs = require("./seeds/common.seed");
 const LLMService = require("./services/chatbots/llm.service");
 const logger = require("./utils/logger.util");
 
@@ -27,14 +28,29 @@ const checkElasticConnection = async () => {
 server.listen(PORT, async () => {
   logger.info("Server started", { port: PORT, env: process.env.NODE_ENV });
 
+  // Tạo admin mac dinh
   try {
     await User.createDefaultAdmin();
-    logger.info("Default admin user created", { module: "User" });
+
+    logger.info("Default admin loaded", { module: "User" });
   } catch (error) {
     logger.error("Failed to create default admin user", {
       error: error.message,
       stack: error.stack,
       module: "User",
+    });
+  }
+
+  // Tạo cấu hình chung
+  try {
+    await seedCommonConfigs();
+
+    logger.info("Default system configs loaded", { module: "Common" });
+  } catch (error) {
+    logger.error("Failed to create default system configs", {
+      error: error.message,
+      stack: error.stack,
+      module: "Common",
     });
   }
 
