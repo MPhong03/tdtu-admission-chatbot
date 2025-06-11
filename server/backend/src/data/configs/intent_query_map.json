@@ -1,0 +1,38 @@
+{
+    "Ask_Major_Detail": {
+        "description": "Truy vấn thông tin chi tiết về một ngành theo chương trình cụ thể (Major + Programme). Trả về MajorProgramme node nếu có.",
+        "entity_requirements": [
+            "Major",
+            "Programme"
+        ],
+        "cypher": "MATCH (m:Major {id: $majorId}) OPTIONAL MATCH (m)<-[:BELONGS_TO]-(mp:MajorProgramme) OPTIONAL MATCH (m)-[:HAS_PROGRAMME]->(p:Programme) WITH m, mp, p WHERE p.id = $programmeId OR $programmeId IS NULL RETURN DISTINCT mp, m, p"
+    },
+    "Ask_Major": {
+        "description": "Truy vấn thông tin về một ngành, bao gồm các chương trình đào tạo liên quan.",
+        "entity_requirements": [
+            "Major"
+        ],
+        "cypher": "MATCH (m:Major)-[:HAS_PROGRAMME]->(p:Programme) WHERE m.id = $majorId RETURN m, p"
+    },
+    "Ask_Group": {
+        "description": "Truy vấn nhóm ngành và danh sách ngành thuộc nhóm đó.",
+        "entity_requirements": [
+            "Group"
+        ],
+        "cypher": "MATCH (g:Group)-[:HAS_MAJOR]->(m:Major) WHERE g.id = $groupId RETURN g, m"
+    },
+    "Ask_Programme": {
+        "description": "Truy vấn chương trình đào tạo và ngành mà nó thuộc về thông qua MajorProgramme.",
+        "entity_requirements": [
+            "Programme"
+        ],
+        "cypher": "MATCH (p:Programme)<-[:IS_INSTANCE_OF]-(mp:MajorProgramme)-[:BELONGS_TO]->(m:Major) WHERE p.id = $programmeId RETURN p, mp, m"
+    },
+    "Ask_Group_Major_Count": {
+        "description": "Truy vấn số lượng ngành trong một nhóm ngành.",
+        "entity_requirements": [
+            "Group"
+        ],
+        "cypher": "MATCH (g:Group)-[:HAS_MAJOR]->(m:Major) WHERE g.id = $groupId RETURN g.name AS groupName, count(m) AS majorCount"
+    }
+}

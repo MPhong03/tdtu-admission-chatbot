@@ -52,15 +52,15 @@ class EntityRecognizer {
                 start: entity.start,
                 end: entity.end
             }));
-            const relationships = response.relationships.map(rel => ({
-                relation: rel.relation,
-                score: rel.score
-            }));
+            // const relationships = response.relationships.map(rel => ({
+            //     relation: rel.relation,
+            //     score: rel.score
+            // }));
 
             console.debug('[EntityRecognizer] Recognized entities:', entities);
-            console.debug('[EntityRecognizer] Recognized relationships:', relationships);
+            console.debug('[EntityRecognizer] Recognized intent:', response.intent);
 
-            return { entities, relationships };
+            return { entities, intent: response.intent.intent };
         } catch (err) {
             console.error('[EntityRecognizer] Error:', err.message);
             return { entities: [], relationships: [] };

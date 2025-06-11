@@ -44,7 +44,7 @@ class ChatService {
                 filter.folderId = folderId;
             }
             else {
-                // filter.folderId = { $ne: null || "" };
+                filter.folderId = null;
             }
             const chats = await this.chatRepo.getAll(filter, ["folderId"]);
             return HttpResponse.success("Chats retrieved successfully", chats);
@@ -121,6 +121,9 @@ class ChatService {
             const filter = { userId };
             if (folderId) {
                 filter.folderId = folderId;
+            }
+            else {
+                filter.folderId = null;
             }
             const result = await this.chatRepo.paginate(filter, page, size, ["folderId"]);
             return HttpResponse.success("Chats paginated successfully", result);

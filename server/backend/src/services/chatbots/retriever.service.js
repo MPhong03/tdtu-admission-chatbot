@@ -41,35 +41,36 @@ class RetrieverService {
      */
     async processQuestion_V2(question) {
         console.time('Entity recognition');
-        const { entities, relationships } = await EntityRecognizer.recognizeEntities_V2(question);
+        const { entities, intent } = await EntityRecognizer.recognizeEntities_V2(question);
         console.timeEnd('Entity recognition');
 
         // Kiểm tra relationships: chỉ cần tồn tại và không rỗng
-        if (!Array.isArray(relationships) || relationships.length === 0) {
-            console.warn('[RetrieverService] No valid relationships found. Skipping retrieval.');
-            return { entities, relationships, contextNodes: [] };
+        // if (!Array.isArray(relationships) || relationships.length === 0) {
+        //     console.warn('[RetrieverService] No valid relationships found. Skipping retrieval.');
+        //     return { entities, relationships, contextNodes: [] };
+        // }
+
+        // Truy vấn kết hợp Neo4j và Elasticsearch tăng khả năng hiểu
+        console.time('Retrieve context');
+
+        let kgContext = await RetrieverQueryBuilder.retrieve_V3({ entities, intent });
+
+        let textContext = [];
+        try {
+            const elasticResults = await elasticService.searchDocuments(question, 'semantic', 5, 'documents');
+            textContext = elasticResults.map(doc => ({
+                name: doc.title || '',
+                content: doc.content,
+            }));
+        } catch (err) {
+            console.error('[RetrieverService] Elastic search failed:', err);
         }
 
-        // Giờ relationships không có head/tail, nên chuyển thẳng entities + relations cho retriever
-        console.time('Retrieve related nodes');
-        let contextNodes = await RetrieverQueryBuilder.retrieve_V2({ entities, relationships });
-        console.timeEnd('Retrieve related nodes');
+        const contextNodes = [...kgContext, ...textContext].slice(0, 20); // tối đa 20 node
 
-        // Nếu không tìm thấy context nodes nào trong KG, fallback sang ElasticSearch documents index
-        if (contextNodes.length === 0) {
-            console.warn('[RetrieverService] No context nodes found in KG. Falling back to document search.');
-            try {
-                const elasticResults = await elasticService.searchDocuments(question, 'semantic', 10, 'documents');
-                contextNodes = elasticResults.map(doc => ({
-                    name: doc.title || '',
-                    content: doc.content,
-                }));
-            } catch (err) {
-                console.error('[RetrieverService] Fallback search failed:', err);
-            }
-        }
+        console.timeEnd('Retrieve context');
 
-        return { entities, relationships, contextNodes };
+        return { entities, intent, contextNodes };
     }
 
     /**
@@ -84,14 +85,14 @@ class RetrieverService {
      */
     async retrieveContext(question) {
         try {
-            const { entities, relationships, contextNodes } = await this.processQuestion_V2(question);
+            const { entities, intent, contextNodes } = await this.processQuestion_V2(question);
 
             // Có thể bổ sung kiểm tra fallback nếu không có contextNodes
 
             return {
                 question,
                 entities,
-                relationships,
+                intent,
                 contextNodes
             };
         } catch (err) {
@@ -108,7 +109,7 @@ class RetrieverService {
     async chatWithBot(question) {
         console.time("Total chatWithBot");
 
-        const { entities, relationships, contextNodes } = await this.processQuestion_V2(question);
+        const { entities, intent, contextNodes } = await this.processQuestion_V2(question);
 
         if (!contextNodes.length) {
             const fallbackPrompt = `Bạn là chatbot tuyển sinh. Hiện không có thông tin từ hệ thống.

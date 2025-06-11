@@ -59,7 +59,7 @@ _Cảm ơn bạn đã thông cảm!_`;
         if (!this.nerApi) {
             throw new Error('NER_API environment variable is not set');
         }
-        logger.info(`## NER API is configured at ${this.nerApi}`);
+        logger.info(`NER API is configured at ${this.nerApi}`);
     }
 
     async inferNER(text) {
@@ -105,7 +105,7 @@ _Cảm ơn bạn đã thông cảm!_`;
             );
 
             // Kiểm tra response
-            if (!response.data || !response.data.entities || !response.data.relationships) {
+            if (!response.data || !response.data.entities) {
                 console.error('[LLMService] Invalid NER API response:', response.data);
                 throw new Error('NER API returned invalid or incomplete data');
             }
@@ -120,14 +120,14 @@ _Cảm ơn bạn đã thông cảm!_`;
             }));
 
             // Ánh xạ relationships
-            const relationships = response.data.relationships.map(rel => ({
-                relation: rel.relation,
-                score: rel.score
-            }));
+            // const relationships = response.data.relationships.map(rel => ({
+            //     relation: rel.relation,
+            //     score: rel.score
+            // }));
 
-            console.debug('[LLMService] NER API response processed:', { entities, relationships });
+            console.debug('[LLMService] NER API response processed:', { entities, intent: response.data.intent });
 
-            return { entities, relationships };
+            return { entities, intent: response.data.intent };
         } catch (err) {
             console.error('[LLMService] NER API Error:', err.message);
             throw new Error(`Failed to call NER API: ${err.message}`);
