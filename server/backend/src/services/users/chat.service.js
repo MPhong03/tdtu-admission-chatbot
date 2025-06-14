@@ -8,9 +8,11 @@ class ChatService {
     }
 
     // Create a new chat
-    async createChat(userId, name, folderId = null) {
+    async createChat(userId, visitorId, name, folderId = null) {
         try {
-            const data = { userId, name };
+            const data = { name };
+            if (userId) data.userId = userId;
+            if (visitorId) data.visitorId = visitorId;
             if (folderId) {
                 data.folderId = folderId;
             }
@@ -23,10 +25,10 @@ class ChatService {
     }
 
     // Get a chat by ID
-    async getChatById(userId, chatId) {
+    async getChatById(userId, visitorId, chatId) {
         try {
             const chat = await this.chatRepo.getById(chatId, ["folderId"]);
-            if (!chat || chat.userId.toString() !== userId.toString()) {
+            if (!chat) {
                 return HttpResponse.error("Chat not found or unauthorized", -404);
             }
             return HttpResponse.success("Chat retrieved successfully", chat);
@@ -37,9 +39,9 @@ class ChatService {
     }
 
     // Get all chats of a user (with optional folder filter)
-    async getChatsByUser(userId, folderId = null) {
+    async getChatsByUser(userId, visitorId, folderId = null) {
         try {
-            const filter = { userId };
+            const filter = this.getUserFilter({ id: userId, visitorId });
             if (folderId) {
                 filter.folderId = folderId;
             }
@@ -55,10 +57,10 @@ class ChatService {
     }
 
     // Update a chat
-    async updateChat(userId, chatId, updateData) {
+    async updateChat(userId, visitorId, chatId, updateData) {
         try {
             const chat = await this.chatRepo.getById(chatId);
-            if (!chat || chat.userId.toString() !== userId.toString()) {
+            if (!chat) {
                 return HttpResponse.error("Chat not found or unauthorized", -404);
             }
             const updatedChat = await this.chatRepo.update(chatId, updateData);
@@ -70,10 +72,10 @@ class ChatService {
     }
 
     // Rename a chat
-    async renameChat(userId, chatId, newName) {
+    async renameChat(userId, visitorId, chatId, newName) {
         try {
             const chat = await this.chatRepo.getById(chatId);
-            if (!chat || chat.userId.toString() !== userId.toString()) {
+            if (!chat) {
                 return HttpResponse.error("Chat not found or unauthorized", -404);
             }
             const updatedChat = await this.chatRepo.update(chatId, { name: newName });
@@ -85,10 +87,10 @@ class ChatService {
     }
 
     // Move a chat to a folder (or remove from folder if folderId is null)
-    async moveChatToFolder(userId, chatId, folderId = null) {
+    async moveChatToFolder(userId, visitorId, chatId, folderId = null) {
         try {
             const chat = await this.chatRepo.getById(chatId);
-            if (!chat || chat.userId.toString() !== userId.toString()) {
+            if (!chat) {
                 return HttpResponse.error("Chat not found or unauthorized", -404);
             }
             const updateData = folderId ? { folderId } : { $unset: { folderId: "" } };
@@ -101,10 +103,10 @@ class ChatService {
     }
 
     // Delete a chat
-    async deleteChat(userId, chatId) {
+    async deleteChat(userId, visitorId, chatId) {
         try {
             const chat = await this.chatRepo.getById(chatId);
-            if (!chat || chat.userId.toString() !== userId.toString()) {
+            if (!chat) {
                 return HttpResponse.error("Chat not found or unauthorized", -404);
             }
             await this.chatRepo.delete(chatId);
@@ -116,9 +118,9 @@ class ChatService {
     }
 
     // Paginate chats
-    async paginateChats(userId, page = 1, size = 10, folderId = null) {
+    async paginateChats(userId, visitorId, page = 1, size = 10, folderId = null) {
         try {
-            const filter = { userId };
+            const filter = this.getUserFilter({ id: userId, visitorId });
             if (folderId) {
                 filter.folderId = folderId;
             }
@@ -131,6 +133,12 @@ class ChatService {
             console.error("Error paginating chats:", error);
             return HttpResponse.error("Failed to paginate chats");
         }
+    }
+
+    getUserFilter(user) {
+        if (user?.id) return { userId: user.id };
+        if (user?.visitorId) return { visitorId: user.visitorId };
+        return {};
     }
 }
 

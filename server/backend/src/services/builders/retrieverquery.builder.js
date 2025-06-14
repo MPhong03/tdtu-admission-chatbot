@@ -348,8 +348,9 @@ class RetrieverQueryBuilder {
         for (const label of config.entity_requirements) {
             const paramKey = label.toLowerCase() + 'Id';
             if (!(paramKey in resolvedIds)) {
-                console.warn(`[Retriever] Bỏ qua truy vấn`);
-                return [];
+                // console.warn(`[Retriever] Bỏ qua truy vấn`);
+                // return [];
+                resolvedIds[paramKey] = null;
             }
         }
 

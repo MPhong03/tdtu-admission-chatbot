@@ -6,11 +6,12 @@ class ChatController {
     async createChat(req, res) {
         try {
             const { name, folderId } = req.body;
-            const userId = req.user.id;
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
             if (!name) {
                 return res.json(HttpResponse.error("Name is required", -400));
             }
-            const result = await ChatService.createChat(userId, name, folderId);
+            const result = await ChatService.createChat(userId, visitorId, name, folderId);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -22,8 +23,9 @@ class ChatController {
     async getChatById(req, res) {
         try {
             const { id } = req.params;
-            const userId = req.user.id;
-            const result = await ChatService.getChatById(userId, id);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await ChatService.getChatById(userId, visitorId, id);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -35,8 +37,9 @@ class ChatController {
     async getChatsByUser(req, res) {
         try {
             const { folderId } = req.query;
-            const userId = req.user.id;
-            const result = await ChatService.getChatsByUser(userId, folderId);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await ChatService.getChatsByUser(userId, visitorId, folderId);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -49,8 +52,9 @@ class ChatController {
         try {
             const { id } = req.params;
             const updateData = req.body;
-            const userId = req.user.id;
-            const result = await ChatService.updateChat(userId, id, updateData);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await ChatService.updateChat(userId, visitorId, id, updateData);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -63,11 +67,12 @@ class ChatController {
         try {
             const { id } = req.params;
             const { name } = req.body;
-            const userId = req.user.id;
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
             if (!name) {
                 return res.json(HttpResponse.error("Name is required", -400));
             }
-            const result = await ChatService.renameChat(userId, id, name);
+            const result = await ChatService.renameChat(userId, visitorId, id, name);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -80,8 +85,9 @@ class ChatController {
         try {
             const { id } = req.params;
             const { folderId } = req.body;
-            const userId = req.user.id;
-            const result = await ChatService.moveChatToFolder(userId, id, folderId);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await ChatService.moveChatToFolder(userId, visitorId, id, folderId);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -93,8 +99,9 @@ class ChatController {
     async deleteChat(req, res) {
         try {
             const { id } = req.params;
-            const userId = req.user.id;
-            const result = await ChatService.deleteChat(userId, id);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await ChatService.deleteChat(userId, visitorId, id);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -106,8 +113,9 @@ class ChatController {
     async paginateChats(req, res) {
         try {
             const { page = 1, size = 10, folderId } = req.query;
-            const userId = req.user.id;
-            const result = await ChatService.paginateChats(userId, parseInt(page), parseInt(size), folderId);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await ChatService.paginateChats(userId, visitorId, parseInt(page), parseInt(size), folderId);
             return res.json(result);
         } catch (err) {
             console.error(err);

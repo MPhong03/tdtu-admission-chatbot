@@ -6,11 +6,12 @@ class FolderController {
     async createFolder(req, res) {
         try {
             const { name } = req.body;
-            const userId = req.user.id;
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
             if (!name) {
                 return res.json(HttpResponse.error("Name is required", -400));
             }
-            const result = await FolderService.createFolder(userId, name);
+            const result = await FolderService.createFolder(userId, visitorId, name);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -22,8 +23,9 @@ class FolderController {
     async getFolderById(req, res) {
         try {
             const { id } = req.params;
-            const userId = req.user.id;
-            const result = await FolderService.getFolderById(userId, id);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await FolderService.getFolderById(userId, visitorId, id);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -34,7 +36,8 @@ class FolderController {
     // Get all folders of a user
     async getFoldersByUser(req, res) {
         try {
-            const userId = req.user.id;
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
             const result = await FolderService.getFoldersByUser(userId);
             return res.json(result);
         } catch (err) {
@@ -48,8 +51,9 @@ class FolderController {
         try {
             const { id } = req.params;
             const updateData = req.body;
-            const userId = req.user.id;
-            const result = await FolderService.updateFolder(userId, id, updateData);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await FolderService.updateFolder(userId, visitorId, id, updateData);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -62,11 +66,12 @@ class FolderController {
         try {
             const { id } = req.params;
             const { name } = req.body;
-            const userId = req.user.id;
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
             if (!name) {
                 return res.json(HttpResponse.error("Name is required", -400));
             }
-            const result = await FolderService.renameFolder(userId, id, name);
+            const result = await FolderService.renameFolder(userId, visitorId, id, name);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -78,8 +83,9 @@ class FolderController {
     async deleteFolder(req, res) {
         try {
             const { id } = req.params;
-            const userId = req.user.id;
-            const result = await FolderService.deleteFolder(userId, id);
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await FolderService.deleteFolder(userId, visitorId, id);
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -91,8 +97,9 @@ class FolderController {
     async paginateFolders(req, res) {
         try {
             const { page = 1, size = 10 } = req.query;
-            const userId = req.user.id;
-            const result = await FolderService.paginateFolders(userId, parseInt(page), parseInt(size));
+            const userId = req.user?.id || null;
+            const visitorId = req.visitorId || null;
+            const result = await FolderService.paginateFolders(userId, visitorId, parseInt(page), parseInt(size));
             return res.json(result);
         } catch (err) {
             console.error(err);

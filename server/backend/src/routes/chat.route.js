@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ChatController = require('../controllers/users/chat.controller');
-const { verifyToken } = require('../middlewares/auth.middleware');
+const { verifyToken, optionalAuth } = require('../middlewares/auth.middleware');
 
 // ============= API ============= //
 
@@ -11,7 +11,7 @@ const { verifyToken } = require('../middlewares/auth.middleware');
  * Headers: Authorization: Bearer <token>
  * Body: { "name": String, "folderId": String (optional) }
  */
-router.post('/', verifyToken, ChatController.createChat);
+router.post('/', optionalAuth, ChatController.createChat);
 
 /**
  * Lấy thông tin một đoạn chat theo ID
@@ -19,7 +19,7 @@ router.post('/', verifyToken, ChatController.createChat);
  * Headers: Authorization: Bearer <token>
  * Không cần body
  */
-router.get('/:id', verifyToken, ChatController.getChatById);
+router.get('/:id', optionalAuth, ChatController.getChatById);
 
 /**
  * Cập nhật một đoạn chat
@@ -27,7 +27,7 @@ router.get('/:id', verifyToken, ChatController.getChatById);
  * Headers: Authorization: Bearer <token>
  * Body: { "name": String (optional), "folderId": String (optional) }
  */
-router.put('/:id', verifyToken, ChatController.updateChat);
+router.put('/:id', optionalAuth, ChatController.updateChat);
 
 /**
  * Đổi tên một đoạn chat
@@ -35,7 +35,7 @@ router.put('/:id', verifyToken, ChatController.updateChat);
  * Headers: Authorization: Bearer <token>
  * Body: { "name": String }
  */
-router.patch('/:id/rename', verifyToken, ChatController.renameChat);
+router.patch('/:id/rename', optionalAuth, ChatController.renameChat);
 
 /**
  * Di chuyển đoạn chat vào một folder khác
@@ -43,7 +43,7 @@ router.patch('/:id/rename', verifyToken, ChatController.renameChat);
  * Headers: Authorization: Bearer <token>
  * Body: { "folderId": String }
  */
-router.patch('/:id/move', verifyToken, ChatController.moveChatToFolder);
+router.patch('/:id/move', optionalAuth, ChatController.moveChatToFolder);
 
 /**
  * Xóa một đoạn chat
@@ -51,7 +51,7 @@ router.patch('/:id/move', verifyToken, ChatController.moveChatToFolder);
  * Headers: Authorization: Bearer <token>
  * Không cần body
  */
-router.delete('/:id', verifyToken, ChatController.deleteChat);
+router.delete('/:id', optionalAuth, ChatController.deleteChat);
 
 /**
  * Phân trang các đoạn chat của user (có thể lọc theo folder)
@@ -59,6 +59,6 @@ router.delete('/:id', verifyToken, ChatController.deleteChat);
  * Headers: Authorization: Bearer <token>
  * Không cần body
  */
-router.get('/', verifyToken, ChatController.paginateChats);
+router.get('/', optionalAuth, ChatController.paginateChats);
 
 module.exports = router;

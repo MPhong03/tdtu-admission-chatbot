@@ -36,7 +36,7 @@ class ChatbotController {
     async chatWithBot(req, res) {
         try {
             const { question, chatId } = req.body;
-            const userId = req.user?.id;
+            const userId = req.user?.id || null;
 
             if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
@@ -46,6 +46,7 @@ class ChatbotController {
             // 2. Lưu vào lịch sử chat
             const saveResult = await HistoryService.saveChat({
                 userId,
+                visitorId: req.isVisitor ? req.visitorId : null,
                 chatId,
                 question,
                 answer,
@@ -62,7 +63,8 @@ class ChatbotController {
                     answer,
                     prompt,
                     contextNodes,
-                    chatId: saveResult?.Data?.chatId || chatId
+                    chatId: saveResult?.Data?.chatId || chatId,
+                    visitorId: req.isVisitor ? req.visitorId : null,
                 })
             );
         } catch (err) {
@@ -89,19 +91,21 @@ class ChatbotController {
         try {
             const { chatId } = req.params;
             const { page = 1, size = 10 } = req.query;
-            const userId = req.user.id;
+            const userId = req.user?.id;
+            const visitorId = req?.visitorId;
 
-            const history = await HistoryService.getChatHistory({
+            const result = await HistoryService.getChatHistory({
                 userId,
+                visitorId,
                 chatId,
                 page: parseInt(page),
                 size: parseInt(size)
             });
 
-            return res.json(HttpResponse.success("Nhận kết quả: ", history));
+            return res.json(HttpResponse.success("Nhận kết quả: ", result));
         } catch (err) {
             console.error(err);
-            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
+            return res.json(HttpResponse.error("Lỗi lấy lịch sử chat", -1, err.message));
         }
     }
 
@@ -114,7 +118,7 @@ class ChatbotController {
             console.error(err);
             return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
-    }   
+    }
 
     async getEmbeddings(req, res) {
         try {
@@ -125,7 +129,7 @@ class ChatbotController {
             console.error(err);
             return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
-    }   
+    }
 }
 
 module.exports = new ChatbotController();

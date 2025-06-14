@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const FolderController = require('../controllers/users/folder.controller');
-const { verifyToken } = require('../middlewares/auth.middleware');
+const { verifyToken, optionalAuth } = require('../middlewares/auth.middleware');
 
 // ============= API ============= //
 
@@ -11,7 +11,7 @@ const { verifyToken } = require('../middlewares/auth.middleware');
  * Headers: Authorization: Bearer <token>
  * Body: { "name": String }
  */
-router.post('/', verifyToken, FolderController.createFolder);
+router.post('/', optionalAuth, FolderController.createFolder);
 
 /**
  * Lấy thông tin một thư mục theo ID
@@ -19,7 +19,7 @@ router.post('/', verifyToken, FolderController.createFolder);
  * Headers: Authorization: Bearer <token>
  * Không cần body
  */
-router.get('/:id', verifyToken, FolderController.getFolderById);
+router.get('/:id', optionalAuth, FolderController.getFolderById);
 
 /**
  * Cập nhật một thư mục
@@ -27,7 +27,7 @@ router.get('/:id', verifyToken, FolderController.getFolderById);
  * Headers: Authorization: Bearer <token>
  * Body: { "name": String (optional) }
  */
-router.put('/:id', verifyToken, FolderController.updateFolder);
+router.put('/:id', optionalAuth, FolderController.updateFolder);
 
 /**
  * Đổi tên một thư mục
@@ -35,7 +35,7 @@ router.put('/:id', verifyToken, FolderController.updateFolder);
  * Headers: Authorization: Bearer <token>
  * Body: { "name": String }
  */
-router.patch('/:id/rename', verifyToken, FolderController.renameFolder);
+router.patch('/:id/rename', optionalAuth, FolderController.renameFolder);
 
 /**
  * Xóa một thư mục
@@ -43,7 +43,7 @@ router.patch('/:id/rename', verifyToken, FolderController.renameFolder);
  * Headers: Authorization: Bearer <token>
  * Không cần body
  */
-router.delete('/:id', verifyToken, FolderController.deleteFolder);
+router.delete('/:id', optionalAuth, FolderController.deleteFolder);
 
 /**
  * Phân trang các thư mục của user
@@ -51,6 +51,6 @@ router.delete('/:id', verifyToken, FolderController.deleteFolder);
  * Headers: Authorization: Bearer <token>
  * Không cần body
  */
-router.get('/', verifyToken, FolderController.paginateFolders);
+router.get('/', optionalAuth, FolderController.paginateFolders);
 
 module.exports = router;

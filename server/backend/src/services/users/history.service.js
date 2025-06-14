@@ -8,21 +8,22 @@ const ChatRepo = new BaseRepository(Chat);
 const HistoryRepo = new BaseRepository(History);
 
 class HistoryService {
-    async saveChat({ userId, chatId, question, answer, isError }) {
+    async saveChat({ userId, visitorId, chatId, question, answer, isError }) {
         try {
             let chat;
 
-            if (!userId) return HttpResponse.error("Thiếu người dùng", -1);
+            // if (!userId) return HttpResponse.error("Thiếu người dùng", -1);
 
             // Nếu không có chatId -> tạo mới chat với tên là "Chat #timestamp"
             if (!chatId) {
                 chat = await ChatRepo.create({
                     userId,
+                    visitorId,
                     name: `Chat ${new Date().toLocaleString()}`
                 });
             } else {
                 chat = await ChatRepo.getById(chatId);
-                if (!chat || String(chat.userId) !== String(userId)) {
+                if (!chat) {
                     return HttpResponse.error("Chat không tồn tại hoặc không thuộc quyền sở hữu");
                 }
             }
@@ -30,6 +31,7 @@ class HistoryService {
             // Tạo lịch sử chat mới
             const history = await HistoryRepo.create({
                 userId,
+                visitorId: visitorId,
                 chatId: chat._id,
                 question,
                 answer,
@@ -43,23 +45,31 @@ class HistoryService {
         }
     }
 
-    async getChatHistory({ userId, chatId, page = 1, size = 10 }) {
+    async getChatHistory({ userId, visitorId, chatId, page = 1, size = 10 }) {
         try {
             const chat = await ChatRepo.getById(chatId);
-            if (!chat || String(chat.userId) !== String(userId)) {
-                return HttpResponse.error("Không tìm thấy đoạn chat này");
+            const isOwner =
+                (chat?.userId && String(chat.userId) === String(userId)) ||
+                (chat?.visitorId && chat.visitorId === visitorId);
+
+            if (!chat || !isOwner) {
+                return HttpResponse.error("Không tìm thấy đoạn chat này hoặc không có quyền truy cập", -404);
             }
 
             const skip = (page - 1) * size;
 
-            const query = HistoryRepo.asQueryable({ chatId, userId })
+            const historyFilter = { chatId };
+            if (userId) historyFilter.userId = userId;
+            if (!userId && visitorId) historyFilter.visitorId = visitorId;
+
+            const query = HistoryRepo.asQueryable(historyFilter)
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(size);
 
             const [items, total] = await Promise.all([
                 query.exec(),
-                HistoryRepo.count({ chatId, userId })
+                HistoryRepo.count(historyFilter)
             ]);
 
             return HttpResponse.success("Lấy lịch sử chat thành công", {
@@ -94,8 +104,20 @@ class HistoryService {
                 HistoryRepo.count()
             ]);
 
+            const mappedHistories = histories.map(h => {
+                const user = h.userId
+                    ? h.userId
+                    : { username: "Vãng lai", email: "unknown" };
+
+                return {
+                    ...h.toObject(), // chuyển document về plain object
+                    userId: user,
+                    isVisitor: !h.userId,
+                };
+            });
+
             return HttpResponse.success("Lịch sử Q&A", {
-                items: histories,
+                items: mappedHistories,
                 pagination: {
                     page,
                     size,
