@@ -3,6 +3,7 @@ const LLMService = require("../services/chatbots/llm.service");
 const RetrieverService = require('../services/chatbots/retriever.service');
 const HistoryService = require("../services/users/history.service");
 const EntityRecognizer = require('../services/regconizers/entity.regconizer');
+const BotService = require("../services/v2/bots/bot.service");
 
 class ChatbotController {
     async retrieveEntities(req, res) {
@@ -41,7 +42,7 @@ class ChatbotController {
             if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
             // 1. Gọi AI để lấy câu trả lời
-            const { answer, prompt, contextNodes, isError } = await RetrieverService.chatWithBot(question);
+            const { answer, prompt, contextNodes, isError } = await BotService.generateAnswer(question);
 
             // 2. Lưu vào lịch sử chat
             const saveResult = await HistoryService.saveChat({

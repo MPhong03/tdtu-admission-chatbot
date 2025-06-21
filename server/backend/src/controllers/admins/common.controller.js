@@ -35,3 +35,19 @@ class CommonController {
 }
 
 module.exports = new CommonController();
+
+/*
+class DemoController {
+    async demoMethod(req, res) {
+        try {
+            const data = {};
+            return res.json(HttpResponse.success('Message', data));
+        } catch (err) {
+            logger.error('Error:', err);
+            return res.status(500).json(HttpResponse.error('Lỗi hệ thống'));
+        }
+    }
+}
+
+module.exports = new DemoController();
+*/

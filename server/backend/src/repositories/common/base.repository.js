@@ -84,9 +84,9 @@ class BaseRepository {
      * @param {number} size - Số lượng mỗi trang
      * @param {Array<string>} populate - Danh sách các field populate (nếu có)
      */
-    async paginate(filter = {}, page = 1, size = 10, populate = []) {
+    async paginate(filter = {}, page = 1, size = 10, populate = [], sort = { createdAt: -1 }) {
         const skip = (page - 1) * size;
-        const query = this.model.find(filter).skip(skip).limit(size);
+        const query = this.model.find(filter).sort(sort).skip(skip).limit(size);
 
         if (populate.length > 0) {
             populate.forEach(p => query.populate(p));

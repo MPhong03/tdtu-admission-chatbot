@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const RetrieverService = require("../services/chatbots/retriever.service");
 const HistoryService = require("../services/users/history.service");
 const HttpResponse = require("../data/responses/http.response");
+const BotService = require("../services/v2/bots/bot.service");
 
 function initSocketHandler(io) {
     io.on("connection", (socket) => {
@@ -37,7 +38,8 @@ function initSocketHandler(io) {
 
             try {
                 // Xử lý chatbot
-                const { answer, prompt, contextNodes, isError } = await RetrieverService.chatWithBot(question);
+                // const { answer, prompt, contextNodes, isError } = await RetrieverService.chatWithBot(question);
+                const { answer, prompt, contextNodes, isError } = await BotService.generateAnswer(question);
 
                 console.log(userId);
 

@@ -1,5 +1,6 @@
 const { app, server } = require("./app");
 const elasticClient = require("./configs/elastic.config");
+const { checkNeo4jConnection } = require("./configs/neo4j.config");
 const User = require("./models/users/user.model");
 const seedCommonConfigs = require("./seeds/common.seed");
 const LLMService = require("./services/chatbots/llm.service");
@@ -25,7 +26,7 @@ const checkElasticConnection = async () => {
   }
 };
 
-server.listen(PORT, async () => {
+server.listen(PORT, "0.0.0.0", async () => {
   logger.info("Server started", { port: PORT, env: process.env.NODE_ENV });
 
   // Tạo admin mac dinh
@@ -54,18 +55,20 @@ server.listen(PORT, async () => {
     });
   }
 
-  // Làm nóng mô hình
-  try {
-    await LLMService.initNER();
-    logger.info("NER model initialized successfully", { module: "LLMService" });
-  } catch (error) {
-    logger.error("Failed to initialize NER model", {
-      error: error.message,
-      stack: error.stack,
-      module: "LLMService",
-    });
-  }
+  await checkNeo4jConnection();
 
-  // Kiểm tra ElasticSearch
-  await checkElasticConnection();
+  // // Làm nóng mô hình
+  // try {
+  //   await LLMService.initNER();
+  //   logger.info("NER model initialized successfully", { module: "LLMService" });
+  // } catch (error) {
+  //   logger.error("Failed to initialize NER model", {
+  //     error: error.message,
+  //     stack: error.stack,
+  //     module: "LLMService",
+  //   });
+  // }
+
+  // // Kiểm tra ElasticSearch
+  // await checkElasticConnection();
 });
