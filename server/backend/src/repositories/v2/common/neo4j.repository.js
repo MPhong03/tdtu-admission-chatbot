@@ -21,7 +21,9 @@ class Neo4jRepository {
             // Trả về properties của node đầu tiên trong mỗi record
             return result.records.map(r => {
                 const firstKey = Object.keys(r.toObject())[0];
-                return r.get(firstKey)?.properties || null;
+                const value = r.get(firstKey);
+                // Nếu là Neo4j Node (có .properties), lấy properties, nếu không thì giữ nguyên
+                return value?.properties ?? value ?? null;
             });
         } finally {
             await session.close();

@@ -10,7 +10,7 @@ import { truncateWords } from "@/utils/tools";
 
 const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
     <>
-        <CardHeader variant="gradient" color="gray" className="mb-8 p-6">
+        <CardHeader variant="gradient" color="gray" className="mb-8 p-6 relative z-20">
             <Typography variant="h6" color="white">
                 Lịch sử Q&A
             </Typography>

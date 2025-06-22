@@ -4,12 +4,14 @@ const {
 } = require('../../services/v2/nodes.neo4j-service');
 const HttpResponse = require('../../data/responses/http.response');
 const logger = require('../../utils/logger.util');
+const { convertHtmlToText } = require('../../utils/calculator.util');
 
 class DocumentController {
     async create(req, res) {
         try {
-            const { yearId, ...document } = req.body;
-            await N_DocumentService.create(document);
+            const { yearId, html, ...document } = req.body;
+            if (html) req.body.text = convertHtmlToText(html);
+            await N_DocumentService.create(req.body);
             if (yearId) await N_YearService.linkToDocument(yearId, document.id);
             return res.json(HttpResponse.success('Tạo tài liệu thành công'));
         } catch (err) {
@@ -20,6 +22,7 @@ class DocumentController {
 
     async update(req, res) {
         try {
+            if (req.body.html) req.body.text = convertHtmlToText(req.body.html);
             await N_DocumentService.update(req.params.id, req.body);
             return res.json(HttpResponse.success('Cập nhật tài liệu thành công'));
         } catch (err) {
@@ -54,8 +57,8 @@ class DocumentController {
 
     async list(req, res) {
         try {
-            const { page = 1, pageSize = 10 } = req.query;
-            const data = await N_DocumentService.paginate({ page: +page, pageSize: +pageSize });
+            const { page = 1, size = 10 } = req.query;
+            const data = await N_DocumentService.paginate({ page: +page, pageSize: +size });
             return res.json(HttpResponse.success('Lấy danh sách tài liệu thành công', data));
         } catch (err) {
             logger.error('Error:', err);

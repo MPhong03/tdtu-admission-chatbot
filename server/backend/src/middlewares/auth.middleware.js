@@ -12,9 +12,15 @@ const verifyToken = (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        if (decoded.exp && Date.now() >= decoded.exp * 1000) {
+            return res.json(HttpResponse.error("Token expired"));
+        }
         req.user = decoded;
         next();
     } catch (error) {
+        if (error.name === "TokenExpiredError") {
+            return res.json(HttpResponse.error("Token expired", 401));
+        }
         res.json(HttpResponse.error("Invalid Token"));
     }
 };
@@ -69,4 +75,17 @@ function optionalAuth(req, res, next) {
     next();
 }
 
-module.exports = { verifyToken, isAdmin, requireAuth, optionalAuth };
+/**
+ * Dùng để khóa API, trả về thông báo API không còn được hỗ trợ nữa.
+ */
+
+function apiLock(req, res, next) {
+    return res.status(410).json({
+        Code: -2,
+        Message: "API này đã ngừng hỗ trợ.",
+        Data: null,
+    });
+}
+
+
+module.exports = { verifyToken, isAdmin, requireAuth, optionalAuth, apiLock };

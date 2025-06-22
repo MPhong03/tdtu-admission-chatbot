@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ChatbotController = require('../controllers/chatbot.controller');
-const { verifyToken, optionalAuth } = require('../middlewares/auth.middleware');
+const { verifyToken, optionalAuth, apiLock } = require('../middlewares/auth.middleware');
 
 // ============= API CHATBOT ============= //
 
@@ -19,21 +19,21 @@ router.post("/chat", optionalAuth, ChatbotController.chatWithBot);
  * POST /chatbot/test-chat
  * Body: { "question": String }
  */
-router.post("/test-chat", ChatbotController.testChat);
+router.post("/test-chat", apiLock, ChatbotController.testChat);
 
 /**
  * Lấy context liên quan tới câu hỏi
  * POST /chatbot/retrieve-context
  * Body: { "question": String }
  */
-router.post("/retrieve-context", ChatbotController.retrieveContext);
+router.post("/retrieve-context", apiLock, ChatbotController.retrieveContext);
 
 /**
  * Nhận diện thực thể trong câu hỏi
  * POST /chatbot/retrieve-entities
  * Body: { "question": String }
  */
-router.post("/retrieve-entities", ChatbotController.retrieveEntities);
+router.post("/retrieve-entities", apiLock, ChatbotController.retrieveEntities);
 
 // ============= API HISTORY ============= //
 
@@ -52,13 +52,13 @@ router.get("/history/:chatId", optionalAuth, ChatbotController.getHistory);
  * POST /chatbot/llm/embedding
  * Body: { "text": String }
  */
-router.post("/llm/embedding", verifyToken, ChatbotController.getEmbedding);
+router.post("/llm/embedding", apiLock, verifyToken, ChatbotController.getEmbedding);
 
 /**
  * So sánh similarity giữa một chuỗi và danh sách các chuỗi
  * POST /chatbot/llm/embeddings
  * Body: { "source": String, "targets": Array<String> }
  */
-router.post("/llm/embeddings", verifyToken, ChatbotController.getEmbeddings);
+router.post("/llm/embeddings", apiLock, verifyToken, ChatbotController.getEmbeddings);
 
 module.exports = router;

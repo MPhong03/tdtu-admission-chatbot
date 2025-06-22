@@ -3,14 +3,17 @@ import { Card } from "@material-tailwind/react";
 import api from "@/configs/api";
 import UserTable from "@/widgets/tables/user/user-table";
 import Pagination from "@/widgets/tables/pagination";
+import LoadingTable from "@/widgets/tables/components/loadingtable";
 
 export function UserPage() {
     const [users, setUsers] = useState([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
+    const [loading, setLoading] = useState(false);
     const size = 5;
 
     const fetchUsers = async (currentPage) => {
+        setLoading(true);
         try {
             const res = await api.get(`/users?page=${currentPage}&size=${size}`);
             if (res.data.Code === 1) {
@@ -19,6 +22,8 @@ export function UserPage() {
             }
         } catch (error) {
             console.error("Error fetching users:", error);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -33,6 +38,7 @@ export function UserPage() {
     return (
         <div className="mt-12 mb-8 flex flex-col gap-12">
             <Card>
+                {loading && <LoadingTable text="Đang tải" />}
                 <UserTable users={users} page={page} size={size} />
                 <Pagination
                     page={page}

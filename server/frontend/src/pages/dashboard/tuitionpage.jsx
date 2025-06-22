@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { Card } from "@material-tailwind/react";
 import api from "@/configs/api";
-import QATable from "@/widgets/tables/history/qa-table";
-import QAModal from "@/widgets/modals/qa-modal";
-import Pagination from "@/widgets/tables/pagination";
+import TuitionTable from "@/widgets/tables/tuition/tuition-table";
 import LoadingTable from "@/widgets/tables/components/loadingtable";
+// import QAModal from "@/widgets/modals/qa-modal";
+import Pagination from "@/widgets/tables/pagination";
 
-export function QAPage() {
-    const [histories, setHistories] = useState([]);
+export function TuitionPage() {
+    const [tuitions, setTuitions] = useState([]);
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [selectedHistory, setSelectedHistory] = useState(null);
@@ -15,32 +15,32 @@ export function QAPage() {
     const [loading, setLoading] = useState(false);
     const size = 5;
 
-    const fetchHistories = async (currentPage) => {
+    const fetchTuitions = async (currentPage) => {
         setLoading(true);
         try {
-            const res = await api.get(`/histories?page=${currentPage}&size=${size}`);
+            const res = await api.get(`/v2/tuitions?page=${currentPage}&size=${size}`);
             if (res.data.Code === 1) {
-                setHistories(res.data.Data.items);
+                setTuitions(res.data.Data.items);
                 setTotalPages(Math.ceil(res.data.Data.pagination.totalItems / size));
             }
         } catch (error) {
-            console.error("Error fetching Q&A history:", error);
+            console.error("Error fetching Q&A tuition:", error);
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchHistories(page);
+        fetchTuitions(page);
     }, [page]);
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
     };
 
-    const handleOpenModal = (history) => {
-        setSelectedHistory(history);
-        setOpenModal(true);
+    const handleOpenModal = (tuition) => {
+        // setSelectedHistory(tuition);
+        // setOpenModal(true);
     };
 
     const handleCloseModal = () => {
@@ -52,8 +52,8 @@ export function QAPage() {
         <div className="mt-12 mb-8 flex flex-col gap-12">
             <Card>
                 {loading && <LoadingTable text="Đang tải" />}
-                <QATable
-                    histories={histories}
+                <TuitionTable
+                    tuitions={tuitions}
                     onOpenModal={handleOpenModal}
                     page={page}
                     size={size}
@@ -65,13 +65,13 @@ export function QAPage() {
                 />
             </Card>
 
-            <QAModal
+            {/* <QAModal
                 open={openModal}
                 onClose={handleCloseModal}
-                history={selectedHistory}
-            />
+                tuition={selectedHistory}
+            /> */}
         </div>
     );
 }
 
-export default QAPage;
+export default TuitionPage;

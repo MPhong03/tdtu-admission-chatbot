@@ -53,7 +53,7 @@ class BotService {
                         contents: [{ parts: [{ text: prompt }] }]
                     }
                 );
-                
+
                 let result = res.data.candidates?.[0]?.content?.parts?.[0]?.text;
 
                 // Nếu Gemini trả về ở dạng text, cố gắng parse JSON từ text
@@ -131,6 +131,10 @@ class BotService {
             try {
                 cypherResult = await this.generateCypher(question);
                 cypher = cypherResult?.cypher;
+                if (!cypher || typeof cypher !== "string" || !cypher.trim()) {
+                    retries++;
+                    continue;
+                }
                 break;
             } catch (err) {
                 lastError = err;
@@ -140,10 +144,40 @@ class BotService {
 
         // **XỬ LÝ CHÀO HỎI XÃ GIAO HOẶC CYHPER RỖNG**
         if (!cypher || typeof cypher !== "string" || !cypher.trim()) {
-            // Trả về lời chào thân thiện hoặc chuỗi rỗng, tuỳ theo chính sách của bạn
+            prompt = this.answerPromptTemplate
+                .replace("<user_question>", question)
+                .replace("<context_json>", "[]");
+
+            retries = 0;
+            while (retries < maxRetries) {
+                try {
+                    const res = await axios.post(
+                        `${this.apiUrl}?key=${this.apiKey}`,
+                        {
+                            contents: [{ parts: [{ text: prompt }] }]
+                        }
+                    );
+                    answer = res.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+                    if (answer) {
+                        return {
+                            answer,
+                            prompt,
+                            contextNodes: [],
+                            isError: false
+                        };
+                    }
+                    lastError = new Error("Gemini trả về rỗng.");
+                    retries++;
+                } catch (err) {
+                    lastError = err;
+                    retries++;
+                }
+            }
+
+            // Nếu vẫn không có answer, trả về mặc định
             return {
                 answer: "Chào bạn! Tôi sẵn sàng hỗ trợ thông tin tuyển sinh TDTU, bạn muốn hỏi gì nào?",
-                prompt: "",
+                prompt,
                 contextNodes: [],
                 isError: false
             };

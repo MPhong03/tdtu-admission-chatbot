@@ -2,8 +2,23 @@ import {
   HomeIcon,
   ChatBubbleLeftRightIcon,
   UserGroupIcon,
+  AcademicCapIcon,
+  BookOpenIcon,
+  BanknotesIcon,
+  GiftIcon,
+  PaperClipIcon
 } from "@heroicons/react/24/solid";
-import { Home, QAPage, UserPage, SystemConfigs } from "@/pages/dashboard";
+import { 
+  Home, 
+  QAPage, 
+  UserPage, 
+  SystemConfigs, 
+  ProgrammePage, 
+  MajorPage,
+  TuitionPage,
+  ScholarshipPage,
+  DocumentPage
+} from "@/pages/dashboard";
 import { SignIn } from "@/pages/auth";
 import { AdjustmentsHorizontalIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 
@@ -26,15 +41,50 @@ export const routes = [
       {
         icon: <ChatBubbleLeftRightIcon {...icon} />,
         name: "Lịch sử Q&A",
-        path: "/qapage",
+        path: "/qa",
         element: <QAPage />,
         display: true
       },
       {
         icon: <UserGroupIcon {...icon} />,
         name: "Người dùng",
-        path: "/userpage",
+        path: "/user",
         element: <UserPage />,
+        display: true
+      },
+      {
+        icon: <AcademicCapIcon {...icon} />,
+        name: "Chương trình/hệ",
+        path: "/programme",
+        element: <ProgrammePage />,
+        display: true
+      },
+      {
+        icon: <BookOpenIcon  {...icon} />,
+        name: "Ngành học",
+        path: "/major",
+        element: <MajorPage />,
+        display: true
+      },
+      {
+        icon: <BanknotesIcon  {...icon} />,
+        name: "Học phí",
+        path: "/tuition",
+        element: <TuitionPage />,
+        display: true
+      },
+      {
+        icon: <GiftIcon  {...icon} />,
+        name: "Học bổng",
+        path: "/scholarship",
+        element: <ScholarshipPage />,
+        display: true
+      },
+      {
+        icon: <PaperClipIcon  {...icon} />,
+        name: "Tài liệu",
+        path: "/document",
+        element: <DocumentPage />,
         display: true
       },
       {

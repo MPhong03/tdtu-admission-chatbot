@@ -1,0 +1,530 @@
+import React, { useEffect, useState } from "react";
+import {
+    Dialog, DialogHeader, DialogBody, DialogFooter,
+    Tabs, TabsHeader, TabsBody, Tab, TabPanel,
+    Input, Button, IconButton, Typography, Checkbox,
+    Accordion, AccordionHeader, AccordionBody, Textarea,
+    Spinner,
+} from "@material-tailwind/react";
+import { PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import Select from "react-select";
+import api from "@/configs/api";
+
+// ===== DynamicFieldList =====
+function DynamicFieldList({ fields, onChange }) {
+    const handleFieldChange = (idx, key, value) => {
+        const copy = [...fields];
+        copy[idx][key] = value;
+        onChange(copy);
+    };
+    const handleAdd = () => onChange([...fields, { key: "", value: "" }]);
+    const handleDelete = (idx) => {
+        if (fields.length === 1) return;
+        onChange(fields.filter((_, i) => i !== idx));
+    };
+
+    return (
+        <div className="space-y-2">
+            <Typography variant="small" color="blue-gray" className="font-medium">
+                Thuộc tính mở rộng chương trình (Học phí, Thời gian đào tạo, ...)
+            </Typography>
+            {fields.map((field, idx) => (
+                <div className="flex gap-2 items-end" key={idx}>
+                    <Input
+                        label="Tên trường"
+                        value={field.key}
+                        onChange={e => handleFieldChange(idx, "key", e.target.value)}
+                        className="flex-1"
+                        crossOrigin=""
+                    />
+                    <Input
+                        label="Giá trị"
+                        value={field.value}
+                        onChange={e => handleFieldChange(idx, "value", e.target.value)}
+                        className="flex-1"
+                        crossOrigin=""
+                    />
+                    <IconButton
+                        color="red"
+                        onClick={() => handleDelete(idx)}
+                        disabled={fields.length === 1}
+                        size="md"
+                        className="mb-1"
+                        variant="text"
+                    >
+                        <TrashIcon className="h-5 w-5" />
+                    </IconButton>
+                </div>
+            ))}
+            <Button
+                variant="outlined"
+                size="sm"
+                color="blue"
+                className="flex items-center gap-1"
+                onClick={handleAdd}
+            >
+                <PlusIcon className="h-5 w-5" /> Thêm trường mới
+            </Button>
+        </div>
+    );
+}
+
+// ===== ProgrammeMultiSelect (react-select) =====
+function ProgrammeMultiSelect({ programmes, selectedProgrammes, setSelectedProgrammes }) {
+    const options = programmes.map(p => ({
+        value: p.id,
+        label: p.name,
+        ...p
+    }));
+
+    const value = selectedProgrammes.map(idObj =>
+        options.find(opt => opt.value === idObj.id)
+    ).filter(Boolean);
+
+    const handleChange = (selectedOptions) => {
+        setSelectedProgrammes(selectedOptions ? selectedOptions.map(opt => ({
+            id: opt.value,
+            name: opt.label,
+            ...opt
+        })) : []);
+    };
+
+    return (
+        <div className="mb-5">
+            <Typography variant="h6" className="mb-2">Chọn chương trình đào tạo</Typography>
+            <Select
+                isMulti
+                options={options}
+                value={value}
+                onChange={handleChange}
+                placeholder="Chọn chương trình..."
+                closeMenuOnSelect={false}
+                menuPortalTarget={document.body}
+                classNamePrefix="react-select"
+                styles={{
+                    menu: provided => ({ ...provided, zIndex: 9999 }),
+                    menuPortal: base => ({ ...base, zIndex: 9999 }),
+                }}
+            />
+        </div>
+    );
+}
+
+// ===== MajorProgrammeAccordion =====
+function MajorProgrammeAccordion({
+    selectedProgrammes,
+    years,
+    formState,
+    setFormState,
+}) {
+    const [openId, setOpenId] = useState(null);
+
+    const handleFieldChange = (id, key, value) => {
+        setFormState(prev => ({
+            ...prev,
+            [id]: { ...prev[id], [key]: value }
+        }));
+    };
+    const handleFieldsChange = (id, fields) => {
+        setFormState(prev => ({
+            ...prev,
+            [id]: { ...prev[id], fields }
+        }));
+    };
+    const handleYearsChange = (id, yearId) => {
+        setFormState(prev => {
+            const currentYears = prev[id]?.years || [];
+            const newYears = currentYears.includes(yearId)
+                ? currentYears.filter(y => y !== yearId)
+                : [...currentYears, yearId];
+            return {
+                ...prev,
+                [id]: { ...prev[id], years: newYears }
+            };
+        });
+    };
+
+    return (
+        <div className="flex flex-col gap-3 mt-3">
+            {selectedProgrammes.map(({ id, name }) => (
+                <Accordion key={id} open={openId === id}
+                    icon={<span className="ml-2 text-xs text-gray-400">{openId === id ? "▲" : "▼"}</span>}
+                    className="rounded-lg border border-blue-gray-100"
+                >
+                    <AccordionHeader onClick={() => setOpenId(openId === id ? null : id)} className="font-medium px-4 py-3">
+                        <span>{name}</span>
+                    </AccordionHeader>
+                    <AccordionBody className="bg-blue-gray-50 rounded-b-lg px-4 py-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <Input
+                                label="Mã ngành"
+                                value={formState[id]?.major_code || ""}
+                                onChange={e => handleFieldChange(id, "major_code", e.target.value)}
+                                className="bg-white"
+                                crossOrigin=""
+                            />
+                            <Input
+                                label="Tên chương trình"
+                                value={formState[id]?.name || ""}
+                                onChange={e => handleFieldChange(id, "name", e.target.value)}
+                                className="bg-white"
+                                crossOrigin=""
+                            />
+                            <div className="md:col-span-2">
+                                <Input
+                                    label="Mô tả"
+                                    value={formState[id]?.description || ""}
+                                    onChange={e => handleFieldChange(id, "description", e.target.value)}
+                                    className="bg-white"
+                                    crossOrigin=""
+                                />
+                            </div>
+                            <div className="md:col-span-2">
+                                <Typography variant="small" color="blue-gray" className="font-medium mb-1">
+                                    Các năm áp dụng
+                                </Typography>
+                                <div className="flex flex-wrap gap-4">
+                                    {years.map(year => (
+                                        <Checkbox
+                                            key={year.id}
+                                            label={year.name}
+                                            checked={formState[id]?.years?.includes(year.id) || false}
+                                            onChange={() => handleYearsChange(id, year.id)}
+                                            crossOrigin=""
+                                            className="py-1"
+                                        />
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="md:col-span-2">
+                                <DynamicFieldList
+                                    fields={formState[id]?.fields || [{ key: "", value: "" }]}
+                                    onChange={fields => handleFieldsChange(id, fields)}
+                                />
+                            </div>
+                        </div>
+                    </AccordionBody>
+                </Accordion>
+            ))}
+        </div>
+    );
+}
+
+// ===== MajorModal =====
+export default function MajorModal({ open, onClose, onSubmit, majorId }) {
+    // Tabs & Major info
+    const [tab, setTab] = useState("info");
+    const [name, setName] = useState("");
+    const [reasons, setReasons] = useState("");
+    const [description, setDescription] = useState("");
+    const [images, setImages] = useState([""]);
+
+    // Programmes & Years (API, không phân trang)
+    const [programmes, setProgrammes] = useState([]);
+    const [years, setYears] = useState([]);
+
+    // Programme selections and MajorProgramme form state
+    // selectedProgrammes: [{id, name, ...}]
+    const [selectedProgrammes, setSelectedProgrammes] = useState([]);
+    const [majorProgrammeFormState, setMajorProgrammeFormState] = useState({});
+    const [loading, setLoading] = useState(false);
+
+    // ===== LOAD DETAIL IF majorId PROVIDED =====
+    useEffect(() => {
+        if (!open) return;
+        if (!majorId) return;
+
+        setLoading(true);
+        api.get(`/v2/majors/${majorId}`)
+            .then(res => {
+                const data = res.data?.Data;
+                // Major info
+                setName(data?.name || "");
+                setDescription(data?.description || "");
+                setReasons(data?.reasons || "");
+                setImages(Array.isArray(data?.images) && data.images.length > 0
+                    ? data.images
+                    : [""]
+                );
+                // Programmes/years from detail response
+                setProgrammes(Array.isArray(data?.programmes) ? data.programmes : []);
+                setYears(Array.isArray(data?.years) ? data.years : []);
+
+                // Map majorProgrammes to selection and state
+                if (Array.isArray(data?.majorProgrammes)) {
+                    // Chọn program id, name cho select
+                    const selected = data.majorProgrammes.map(mp => {
+                        // Lấy id & name từ programmes field nếu có (đúng chuẩn)
+                        if (Array.isArray(mp.programmes) && mp.programmes[0]) {
+                            return { id: mp.programmes[0].id, name: mp.programmes[0].name };
+                        }
+                        // Fallback: lấy từ programme_id & tab
+                        return { id: mp.programme_id, name: mp.tab || mp.name || mp.programme_id };
+                    });
+                    setSelectedProgrammes(selected);
+
+                    // Map state từng programme
+                    const nextState = {};
+                    data.majorProgrammes.forEach(mp => {
+                        const progId = Array.isArray(mp.programmes) && mp.programmes[0]
+                            ? mp.programmes[0].id
+                            : mp.programme_id;
+
+                        // Map các trường động (key: value) thành fields
+                        const fields = Object.entries(mp)
+                            .filter(([k]) =>
+                                ![
+                                    "major_code", "name", "description", "years", "programme_id",
+                                    "programmes", "id", "major_id", "tab", "Bằng cấp"
+                                ].includes(k)
+                            )
+                            .filter(([k, v]) => typeof v === "string" && v.trim() !== "")
+                            .map(([key, value]) => ({ key, value }));
+
+                        // years: array of objects -> ids
+                        const yearsArr = Array.isArray(mp.years) ? mp.years.map(y => y.id) : [];
+
+                        nextState[progId] = {
+                            major_code: mp.major_code || "",
+                            name: mp.name || "",
+                            description: mp.description || "",
+                            fields: fields.length > 0 ? fields : [{ key: "", value: "" }],
+                            years: yearsArr,
+                        };
+                    });
+                    setMajorProgrammeFormState(nextState);
+                } else {
+                    setSelectedProgrammes([]);
+                    setMajorProgrammeFormState({});
+                }
+            })
+            .finally(() => setLoading(false));
+    }, [open, majorId]);
+
+    // ===== LOAD ALL PROGRAMMES, YEARS IF NOT PROVIDED (for create mode) =====
+    useEffect(() => {
+        if (!open) return;
+        if (majorId) return; // Nếu đã lấy từ detail thì không gọi lại
+        api.get("/v2/programmes", { params: { page: 1, size: 99999 } })
+            .then(res => {
+                const items = res.data.Data.items || [];
+                setProgrammes(items);
+            });
+    }, [open, majorId]);
+    useEffect(() => {
+        if (!open) return;
+        if (majorId) return;
+        api.get("/v2/years", { params: { page: 1, size: 99999 } })
+            .then(res => {
+                const items = res.data.Data.items || [];
+                setYears(items);
+            });
+    }, [open, majorId]);
+
+    // Đồng bộ MajorProgramme state khi chọn/deselect Programme
+    useEffect(() => {
+        setMajorProgrammeFormState(prev => {
+            const next = { ...prev };
+            for (const p of selectedProgrammes) {
+                if (!next[p.id]) {
+                    next[p.id] = {
+                        major_code: "",
+                        name: p.name || "",
+                        description: "",
+                        fields: [{ key: "", value: "" }],
+                        years: [],
+                    };
+                }
+            }
+            // Remove state nếu bỏ chọn
+            Object.keys(next).forEach(id => {
+                if (!selectedProgrammes.some(p => p.id === id)) delete next[id];
+            });
+            return next;
+        });
+        // eslint-disable-next-line
+    }, [selectedProgrammes]);
+
+    // Ảnh
+    const handleImageChange = (idx, value) => {
+        const copy = [...images];
+        copy[idx] = value;
+        setImages(copy);
+    };
+    const handleAddImage = () => setImages([...images, ""]);
+    const handleRemoveImage = (idx) =>
+        setImages(images.length === 1 ? images : images.filter((_, i) => i !== idx));
+
+    // Gửi dữ liệu
+    const handleSubmit = () => {
+        const majorProgrammes = selectedProgrammes.map(p => ({
+            ...majorProgrammeFormState[p.id],
+            fields: (majorProgrammeFormState[p.id]?.fields || []).filter(f => f.key),
+        }));
+        const data = {
+            name,
+            reasons,
+            description,
+            images: images.filter(img => img),
+            majorProgrammes,
+        };
+        if (onSubmit) onSubmit(data);
+        onClose();
+    };
+
+    const handleClearForm = () => {
+        setName('');
+        setReasons('');
+        setDescription('');
+        setImages(['']);
+        setSelectedProgrammes([]);
+        setMajorProgrammeFormState({});
+    };
+
+    // Lấy danh sách programme đã chọn (object) để truyền vào form
+    const selectedProgrammesForAccordion = selectedProgrammes.map(
+        p => programmes.find(prog => prog.id === p.id) || p
+    ).filter(Boolean);
+
+    return (
+        <Dialog open={open} handler={onClose} size="xxl" className="!h-screen !max-h-screen !w-screen">
+            <DialogHeader className="border-b border-blue-gray-100 px-8 py-5">
+                <Typography variant="h5" color="blue-gray">
+                    {majorId ? "Chỉnh sửa ngành học" : "Tạo mới ngành học"}
+                </Typography>
+            </DialogHeader>
+            <DialogBody className="flex-1 flex flex-col min-h-0 p-0">
+                {loading ? (
+                    <div className="flex-1 flex items-center justify-center min-h-[300px]">
+                        <Spinner color="blue" className="w-8 h-8" />
+                    </div>
+                ) : (
+                    <Tabs value={tab} className="flex-1 flex flex-col h-full min-h-0">
+                        <TabsHeader className="px-8 pt-4 pb-2 bg-white shadow-none">
+                            <Tab value="info" onClick={() => setTab("info")} className="text-base px-4 py-2">Thông tin ngành</Tab>
+                            <Tab value="programme" onClick={() => setTab("programme")} className="text-base px-4 py-2">Chương trình đào tạo</Tab>
+                            <Tab value="preview" onClick={() => setTab("preview")} className="text-base px-4 py-2">Preview</Tab>
+                        </TabsHeader>
+                        <TabsBody className="flex-1 flex flex-col h-full min-h-0">
+                            {/* Thông tin ngành */}
+                            <TabPanel value="info" className="flex-1 flex flex-col h-full min-h-0 p-0">
+                                <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        <div className="md:col-span-2">
+                                            <Input label="Tên ngành" value={name} onChange={e => setName(e.target.value)} crossOrigin="" />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <Textarea
+                                                label="Lý do chọn ngành"
+                                                value={reasons}
+                                                onChange={e => setReasons(e.target.value)}
+                                                rows={3}
+                                                className="py-2"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2">
+                                            <Textarea
+                                                label="Mô tả"
+                                                value={description}
+                                                onChange={e => setDescription(e.target.value)}
+                                                rows={3}
+                                                className="py-2"
+                                            />
+                                        </div>
+                                        <div className="md:col-span-2 flex flex-col gap-1">
+                                            <Typography variant="small" color="blue-gray" className="font-medium">
+                                                Hình ảnh (URL)
+                                            </Typography>
+                                            <div className="flex flex-col gap-2">
+                                                {images.map((img, idx) => (
+                                                    <div className="flex gap-2 items-end" key={idx}>
+                                                        <Input
+                                                            value={img}
+                                                            onChange={e => handleImageChange(idx, e.target.value)}
+                                                            placeholder="Dán URL ảnh"
+                                                            crossOrigin=""
+                                                            className="flex-1"
+                                                        />
+                                                        <IconButton
+                                                            color="red"
+                                                            onClick={() => handleRemoveImage(idx)}
+                                                            disabled={images.length === 1}
+                                                            size="md"
+                                                            variant="text"
+                                                        >
+                                                            <TrashIcon className="h-5 w-5" />
+                                                        </IconButton>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            <Button
+                                                variant="outlined"
+                                                size="sm"
+                                                color="blue"
+                                                className="flex items-center gap-1 mt-1 w-fit"
+                                                onClick={handleAddImage}
+                                            >
+                                                <PlusIcon className="h-5 w-5" /> Thêm ảnh
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </TabPanel>
+                            {/* Chương trình đào tạo */}
+                            <TabPanel value="programme" className="flex-1 flex flex-col h-full min-h-0 p-0">
+                                <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
+                                    <ProgrammeMultiSelect
+                                        programmes={programmes}
+                                        selectedProgrammes={selectedProgrammes}
+                                        setSelectedProgrammes={setSelectedProgrammes}
+                                    />
+                                    <MajorProgrammeAccordion
+                                        selectedProgrammes={selectedProgrammesForAccordion}
+                                        years={years}
+                                        formState={majorProgrammeFormState}
+                                        setFormState={setMajorProgrammeFormState}
+                                    />
+                                </div>
+                            </TabPanel>
+                            {/* Preview */}
+                            <TabPanel value="preview" className="flex-1 flex flex-col h-full min-h-0 p-0">
+                                <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
+                                    <Typography variant="h6" className="mb-2">Preview dữ liệu</Typography>
+                                    <pre className="bg-gray-100 p-4 rounded overflow-x-auto text-xs">
+                                        {JSON.stringify(
+                                            {
+                                                name,
+                                                reasons,
+                                                description,
+                                                images: images.filter(img => img),
+                                                majorProgrammes: selectedProgrammes.map(p => ({
+                                                    ...majorProgrammeFormState[p.id],
+                                                    fields: (majorProgrammeFormState[p.id]?.fields || []).filter(f => f.key),
+                                                })),
+                                            },
+                                            null,
+                                            2
+                                        )}
+                                    </pre>
+                                </div>
+                            </TabPanel>
+                        </TabsBody>
+                    </Tabs>
+                )}
+            </DialogBody>
+            <DialogFooter className="border-t border-blue-gray-100 px-8 py-4 flex justify-end gap-3">
+                <Button variant="text" color="gray" onClick={onClose}>
+                    Hủy
+                </Button>
+                {!majorId && (
+                    <Button variant="outlined" color="red" onClick={handleClearForm}>
+                        Làm mới
+                    </Button>
+                )}
+                <Button color="blue" variant="filled" onClick={handleSubmit}>
+                    Lưu
+                </Button>
+            </DialogFooter>
+        </Dialog>
+    );
+}

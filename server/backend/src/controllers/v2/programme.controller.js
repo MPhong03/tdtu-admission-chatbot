@@ -51,8 +51,8 @@ class ProgrammeController {
 
     async list(req, res) {
         try {
-            const { page = 1, pageSize = 10 } = req.query;
-            const data = await N_ProgrammeService.paginate({ page: +page, pageSize: +pageSize });
+            const { page = 1, size = 10 } = req.query;
+            const data = await N_ProgrammeService.paginate({ page: +page, pageSize: +size });
             return res.json(HttpResponse.success('Lấy danh sách chương trình học thành công', data));
         } catch (err) {
             logger.error('Error:', err);

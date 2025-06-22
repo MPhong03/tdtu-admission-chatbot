@@ -1,12 +1,21 @@
 const { neo4j, getSession } = require("../../../configs/neo4j.config");
+const { now } = require("../../../utils/calculator.util");
+const { stringToId } = require("../../../utils/neo4j.util");
 
 class Neo4jNodeRepository {
     // Create or update (MERGE) node with given label and properties (must include 'id')
     async upsert(label, properties) {
         const session = getSession();
         try {
-            const query = `MERGE (n:${label} {id: $id}) SET n += $props RETURN n`;
-            const result = await session.run(query, { id: properties.id, props: properties });
+            let { id, name, ...rest } = properties;
+            if (!id) {
+                if (!name || typeof name !== 'string') throw new Error('Vui lòng cung cấp tên tài liệu!');
+                id = stringToId(name);
+            }
+            const createdAt = now();
+            const props = { id, name, ...rest };
+            const query = `MERGE (n:${label} {id: $id}) ON CREATE SET n.createdAt = $createdAt SET n += $props, n.updatedAt = $updatedAt RETURN n`;
+            const result = await session.run(query, { id, createdAt, updatedAt: createdAt, props });
             return result.records[0]?.get('n').properties || null;
         } finally {
             await session.close();
@@ -18,13 +27,28 @@ class Neo4jNodeRepository {
         if (!arr || arr.length === 0) return;
         const session = getSession();
 
+        const createdAt = now();
+        const updatedAt = createdAt;
+
+        // Xử lý mảng: nếu phần tử không có id thì sinh id từ name
+        const rows = arr.map(item => {
+            let { id, name, ...rest } = item;
+            if (!id) {
+                if (!name || typeof name !== 'string') throw new Error('Vui lòng cung cấp tên tài liệu!');
+                id = stringToId(name);
+            }
+            return { id, name, ...rest, createdAt, updatedAt };
+        });
+
         try {
             const query = `
                 UNWIND $rows AS row
                 MERGE (n:${label} {id: row.id})
-                SET n += row
+                ON CREATE SET n.createdAt = row.createdAt
+                SET n += row, n.updatedAt = row.updatedAt
+                RETURN n
             `;
-            const result = await session.run(query, { rows: arr });
+            const result = await session.run(query, { rows });
             return result.records.map(r => r.get('n').properties);
         } finally {
             await session.close();
@@ -61,14 +85,36 @@ class Neo4jNodeRepository {
         const limit = parseInt(pageSize, 10);
         const skip = parseInt((page - 1) * limit, 10);
         try {
+            // 1. Lấy tổng số nodes
+            const countQuery = `
+                MATCH (n:${label})
+                RETURN count(n) as totalItems
+            `;
+            const countResult = await session.run(countQuery);
+            const totalItems = countResult.records[0].get('totalItems').toNumber();
+
+            // 2. Lấy dữ liệu phân trang
             const query = `
-            MATCH (n:${label})
-            RETURN n
-            SKIP $skip
-            LIMIT $limit
-        `;
-            const result = await session.run(query, { skip: neo4j.int(skip) , limit: neo4j.int(limit) });
-            return result.records.map(r => r.get('n').properties);
+                MATCH (n:${label})
+                RETURN n
+                ORDER BY coalesce(n.createdAt, "") DESC
+                SKIP $skip
+                LIMIT $limit
+            `;
+            const result = await session.run(query, { skip: neo4j.int(skip), limit: neo4j.int(limit) });
+
+            // 3. Tính tổng số trang
+            const totalPages = Math.ceil(totalItems / limit);
+
+            return {
+                items: result.records.map(r => r.get('n').properties),
+                pagination: {
+                    page,
+                    size: limit,
+                    totalItems,
+                    totalPages
+                }
+            }
         } finally {
             await session.close();
         }
@@ -78,8 +124,9 @@ class Neo4jNodeRepository {
     async update(label, id, props) {
         const session = getSession();
         try {
-            const query = `MATCH (n:${label} {id: $id}) SET n += $props RETURN n`;
-            const result = await session.run(query, { id, props });
+            const updatedAt = now();
+            const query = `MATCH (n:${label} {id: $id}) SET n += $props, n.updatedAt = $updatedAt RETURN n`;
+            const result = await session.run(query, { id, props, updatedAt });
             return result.records[0]?.get('n').properties || null;
         } finally {
             await session.close();

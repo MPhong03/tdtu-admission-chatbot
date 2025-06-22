@@ -22,7 +22,17 @@ class MajorController {
                 await N_MajorService.linkToProgramme(major.id, prog.id);
                 await N_ProgrammeService.linkToMajor(prog.id, major.id);
             }
-            for (const mp of majorProgrammes || []) {
+            for (const mpRaw of majorProgrammes || []) {
+                // Map fields array thành object thuộc tính động
+                const { fields = [], ...mpRest } = mpRaw;
+                const fieldsObj = Array.isArray(fields)
+                    ? fields.reduce((acc, cur) => {
+                        if (cur.key) acc[cur.key] = cur.value;
+                        return acc;
+                    }, {})
+                    : {};
+                const mp = { ...mpRest, ...fieldsObj };
+
                 await N_MajorProgrammeService.create(mp);
                 await N_MajorProgrammeService.linkToMajor(mp.id, major.id);
                 await N_MajorProgrammeService.linkToProgramme(mp.id, mp.programmeId);
@@ -54,12 +64,25 @@ class MajorController {
                 await N_MajorService.linkToProgramme(id, prog.id);
                 await N_ProgrammeService.linkToMajor(prog.id, id);
             }
-            for (const mp of majorProgrammes || []) {
+            for (const mpRaw of majorProgrammes || []) {
+                const { fields = [], ...mpRest } = mpRaw;
+                const fieldsObj = Array.isArray(fields)
+                    ? fields.reduce((acc, cur) => {
+                        if (cur.key) acc[cur.key] = cur.value;
+                        return acc;
+                    }, {})
+                    : {};
+                const mp = { ...mpRest, ...fieldsObj };
+
                 await N_MajorProgrammeService.create(mp);
+
                 await N_MajorProgrammeService.linkToMajor(mp.id, id);
                 await N_MajorProgrammeService.linkToProgramme(mp.id, mp.programmeId);
-                if (mp.yearId)
-                    await N_MajorProgrammeService.linkToYear(mp.id, mp.yearId);
+                if (Array.isArray(mp.yearIds)) {
+                    for (const yid of mp.yearIds) {
+                        await N_MajorProgrammeService.linkToYear(mp.id, yid);
+                    }
+                }
             }
             return res.json(HttpResponse.success('Cập nhật ngành học thành công'));
         } catch (err) {
@@ -116,8 +139,8 @@ class MajorController {
      */
     async list(req, res) {
         try {
-            const { page = 1, pageSize = 10 } = req.query;
-            const data = await N_MajorService.paginate({ page: +page, pageSize: +pageSize });
+            const { page = 1, size = 10 } = req.query;
+            const data = await N_MajorService.paginate({ page: +page, pageSize: +size });
             return res.json(HttpResponse.success('Lấy danh sách ngành học thành công', data));
         } catch (err) {
             logger.error('Error:', err);

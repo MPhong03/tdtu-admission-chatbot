@@ -4,15 +4,17 @@ import PrivateRoute from "@/routes/private-route";
 
 function App() {
   return (
-    <Routes>
-      <Route path="/dashboard/*" element={
-        <PrivateRoute>
-          <Dashboard />
-        </PrivateRoute>
-      } />
-      <Route path="/auth/*" element={<Auth />} />
-      <Route path="*" element={<Navigate to="/dashboard/home" replace />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route path="/dashboard/*" element={
+          <PrivateRoute>
+            <Dashboard />
+          </PrivateRoute>
+        } />
+        <Route path="/auth/*" element={<Auth />} />
+        <Route path="*" element={<Navigate to="/dashboard/home" replace />} />
+      </Routes>
+    </>
   );
 }
 

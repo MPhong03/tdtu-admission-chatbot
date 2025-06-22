@@ -4,3 +4,8 @@ export * from "@/pages/dashboard/notifications";
 export * from "@/pages/dashboard/qapage";
 export * from "@/pages/dashboard/userpage";
 export * from "@/pages/dashboard/systemconfigs";
+export * from "@/pages/dashboard/programmepage";
+export * from "@/pages/dashboard/majorpage";
+export * from "@/pages/dashboard/tuitionpage";
+export * from "@/pages/dashboard/scholarshippage";
+export * from "@/pages/dashboard/documentpage";
