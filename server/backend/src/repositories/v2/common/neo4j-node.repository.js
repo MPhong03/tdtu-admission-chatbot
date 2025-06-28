@@ -121,11 +121,21 @@ class Neo4jNodeRepository {
     }
 
     // Update node by label and id
-    async update(label, id, props) {
+    async update(label, id, props, toRemove = []) {
         const session = getSession();
         try {
             const updatedAt = now();
-            const query = `MATCH (n:${label} {id: $id}) SET n += $props, n.updatedAt = $updatedAt RETURN n`;
+            
+            let query = `MATCH (n:${label} {id: $id}) SET n += $props, n.updatedAt = $updatedAt`;
+
+            // Nếu có thuộc tính cần xóa -> thêm REMOVE vào query
+            if (toRemove.length > 0) {
+                const removeClauses = toRemove.map(k => `n.\`${k}\``).join(", ");
+                query += ` REMOVE ${removeClauses}`;
+            }
+
+            query += ` RETURN n`;
+
             const result = await session.run(query, { id, props, updatedAt });
             return result.records[0]?.get('n').properties || null;
         } finally {

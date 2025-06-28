@@ -126,6 +126,19 @@ class N_MajorProgrammeService extends BaseService {
     async linkToYear(mpId, yearId, relProps = {}) {
         return edgeRepo.upsert('MajorProgramme', mpId, 'OF_YEAR', 'Year', yearId, relProps);
     }
+
+    /**
+     * Lấy tất cả MajorProgramme theo majorId, chỉ trả về majorprogrammes
+     */
+    async findByMajorId(majorId) {
+        const cypher = `
+            MATCH (mp:MajorProgramme)-[:OF_MAJOR]->(m:Major {id: $majorId})
+            RETURN mp
+        `;
+        const results = await neo4jRepo.execute(cypher, { majorId }, { raw: true });
+
+        return results.map(r => r.mp.properties);
+    }
 }
 
 /**

@@ -114,6 +114,7 @@ Nếu tôi còn thiếu thuộc tính hoặc keyword quan trọng, hãy bổ sun
 - Trước khi sinh Cypher, hãy tự động chuẩn hóa các keyword/tên ngành, chương trình, năm, v.v. mà người dùng cung cấp: bao gồm sửa lỗi chính tả, mở rộng các từ viết tắt (ví dụ: "CNTT" → "Công nghệ thông tin", "TDTU" → "Đại học Tôn Đức Thắng", v.v.) theo đúng chuẩn ngành/chương trình/năm đã lưu trong hệ thống.  
 - Chỉ sử dụng keyword đã chuẩn hóa để sinh lệnh Cypher và labels. Nếu có thể, hãy ưu tiên keyword đúng chuẩn đã lưu trong hệ thống.
 - Nếu không chắc, hãy dùng keyword đã chuẩn hóa tốt nhất có thể.
+- Nếu không nhận diện được bất kỳ thực thể nào (Major, Programme, Year, Tuition, Scholarship) trong câu hỏi, mặc định truy vấn node Document để tìm thông tin chung của trường, thông tin tuyển sinh tổng quan hoặc bất cứ thông tin gì.
 
 ---
 

@@ -1,0 +1,69 @@
+{
+  "majors": [
+    {
+      "id": "slug của tên ngành",
+      "name": "Tên ngành",
+      "description": "Mô tả ngành",
+      "reasons": "Lý do nên học, dạng text",
+      "images": "JSON string list URL ảnh"
+    }
+  ],
+  "programmes": [
+    {
+      "id": "slug của tên chương trình",
+      "name": "Tên chương trình"
+    }
+  ],
+  "years": [
+    {
+      "id": "2025",
+      "name": "2025"
+    }
+  ],
+  "tuitions": [
+    {
+      "id": "TUITION_<programme_id>_<year>",
+      "year_id": "<năm>",
+      "programme_id": "<id chương trình>",
+      "name": "<Tên phần học phí>",
+      "url": "<URL nguồn crawl>",
+      "content": "<HTML/text chi tiết học phí>"
+    }
+  ],
+  "scholarships": [
+    {
+      "id": "SCHOLARSHIPS_<năm>",
+      "year_id": "<năm>",
+      "name": "<Tên gốc của file crawl>",
+      "url": "<URL nguồn crawl>",
+      "content": "<Text + bảng html học bổng>"
+    }
+  ],
+  "documents": [
+    {
+      "id": "PHUONG_THUC_<năm>",
+      "year_id": "<năm>",
+      "type": "phuong-thuc-tuyen-sinh",
+      "name": "<Tên file crawl>",
+      "url": "<URL nguồn crawl>",
+      "html": "<HTML nội dung phương thức>",
+      "text": "<Text nội dung phương thức>"
+    }
+  ],
+  "major_programmes": [
+    {
+      "id": "<major_id>_<programme_id>",
+      "major_id": "<id ngành>",
+      "programme_id": "<id chương trình>",
+      "tab": "<Tên tab trong major detail>",
+      "major_code": "<mã ngành>",
+      "description": "<Mô tả chi tiết>",
+      "name": "<Tên hiển thị>",
+      "year_ids": [
+        "2023",
+        "2024",
+        "2025"
+      ]
+    }
+  ]
+}

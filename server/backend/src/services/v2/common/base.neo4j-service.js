@@ -13,8 +13,8 @@ class BaseNeo4jService {
         return nodeRepo.findById(this.label, id);
     }
 
-    async update(id, data) {
-        return nodeRepo.update(this.label, id, data);
+    async update(id, data, toRemove = []) {
+        return nodeRepo.update(this.label, id, data, toRemove);
     }
 
     async delete(id) {

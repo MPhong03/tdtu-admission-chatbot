@@ -1,0 +1,242 @@
+[
+  {
+    "group_name": "Nhóm ngành Kỹ thuật - Công nghệ",
+    "majors": [
+      {
+        "name": "Bảo hộ lao động",
+        "link": "/bao-ho-lao-dong",
+        "detail": "details\\bao-ho-lao-dong.json"
+      },
+      {
+        "name": "Công nghệ kỹ thuật môi trường (Chuyên ngành Cấp thoát nước và Môi trường nước)",
+        "link": "/cong-nghe-ky-thuat-moi-truong-chuyen-nganh-cap-thoat-nuoc-va-moi-truong-nuoc",
+        "detail": "details\\cong-nghe-ky-thuat-moi-truong-chuyen-nganh-cap-thoat-nuoc-va-moi-truong-nuoc.json"
+      },
+      {
+        "name": "Khoa học máy tính",
+        "link": "/khoa-hoc-may-tinh",
+        "detail": "details\\khoa-hoc-may-tinh.json"
+      },
+      {
+        "name": "Khoa học môi trường",
+        "link": "/khoa-hoc-moi-truong",
+        "detail": "details\\khoa-hoc-moi-truong.json"
+      },
+      {
+        "name": "Kiến trúc",
+        "link": "/kien-truc",
+        "detail": "details\\kien-truc.json"
+      },
+      {
+        "name": "Kỹ thuật cơ điện tử",
+        "link": "/ky-thuat-co-dien-tu",
+        "detail": "details\\ky-thuat-co-dien-tu.json"
+      },
+      {
+        "name": "Kỹ thuật điện",
+        "link": "/ky-thuat-dien",
+        "detail": "details\\ky-thuat-dien.json"
+      },
+      {
+        "name": "Kỹ thuật điện tử - viễn thông",
+        "link": "/ky-thuat-dien-tu-vien-thong",
+        "detail": "details\\ky-thuat-dien-tu-vien-thong.json"
+      },
+      {
+        "name": "Kỹ thuật điện tử - viễn thông (Chuyên ngành Kỹ thuật thiết kế vi mạch bán dẫn)",
+        "link": "/ky-thuat-dien-tu-vien-thong-chuyen-nganh-ky-thuat-thiet-ke-vi-mach-ban-dan",
+        "detail": "details\\ky-thuat-dien-tu-vien-thong-chuyen-nganh-ky-thuat-thiet-ke-vi-mach-ban-dan.json"
+      },
+      {
+        "name": "Kỹ thuật điều khiển và tự động hóa",
+        "link": "/ky-thuat-dieu-khien-va-tu-dong-hoa",
+        "detail": "details\\ky-thuat-dieu-khien-va-tu-dong-hoa.json"
+      },
+      {
+        "name": "Kỹ thuật phần mềm",
+        "link": "/ky-thuat-phan-mem",
+        "detail": "details\\ky-thuat-phan-mem.json"
+      },
+      {
+        "name": "Kỹ thuật xây dựng",
+        "link": "/ky-thuat-xay-dung",
+        "detail": "details\\ky-thuat-xay-dung.json"
+      },
+      {
+        "name": "Kỹ thuật xây dựng công trình giao thông",
+        "link": "/ky-thuat-xay-dung-cong-trinh-giao-thong",
+        "detail": "details\\ky-thuat-xay-dung-cong-trinh-giao-thong.json"
+      },
+      {
+        "name": "Mạng máy tính và Truyền thông dữ liệu",
+        "link": "/mang-may-tinh-va-truyen-thong-du-lieu",
+        "detail": "details\\mang-may-tinh-va-truyen-thong-du-lieu.json"
+      },
+      {
+        "name": "Quản lý xây dựng",
+        "link": "/quan-ly-xay-dung",
+        "detail": "details\\quan-ly-xay-dung.json"
+      },
+      {
+        "name": "Quy hoạch vùng và đô thị",
+        "link": "/quy-hoach-vung-va-do-thi",
+        "detail": "details\\quy-hoach-vung-va-do-thi.json"
+      }
+    ]
+  },
+  {
+    "group_name": "Nhóm ngành Khoa học sức khỏe",
+    "majors": [
+      {
+        "name": "Dược",
+        "link": "/duoc",
+        "detail": "details\\duoc.json"
+      },
+      {
+        "name": "Quản lý thể dục thể thao (Chuyên ngành Golf)",
+        "link": "/quan-ly-duc-thao-chuyen-nganh-golf",
+        "detail": "details\\quan-ly-duc-thao-chuyen-nganh-golf.json"
+      },
+      {
+        "name": "Quản lý thể dục thể thao (Chuyên ngành Kinh doanh thể thao và tổ chức sự kiện)",
+        "link": "/quan-ly-duc-thao-chuyen-nganh-kinh-doanh-thao-va-chuc-su-kien",
+        "detail": "details\\quan-ly-duc-thao-chuyen-nganh-kinh-doanh-thao-va-chuc-su-kien.json"
+      }
+    ]
+  },
+  {
+    "group_name": "Nhóm ngành Khoa học ứng dụng",
+    "majors": [
+      {
+        "name": "Công nghệ sinh học",
+        "link": "/cong-nghe-sinh-hoc",
+        "detail": "details\\cong-nghe-sinh-hoc.json"
+      },
+      {
+        "name": "Kỹ thuật hóa học",
+        "link": "/ky-thuat-hoa-hoc",
+        "detail": "details\\ky-thuat-hoa-hoc.json"
+      },
+      {
+        "name": "Thống kê",
+        "link": "/thong-ke",
+        "detail": "details\\thong-ke.json"
+      },
+      {
+        "name": "Toán ứng dụng",
+        "link": "/toan-ung-dung",
+        "detail": "details\\toan-ung-dung.json"
+      }
+    ]
+  },
+  {
+    "group_name": "Nhóm ngành Khoa học xã hội - Nhân văn Mỹ thuật",
+    "majors": [
+      {
+        "name": "Công tác xã hội",
+        "link": "/cong-tac-xa-hoi",
+        "detail": "details\\cong-tac-xa-hoi.json"
+      },
+      {
+        "name": "Luật",
+        "link": "/luat",
+        "detail": "details\\luat.json"
+      },
+      {
+        "name": "Ngôn ngữ Anh",
+        "link": "/ngon-ngu-anh",
+        "detail": "details\\ngon-ngu-anh.json"
+      },
+      {
+        "name": "Ngôn ngữ Trung Quốc",
+        "link": "/ngon-ngu-trung-quoc",
+        "detail": "details\\ngon-ngu-trung-quoc.json"
+      },
+      {
+        "name": "Quan hệ lao động (Chuyên ngành Quản lý quan hệ lao động, Chuyên ngành Hành vi tổ chức)",
+        "link": "/quan-he-lao-dong",
+        "detail": "details\\quan-he-lao-dong.json"
+      },
+      {
+        "name": "Thiết kế nội thất",
+        "link": "/thiet-ke-noi-that",
+        "detail": "details\\thiet-ke-noi-that.json"
+      },
+      {
+        "name": "Thiết kế thời trang",
+        "link": "/thiet-ke-thoi-trang",
+        "detail": "details\\thiet-ke-thoi-trang.json"
+      },
+      {
+        "name": "Thiết kế đồ họa",
+        "link": "/thiet-ke-do-hoa",
+        "detail": "details\\thiet-ke-do-hoa.json"
+      },
+      {
+        "name": "Du lịch (Chuyên ngành Quản lý du lịch)",
+        "link": "/du-lich-chuyen-nganh-quan-ly-du-lich",
+        "detail": "details\\du-lich-chuyen-nganh-quan-ly-du-lich.json"
+      },
+      {
+        "name": "Du lịch (Chuyên ngành Hướng dẫn du lịch)",
+        "link": "/du-lich-chuyen-nganh-huong-dan-vien-du-lich",
+        "detail": "details\\du-lich-chuyen-nganh-huong-dan-vien-du-lich.json"
+      },
+      {
+        "name": "Xã hội học",
+        "link": "/xa-hoi-hoc",
+        "detail": "details\\xa-hoi-hoc.json"
+      }
+    ]
+  },
+  {
+    "group_name": "Nhóm ngành kinh tế",
+    "majors": [
+      {
+        "name": "Kế toán",
+        "link": "/ke-toan",
+        "detail": "details\\ke-toan.json"
+      },
+      {
+        "name": "Kiểm toán (Chuyên ngành Kiểm toán và Phân tích dữ liệu)",
+        "link": "/kiem-toan-chuyen-nganh-kiem-toan-va-phan-tich-du-lieu",
+        "detail": "details\\kiem-toan-chuyen-nganh-kiem-toan-va-phan-tich-du-lieu.json"
+      },
+      {
+        "name": "Kinh doanh quốc tế",
+        "link": "/kinh-doanh-quoc-te",
+        "detail": "details\\kinh-doanh-quoc-te.json"
+      },
+      {
+        "name": "Marketing",
+        "link": "/marketing",
+        "detail": "details\\marketing.json"
+      },
+      {
+        "name": "Quản trị kinh doanh (Chuyên ngành Quản trị nguồn nhân lực)",
+        "link": "/quan-tri-kinh-doanh-chuyen-nganh-quan-tri-nguon-nhan-luc",
+        "detail": "details\\quan-tri-kinh-doanh-chuyen-nganh-quan-tri-nguon-nhan-luc.json"
+      },
+      {
+        "name": "Quản trị kinh doanh (Chuyên ngành Quản trị nhà hàng-khách sạn)",
+        "link": "/quan-tri-kinh-doanh-chuyen-nganh-quan-tri-nha-hang-khach-san",
+        "detail": "details\\quan-tri-kinh-doanh-chuyen-nganh-quan-tri-nha-hang-khach-san.json"
+      },
+      {
+        "name": "Quản trị kinh doanh (Chuyên ngành Quản trị chuỗi cung ứng)",
+        "link": "/quan-tri-kinh-doanh-chuyen-nganh-quan-tri-chuoi-cung-ung",
+        "detail": "details\\quan-tri-kinh-doanh-chuyen-nganh-quan-tri-chuoi-cung-ung.json"
+      },
+      {
+        "name": "Tài chính - Ngân hàng",
+        "link": "/tai-chinh-ngan-hang",
+        "detail": "details\\tai-chinh-ngan-hang.json"
+      },
+      {
+        "name": "Tài chính - Ngân hàng (Chuyên ngành Tài chính quốc tế)",
+        "link": "/tai-chinh-ngan-hang-chuyen-nganh-tai-chinh-quoc-te",
+        "detail": "details\\tai-chinh-ngan-hang-chuyen-nganh-tai-chinh-quoc-te.json"
+      }
+    ]
+  }
+]

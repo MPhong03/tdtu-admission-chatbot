@@ -1,0 +1,76 @@
+I. Mô tả các nodes
+1. Major (Ngành học)
+- Thuộc tính:
+  - id: Mã ngành học (chuẩn hóa, duy nhất)
+  - name: Tên ngành học
+  - description: Mô tả ngành học
+  - reasons: Lý do chọn ngành, điểm nổi bật
+  - images: Danh sách ảnh minh họa (mảng URL)
+- Dùng để: Đại diện cho một ngành đào tạo, lưu thông tin tổng quan về ngành.
+
+2. Programme (Chương trình đào tạo)
+- Thuộc tính:
+  - id: Mã chương trình (chuẩn hóa, duy nhất)
+  - name: Tên chương trình (ví dụ: Tiêu chuẩn, Chất lượng cao, Liên kết quốc tế)
+- Dùng để: Phân loại các loại hình chương trình đào tạo.
+
+3. MajorProgramme (Chi tiết ngành theo chương trình)
+- Thuộc tính:
+  - id: Mã chi tiết (ghép từ major_id + programme_id)
+  - major_id: Id ngành
+  - programme_id: Id chương trình
+  - tab: Tên tab/loại hình chương trình
+  - major_code: Mã ngành chi tiết
+  - description: Mô tả chi tiết
+  - name: Tên chi tiết ngành
+- Dùng để: Biểu diễn "ngành học A theo chương trình B", lưu mọi đặc điểm riêng biệt của ngành đó trong chương trình cụ thể.
+
+4. Year (Năm tuyển sinh)
+- Thuộc tính:
+  - id: Mã năm (ví dụ: "2023", "2024")
+  - name: Tên năm (thường giống id)
+- Dùng để: Phân loại dữ liệu theo từng mùa tuyển sinh.
+
+5. Document (Tài liệu tuyển sinh)
+- Thuộc tính:
+  - id: Mã tài liệu
+  - year_id: Năm áp dụng
+  - type: Loại tài liệu (ví dụ: "phuong-thuc-tuyen-sinh")
+  - name: Tên tài liệu
+  - url: Link tài liệu
+  - html: Nội dung HTML
+  - text: Nội dung text thô
+- Dùng để: Lưu các tài liệu tuyển sinh như thông báo, phương thức xét tuyển, theo từng năm.
+
+6. Tuition (Tài liệu học phí)
+- Thuộc tính:
+  - id: Mã tài liệu học phí
+  - year_id: Năm áp dụng
+  - programme_id: Chương trình áp dụng
+  - name: Tên tài liệu
+  - url: Link tài liệu
+  - content: Nội dung chi tiết (text hoặc HTML)
+- Dùng để: Lưu thông tin học phí của từng năm, từng chương trình.
+
+7. Scholarship (Tài liệu học bổng)
+- Thuộc tính:
+  - id: Mã học bổng
+  - year_id: Năm áp dụng
+  - name: Tên học bổng
+  - url: Link tài liệu
+  - content: Nội dung chi tiết (text hoặc HTML)
+- Dùng để: Lưu thông tin học bổng áp dụng cho từng năm.
+
+II. Mô tả mối edges
+(Major)-[:HAS_PROGRAMME]->(Programme) = Ngành học đang có những chương trình đào tạo
+(Programme)-[:HAS_MAJOR]->(Major) = Chương trình đào tạo đang có những ngành
+(MajorProgramme)-[:OF_MAJOR]->(Major) = Chi tiết ngành học này thuộc ngành nào
+(MajorProgramme)-[:OF_PROGRAMME]->(Programme) = Chi tiết ngành học này thuộc ngành nào
+(MajorProgramme)-[:OF_YEAR]->(Year) = Chi tiết ngành học này thuộc năm nào
+(Year)-[:HAS_DOCUMENT]->(Document) = Năm này có những tài liệu nào
+(Year)-[:HAS_TUITION]->(Tuition) = Năm này có các tài liệu học phí nào
+(Year)-[:HAS_MAJORPROGRAMME]->(MajorProgramme) = Năm này có những chi tiết ngành học nào
+(Programme)-[:HAS_TUITION]->(Tuition) = Chương trình đào tạo này có những tài liệu học phí nào
+(Tuition)-[:OF_PROGRAMME]->(Programme) = Tài liệu học phí này thuộc chương trình đào tạo nào
+(Tuition)-[:OF_YEAR]->(Year) = Tài liệu học phí này thuộc năm nào
+(Scholarship)-[:OF_YEAR]->(Year) = Tài liệu học bổng này thuộc năm nào

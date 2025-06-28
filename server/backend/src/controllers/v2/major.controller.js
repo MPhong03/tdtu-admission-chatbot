@@ -5,6 +5,7 @@ const {
 } = require('../../services/v2/nodes.neo4j-service');
 const HttpResponse = require('../../data/responses/http.response');
 const logger = require('../../utils/logger.util');
+const { stringToId } = require('../../utils/neo4j.util');
 
 class MajorController {
     /**
@@ -13,17 +14,18 @@ class MajorController {
      */
     async create(req, res) {
         try {
-            const { major, group, programmes, majorProgrammes } = req.body;
-            await N_MajorService.create(major);
-            if (group?.id && N_MajorService.linkToGroup) {
-                await N_MajorService.linkToGroup(major.id, group.id);
-            }
+            const { major, programmes, majorProgrammes } = req.body;
+            // Tạo ngành học
+            let newM = await N_MajorService.create(major);
+
+            // Liên kết các programme
             for (const prog of programmes || []) {
-                await N_MajorService.linkToProgramme(major.id, prog.id);
-                await N_ProgrammeService.linkToMajor(prog.id, major.id);
+                await N_MajorService.linkToProgramme(newM.id, prog.id);
+                await N_ProgrammeService.linkToMajor(prog.id, newM.id);
             }
+
+            // Tạo các liên kết majorProgramme
             for (const mpRaw of majorProgrammes || []) {
-                // Map fields array thành object thuộc tính động
                 const { fields = [], ...mpRest } = mpRaw;
                 const fieldsObj = Array.isArray(fields)
                     ? fields.reduce((acc, cur) => {
@@ -33,12 +35,14 @@ class MajorController {
                     : {};
                 const mp = { ...mpRest, ...fieldsObj };
 
-                await N_MajorProgrammeService.create(mp);
-                await N_MajorProgrammeService.linkToMajor(mp.id, major.id);
-                await N_MajorProgrammeService.linkToProgramme(mp.id, mp.programmeId);
-                if (Array.isArray(mp.yearIds)) {
-                    for (const yid of mp.yearIds) {
-                        await N_MajorProgrammeService.linkToYear(mp.id, yid);
+                mp.id = stringToId((mp.name || mp.major_code)) + "_" + mp.programmeId;
+
+                let newMP = await N_MajorProgrammeService.create(mp);
+                await N_MajorProgrammeService.linkToMajor(newMP.id, newM.id);
+                await N_MajorProgrammeService.linkToProgramme(newMP.id, mp.programmeId);
+                if (Array.isArray(mp.years)) {
+                    for (const yid of mp.years) {
+                        await N_MajorProgrammeService.linkToYear(newMP.id, yid);
                     }
                 }
             }
@@ -55,35 +59,88 @@ class MajorController {
     async update(req, res) {
         try {
             const { id } = req.params;
-            const { major, group, programmes, majorProgrammes } = req.body;
+            const importantKeys = [
+                "major_code", "name", "description", "programmeId", "id",
+                "major_id", "tab", "createdAt", "updatedAt", "years"
+            ];
+
+            const {
+                major,
+                programmes,
+                majorProgrammes,
+                deletedMajorProgrammeIds = [],
+            } = req.body;
+
+            // 1. Cập nhật ngành chính
             await N_MajorService.update(id, major);
-            if (group?.id && N_MajorService.linkToGroup) {
-                await N_MajorService.linkToGroup(id, group.id);
-            }
+
+            // 2. Liên kết các programme
             for (const prog of programmes || []) {
                 await N_MajorService.linkToProgramme(id, prog.id);
                 await N_ProgrammeService.linkToMajor(prog.id, id);
             }
+
+            // 3. Xóa các majorProgramme bị loại bỏ
+            if (Array.isArray(deletedMajorProgrammeIds)) {
+                for (const mpId of deletedMajorProgrammeIds) {
+                    await N_MajorProgrammeService.delete(mpId);
+                }
+            }
+
+            // 4. Tạo hoặc cập nhật majorProgrammes
             for (const mpRaw of majorProgrammes || []) {
-                const { fields = [], ...mpRest } = mpRaw;
+                const { id: mpId, fields = [], ...mpRest } = mpRaw;
+
+                // Chuyển fields từ array sang object
                 const fieldsObj = Array.isArray(fields)
                     ? fields.reduce((acc, cur) => {
                         if (cur.key) acc[cur.key] = cur.value;
                         return acc;
                     }, {})
                     : {};
-                const mp = { ...mpRest, ...fieldsObj };
 
-                await N_MajorProgrammeService.create(mp);
+                // Lọc mpRest chỉ giữ các key quan trọng
+                const filteredMpRest = Object.keys(mpRest).reduce((acc, key) => {
+                    if (importantKeys.includes(key)) acc[key] = mpRest[key];
+                    return acc;
+                }, {});
 
-                await N_MajorProgrammeService.linkToMajor(mp.id, id);
-                await N_MajorProgrammeService.linkToProgramme(mp.id, mp.programmeId);
-                if (Array.isArray(mp.yearIds)) {
-                    for (const yid of mp.yearIds) {
-                        await N_MajorProgrammeService.linkToYear(mp.id, yid);
+                // Tạo object final gửi lên DB
+                const mp = { ...filteredMpRest, ...fieldsObj };
+
+                let majorProgrammeId = mpId;
+
+                if (mpId) {
+                    const currentNode = await N_MajorProgrammeService.getById(mpId);
+                    const currentKeys = Object.keys(currentNode);
+                    const newKeys = [
+                        ...Object.keys(filteredMpRest),
+                        ...Object.keys(fieldsObj)
+                    ];
+                    const fieldsToRemove = currentKeys.filter(k =>
+                        !newKeys.includes(k) && !importantKeys.includes(k)
+                    );
+
+                    // Update với fieldsToRemove
+                    await N_MajorProgrammeService.update(mpId, mp, fieldsToRemove);
+                } else {
+                    // Tạo mới nếu chưa có id
+                    const created = await N_MajorProgrammeService.create(mp);
+                    majorProgrammeId = created.id || created;
+                }
+
+                // Liên kết lại major <-> majorProgramme <-> programme
+                await N_MajorProgrammeService.linkToMajor(majorProgrammeId, id);
+                await N_MajorProgrammeService.linkToProgramme(majorProgrammeId, mp.programmeId);
+
+                // Liên kết các năm
+                if (Array.isArray(mp.years)) {
+                    for (const yid of mp.years) {
+                        await N_MajorProgrammeService.linkToYear(majorProgrammeId, yid);
                     }
                 }
             }
+
             return res.json(HttpResponse.success('Cập nhật ngành học thành công'));
         } catch (err) {
             logger.error('Error:', err);
@@ -97,8 +154,8 @@ class MajorController {
     async delete(req, res) {
         try {
             const { id } = req.params;
-            if (N_MajorProgrammeService.findByMajorId) {
-                const mps = await N_MajorProgrammeService.findByMajorId(id);
+            const mps = await N_MajorProgrammeService.findByMajorId(id);
+            if (mps.length > 0) {
                 for (const mp of mps) {
                     await N_MajorProgrammeService.delete(mp.id);
                 }

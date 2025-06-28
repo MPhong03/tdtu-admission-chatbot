@@ -2,10 +2,11 @@ import React, { useEffect, useState } from "react";
 import { Card } from "@material-tailwind/react";
 import api from "@/configs/api";
 import MajorTable from "@/widgets/tables/major/major-table";
-// import QAModal from "@/widgets/modals/qa-modal";
 import LoadingTable from "@/widgets/tables/components/loadingtable";
 import Pagination from "@/widgets/tables/pagination";
 import MajorModal from "@/widgets/modals/major-modal";
+import ConfirmDialog from "@/widgets/dialogs/confirm-dialog";
+import toast from "react-hot-toast";
 
 export function MajorPage() {
     const [majors, setMajors] = useState([]);
@@ -14,7 +15,10 @@ export function MajorPage() {
     const [selectedMajor, setSelectedMajor] = useState(null);
     const [openModal, setOpenModal] = useState(false);
     const [modalMode, setModalMode] = useState("view");
-    const [loading, setLoading] = useState(false); 
+    const [loading, setLoading] = useState(false);
+
+    // Confirm dialog state
+    const [confirmDelete, setConfirmDelete] = useState({ open: false, major: null });
 
     const size = 5;
 
@@ -27,7 +31,8 @@ export function MajorPage() {
                 setTotalPages(Math.ceil(res.data.Data.pagination.totalItems / size));
             }
         } catch (error) {
-            console.error("Error fetching Q&A major:", error);
+            console.error("Error fetching majors:", error);
+            toast.error("Lỗi khi tải danh sách ngành");
         } finally {
             setLoading(false);
         }
@@ -53,6 +58,73 @@ export function MajorPage() {
         if (refresh) fetchMajors(page);
     };
 
+    // ==== Xử lý xoá major ====
+    const handleDeleteMajor = (major) => {
+        if (!major || (!major.id && !major._id)) return;
+        setConfirmDelete({
+            open: true,
+            major,
+        });
+    };
+
+    const handleConfirmDelete = async () => {
+        const major = confirmDelete.major;
+        if (!major || (!major.id && !major._id)) {
+            setConfirmDelete({ open: false, major: null });
+            return;
+        }
+        const id = major.id || major._id;
+        try {
+            const res = await api.delete(`/v2/majors/${id}`);
+            if (res.data.Code === 1) {
+                toast.success("Xoá ngành thành công!");
+                // Nếu ngành bị xoá là ngành cuối cùng của trang, chuyển về trang trước
+                if (majors.length === 1 && page > 1) {
+                    setPage(page - 1);
+                } else {
+                    fetchMajors(page);
+                }
+            } else {
+                throw new Error(res.data.Message || "Xoá ngành thất bại");
+            }
+        } catch (err) {
+            toast.error(err.message || "Có lỗi khi xoá ngành!");
+        }
+        setConfirmDelete({ open: false, major: null });
+    };
+
+    const handleCancelDelete = () => {
+        setConfirmDelete({ open: false, major: null });
+    };
+
+    // ==== Ráp API vào onSubmit của MajorModal ====
+    const handleSubmitMajor = async (data) => {
+        try {
+            if (!selectedMajor) {
+                // CREATE
+                const res = await api.post("/v2/majors", data);
+                if (res.data.Code === 1) {
+                    toast.success("Tạo ngành thành công!");
+                    handleCloseModal(true);
+                } else {
+                    throw new Error(res.data.Message || "Tạo ngành thất bại");
+                }
+            } else {
+                // UPDATE
+                const res = await api.put(`/v2/majors/${selectedMajor.id}`, data);
+                if (res.data.Code === 1) {
+                    toast.success("Cập nhật ngành thành công!");
+                    handleCloseModal(true);
+                } else {
+                    throw new Error(res.data.Message || "Cập nhật ngành thất bại");
+                }
+            }
+        } catch (err) {
+            toast.error(err.message || "Có lỗi xảy ra!");
+            throw err;
+        }
+    };
+
     return (
         <div className="mt-12 mb-8 flex flex-col gap-12">
             <Card>
@@ -61,6 +133,7 @@ export function MajorPage() {
                     majors={majors}
                     onOpenModal={handleOpenModal}
                     onCreate={() => setOpenModal(true)}
+                    onDelete={handleDeleteMajor}
                     page={page}
                     size={size}
                 />
@@ -74,9 +147,24 @@ export function MajorPage() {
             <MajorModal
                 open={openModal}
                 onClose={handleCloseModal}
-                onSubmit={(m) => console.log(m)}
+                onSubmit={handleSubmitMajor}
                 majorId={selectedMajor?.id}
-                // title={modalMode === "create" ? "Thêm mới tài liệu" : selectedMajor?.name || "Chi tiết tài liệu"}
+            />
+
+            {/* Dialog confirm xóa */}
+            <ConfirmDialog
+                open={confirmDelete.open}
+                title="Xác nhận xoá ngành học"
+                content={
+                    confirmDelete.major
+                        ? <>Bạn có chắc chắn muốn xoá ngành "<b>{confirmDelete.major.name}</b>"?</>
+                        : "Bạn có chắc chắn muốn xoá mục này?"
+                }
+                onConfirm={handleConfirmDelete}
+                onCancel={handleCancelDelete}
+                confirmText="Xoá"
+                cancelText="Hủy"
+                confirmColor="red"
             />
         </div>
     );

@@ -6,12 +6,12 @@ import {
     IconButton,
     Button,
 } from "@material-tailwind/react";
-import { EyeIcon, PlusIcon } from "@heroicons/react/24/solid";
+import { EyeIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/solid";
 import { truncateWords } from "@/utils/tools";
 
 const fallbackImage = "/img/logo.jpg";
 
-const MajorTable = ({ majors, onOpenModal, onCreate, page = 1, size = 5 }) => (
+const MajorTable = ({ majors, onOpenModal, onCreate, onDelete, page = 1, size = 5 }) => (
     <>
         <CardHeader
             variant="gradient"
@@ -81,9 +81,22 @@ const MajorTable = ({ majors, onOpenModal, onCreate, page = 1, size = 5 }) => (
                                 <td className={className}>{truncateWords(name, 50)}</td>
                                 <td className={className}>{truncateWords(description, 50)}</td>
                                 <td className={className}>
-                                    <IconButton variant="text" color="black" onClick={() => onOpenModal(majors[key])}>
-                                        <EyeIcon className="h-5 w-5" />
-                                    </IconButton>
+                                    <div className="flex flex-row items-center gap-2">
+                                        <IconButton
+                                            variant="text"
+                                            color="black"
+                                            onClick={() => onOpenModal(majors[key])}
+                                        >
+                                            <EyeIcon className="h-5 w-5" />
+                                        </IconButton>
+                                        <IconButton
+                                            variant="text"
+                                            color="red"
+                                            onClick={() => onDelete && onDelete(majors[key])}
+                                        >
+                                            <TrashIcon className="h-5 w-5" />
+                                        </IconButton>
+                                    </div>
                                 </td>
                             </tr>
                         );
