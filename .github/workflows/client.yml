@@ -31,7 +31,7 @@ jobs:
       - name: Build & Deploy
         env:
           VITE_API_URL: ${{ secrets.BACKEND_URL }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.PAT }}
         run: |
           npm run build
           npm run deploy
