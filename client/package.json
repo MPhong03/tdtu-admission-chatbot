@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "vite build && npx vite-gh-pages --dist dist"
+    "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
     "@lottiefiles/react-lottie-player": "^3.6.0",
