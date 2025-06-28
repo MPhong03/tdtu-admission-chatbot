@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "npm run build && gh-pages -d dist"
+      "deploy": "gh-pages -d dist -u \"github-actions[bot] <github-actions[bot]@users.noreply.github.com>\" --repo=https://$GH_TOKEN@github.com/MPhong03/tdtu-admission-chatbot.git"
   },
   "dependencies": {
     "@lottiefiles/react-lottie-player": "^3.6.0",

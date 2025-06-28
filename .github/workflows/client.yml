@@ -12,29 +12,23 @@ defaults:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
           node-version: 18
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Build project
+      - name: Build & Deploy
         env:
           VITE_API_URL: ${{ secrets.BACKEND_URL }}
-        run: npm run build
-
-      - name: Set up Git user for gh-pages
-        run: |
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-
-      - name: Deploy to GitHub Pages
-        env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run deploy
+        run: |
+          npm run build
+          npm run deploy
