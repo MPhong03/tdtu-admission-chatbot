@@ -13,5 +13,6 @@ export default defineConfig({
     // host: true,
     port: 5174,
     // allowedHosts: ["0f28-14-161-73-175.ngrok-free.app"],
-  }
+  },
+  base: '/tdtu-admission-chatbot/'
 });
