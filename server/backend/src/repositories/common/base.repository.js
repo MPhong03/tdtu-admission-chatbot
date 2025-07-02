@@ -51,7 +51,7 @@ class BaseRepository {
     }
 
     async updateRange(condition, updateData) {
-        return this.model.updateMany(condition, { $set: updateData });
+        return this.model.updateMany(condition, updateData);
     }
 
     // ======= DELETE =======

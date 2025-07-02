@@ -1,17 +1,18 @@
 const express = require('express');
 const ScenarioController = require('../controllers/chatbotconfigs/scenario.controller');
+const { apiLock } = require('../middlewares/auth.middleware');
 const router = express.Router();
 
 // GET
-router.get('/', ScenarioController.getScenarios);
+router.get('/', apiLock, ScenarioController.getScenarios);
 
 // POST
-router.post('/', ScenarioController.createScenario);
+router.post('/', apiLock, ScenarioController.createScenario);
 
 // PUT
-router.put('/:id', ScenarioController.updateScenario);
+router.put('/:id', apiLock, ScenarioController.updateScenario);
 
 // DELETE
-router.delete('/:id', ScenarioController.deleteScenario);
+router.delete('/:id', apiLock, ScenarioController.deleteScenario);
 
 module.exports = router;

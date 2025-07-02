@@ -42,7 +42,7 @@ class ChatbotController {
             if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
             // 1. Gọi AI để lấy câu trả lời
-            const { answer, prompt, contextNodes, isError } = await BotService.generateAnswer(question);
+            const { answer, prompt, contextNodes, isError, cypher } = await BotService.generateAnswer(question);
 
             // 2. Lưu vào lịch sử chat
             const saveResult = await HistoryService.saveChat({
@@ -51,6 +51,8 @@ class ChatbotController {
                 chatId,
                 question,
                 answer,
+                cypher,
+                contextNodes,
                 isError
             });
 

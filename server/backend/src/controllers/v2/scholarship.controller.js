@@ -3,13 +3,15 @@ const {
 } = require('../../services/v2/nodes.neo4j-service');
 const HttpResponse = require('../../data/responses/http.response');
 const logger = require('../../utils/logger.util');
+const { convertHtmlToText } = require('../../utils/calculator.util');
 
 class ScholarshipController {
     async create(req, res) {
         try {
-            const { yearId, ...scholarship } = req.body;
+            const { year_id, ...scholarship } = req.body;
+            if (req.body.content) req.body.text = convertHtmlToText(req.body.content);
             await N_ScholarshipService.create(scholarship);
-            if (yearId) await N_ScholarshipService.linkToYear(scholarship.id, yearId);
+            if (year_id) await N_ScholarshipService.linkToYear(scholarship.id, year_id);
             return res.json(HttpResponse.success('Tạo học bổng thành công'));
         } catch (err) {
             logger.error('Error:', err);
@@ -19,7 +21,10 @@ class ScholarshipController {
 
     async update(req, res) {
         try {
+            const { year_id, ...scholarship } = req.body;
+            if (req.body.content) req.body.text = convertHtmlToText(req.body.content);
             await N_ScholarshipService.update(req.params.id, req.body);
+            if (year_id) await N_ScholarshipService.linkToYear(scholarship.id, year_id);
             return res.json(HttpResponse.success('Cập nhật học bổng thành công'));
         } catch (err) {
             logger.error('Error:', err);

@@ -39,7 +39,7 @@ function initSocketHandler(io) {
             try {
                 // Xử lý chatbot
                 // const { answer, prompt, contextNodes, isError } = await RetrieverService.chatWithBot(question);
-                const { answer, prompt, contextNodes, isError } = await BotService.generateAnswer(question);
+                const { answer, prompt, contextNodes, cypher, isError } = await BotService.generateAnswer(question);
 
                 console.log(userId);
 
@@ -49,6 +49,8 @@ function initSocketHandler(io) {
                     chatId,
                     question,
                     answer,
+                    cypher,
+                    contextNodes,
                     isError
                 });
 

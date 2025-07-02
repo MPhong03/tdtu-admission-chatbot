@@ -11,28 +11,31 @@ require('dotenv').config();
 
 class LLMService {
     constructor() {
+        // ===================== CÒN DÙNG =====================
+        this.embeddingModel = null;
+
+        // ===================== KHÔNG CÒN DÙNG =====================
         // Embed + Gemini
         this.llmapi = process.env.LLM_API || "http://localhost:8000";
         this.geminiApi = process.env.GEMINI_API_URL || "http://localhost:8000";
         this.apiKey = process.env.GEMINI_API_KEY;
 
-        this.embeddingModel = null;
         this.fallbackMessage = `**Xin lỗi bạn nhé, hiện tại hệ thống đang quá tải nên chưa thể phản hồi chính xác.**
         
-👉 Bạn có thể liên hệ trực tiếp với bộ phận tư vấn tuyển sinh qua:
+            👉 Bạn có thể liên hệ trực tiếp với bộ phận tư vấn tuyển sinh qua:
 
-- **Fanpage TDTU**: [https://www.facebook.com/tonducthanguniversity](https://www.facebook.com/tonducthanguniversity)
-- **Hotline**: 1900 2024 (nhấn phím 2)
-- **Email**: [tuyensinh@tdtu.edu.vn](mailto:tuyensinh@tdtu.edu.vn)
+            - **Fanpage TDTU**: [https://www.facebook.com/tonducthanguniversity](https://www.facebook.com/tonducthanguniversity)
+            - **Hotline**: 1900 2024 (nhấn phím 2)
+            - **Email**: [tuyensinh@tdtu.edu.vn](mailto:tuyensinh@tdtu.edu.vn)
 
-_Cảm ơn bạn đã thông cảm!_`;
+            _Cảm ơn bạn đã thông cảm!_`;
 
-        // NER
-        this.embeddingModel = null;
         // this.nerModel = null; // Comment: Không cần nerModel cục bộ
         // this.nerInitPromise = null; // Comment: Không cần nerInitPromise
         this.nerApi = process.env.NER_API || 'http://localhost:8000'; // Địa chỉ API FastAPI
     }
+
+    // START: ========== CÁC METHOD KHÔNG CÒN SỬ DỤNG ===========
 
     // === LOAD CONFIG ===
     async loadGeminiConfig() {
@@ -136,32 +139,12 @@ _Cảm ơn bạn đã thông cảm!_`;
 
     // === EMBEDDING ===
 
-    async initEmbeddingModel() {
-        if (!this.embeddingModel) {
-            this.embeddingModel = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
-        }
-    }
-
     async getEmbedding(text) {
         try {
             const res = await axios.post(`${this.llmapi}/embedding`, { text });
             return res.data.embedding;
         } catch (err) {
             console.error("Embedding Error:", err);
-            return null;
-        }
-    }
-
-    async getEmbeddingV2(text) {
-        try {
-            await this.initEmbeddingModel();
-            const output = await this.embeddingModel(text, {
-                pooling: 'mean',
-                normalize: true
-            });
-            return Array.isArray(output.data) ? output.data : Object.values(output.data);
-        } catch (err) {
-            console.error("Embedding Error (NodeJS):", err);
             return null;
         }
     }
@@ -176,25 +159,7 @@ _Cảm ơn bạn đã thông cảm!_`;
         }
     }
 
-    async compareSimilarityV2(source, targets = []) {
-        try {
-            await this.initEmbeddingModel();
-            const [sourceEmbedding, ...targetEmbeddings] = await Promise.all([
-                this.embeddingModel(source, { pooling: 'mean', normalize: true }),
-                ...targets.map(t =>
-                    this.embeddingModel(t, { pooling: 'mean', normalize: true })
-                )
-            ]);
-
-            const sourceVec = sourceEmbedding.data;
-            return targetEmbeddings.map(te => cosineSimilarity(sourceVec, te.data));
-        } catch (err) {
-            console.error("Similarity Error:", err);
-            return [];
-        }
-    }
-
-    // === GEMINI ===
+    // === GEMINI (CHUYỂN SANG BOT.SERVICE) ===
 
     async generateAnswer(prompt) {
         try {
@@ -218,6 +183,49 @@ _Cảm ơn bạn đã thông cảm!_`;
             };
         }
     }
+
+    // END: ========== CÁC METHOD KHÔNG CÒN SỬ DỤNG ===========
+
+    // START: ================== EMBEDDING V2 METHOD ==================
+    async initEmbeddingModel() {
+        if (!this.embeddingModel) {
+            this.embeddingModel = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
+        }
+    }
+
+    async getEmbeddingV2(text) {
+        try {
+            await this.initEmbeddingModel();
+            const output = await this.embeddingModel(text, {
+                pooling: 'mean',
+                normalize: true
+            });
+            return Array.isArray(output.data) ? output.data : Object.values(output.data);
+        } catch (err) {
+            console.error("Embedding Error (NodeJS):", err);
+            return null;
+        }
+    }
+
+    async compareSimilarityV2(source, targets = []) {
+        try {
+            await this.initEmbeddingModel();
+            const [sourceEmbedding, ...targetEmbeddings] = await Promise.all([
+                this.embeddingModel(source, { pooling: 'mean', normalize: true }),
+                ...targets.map(t =>
+                    this.embeddingModel(t, { pooling: 'mean', normalize: true })
+                )
+            ]);
+
+            const sourceVec = sourceEmbedding.data;
+            return targetEmbeddings.map(te => cosineSimilarity(sourceVec, te.data));
+        } catch (err) {
+            console.error("Similarity Error:", err);
+            return [];
+        }
+    }
+
+    // END: ================== EMBEDDING V2 METHOD ==================
 }
 
 module.exports = new LLMService();

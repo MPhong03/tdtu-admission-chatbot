@@ -5,16 +5,18 @@ const {
 } = require('../../services/v2/nodes.neo4j-service');
 const HttpResponse = require('../../data/responses/http.response');
 const logger = require('../../utils/logger.util');
+const { convertHtmlToText } = require('../../utils/calculator.util');
 
 class TuitionController {
     async create(req, res) {
         try {
-            const { yearId, programmeId, ...tuition } = req.body;
+            const { year_id, programme_id, ...tuition } = req.body;
+            if (req.body.content) req.body.text = convertHtmlToText(req.body.content);
             await N_TuitionService.create(tuition);
-            if (yearId) await N_TuitionService.linkToYear(tuition.id, yearId);
-            if (programmeId) {
-                await N_TuitionService.linkToProgramme(tuition.id, programmeId);
-                await N_ProgrammeService.linkToTuition(programmeId, tuition.id);
+            if (year_id) await N_TuitionService.linkToYear(tuition.id, year_id);
+            if (programme_id) {
+                await N_TuitionService.linkToProgramme(tuition.id, programme_id);
+                await N_ProgrammeService.linkToTuition(programme_id, tuition.id);
             }
             return res.json(HttpResponse.success('Tạo học phí thành công'));
         } catch (err) {
@@ -25,7 +27,14 @@ class TuitionController {
 
     async update(req, res) {
         try {
+            const { year_id, programme_id, ...tuition } = req.body;
+            if (req.body.content) req.body.text = convertHtmlToText(req.body.content);
             await N_TuitionService.update(req.params.id, req.body);
+            if (year_id) await N_TuitionService.linkToYear(tuition.id, year_id);
+            if (programme_id) {
+                await N_TuitionService.linkToProgramme(tuition.id, programme_id);
+                await N_ProgrammeService.linkToTuition(programme_id, tuition.id);
+            }
             return res.json(HttpResponse.success('Cập nhật học phí thành công'));
         } catch (err) {
             logger.error('Error:', err);

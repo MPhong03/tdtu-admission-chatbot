@@ -4,8 +4,21 @@ const mongoose = require("mongoose");
 const FeedbackSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     historyId: { type: mongoose.Schema.Types.ObjectId, ref: 'History', required: true },
+    question: { type: Text, required: true },
     answer: { type: Text, required: true },
-    content: { type: Text, required: true },
+    cypher: { type: String, default: '' },
+    contextNodes: { type: String, default: '' }, // JSON string
+    rating: {
+        type: Number,
+        min: 1,
+        max: 5
+    },
+    comment: { type: String, default: '' },
+    status: {
+        type: String,
+        enum: ['pending', 'reviewed', 'resolved'],
+        default: 'pending',
+    }
 }, {
     timestamps: true
 });

@@ -9,10 +9,10 @@ const { convertHtmlToText } = require('../../utils/calculator.util');
 class DocumentController {
     async create(req, res) {
         try {
-            const { yearId, html, ...document } = req.body;
+            const { year_id, html, ...document } = req.body;
             if (html) req.body.text = convertHtmlToText(html);
             await N_DocumentService.create(req.body);
-            if (yearId) await N_YearService.linkToDocument(yearId, document.id);
+            if (year_id) await N_YearService.linkToDocument(year_id, document.id);
             return res.json(HttpResponse.success('Tạo tài liệu thành công'));
         } catch (err) {
             logger.error('Error:', err);
@@ -22,8 +22,10 @@ class DocumentController {
 
     async update(req, res) {
         try {
+            const { year_id, html, ...document } = req.body;
             if (req.body.html) req.body.text = convertHtmlToText(req.body.html);
             await N_DocumentService.update(req.params.id, req.body);
+            if (year_id) await N_YearService.linkToDocument(year_id, req.params.id);
             return res.json(HttpResponse.success('Cập nhật tài liệu thành công'));
         } catch (err) {
             logger.error('Error:', err);

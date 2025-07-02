@@ -130,7 +130,7 @@ export function Home() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-        {qaByDay.length > 0 && (
+        {/* {qaByDay.length > 0 && ( */}
           <StatisticsChart
             chart={{
               type: "bar",
@@ -145,9 +145,9 @@ export function Home() {
             title="Số câu hỏi theo ngày"
             description="Biểu đồ số lượng câu hỏi được hỏi theo từng ngày"
           />
-        )}
+        {/* )} */}
 
-        {qaByStatus.length > 0 && (
+        {/* {qaByStatus.length > 0 && ( */}
           <StatisticsChart
             chart={{
               type: "donut",
@@ -162,7 +162,7 @@ export function Home() {
             title="Số câu hỏi theo trạng thái"
             description="Phân loại câu hỏi theo trạng thái xử lý"
           />
-        )}
+        {/* )} */}
       </div>
     </div>
   );

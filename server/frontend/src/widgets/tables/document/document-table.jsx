@@ -8,8 +8,9 @@ import {
 } from "@material-tailwind/react";
 import { EyeIcon, PlusIcon } from "@heroicons/react/24/solid";
 import { truncateWords } from "@/utils/tools";
+import { TrashIcon } from "@heroicons/react/24/outline";
 
-const DocumentTable = ({ documents, onOpenModal,onCreate, page = 1, size = 5 }) => (
+const DocumentTable = ({ documents, onOpenModal,onCreate, onDelete, page = 1, size = 5 }) => (
     <>
         <CardHeader
             variant="gradient"
@@ -52,18 +53,27 @@ const DocumentTable = ({ documents, onOpenModal,onCreate, page = 1, size = 5 }) 
                                 <td className={className}>{truncateWords(name, 50)}</td>
                                 <td className={className}>{year_id}</td>
                                 <td className={className}>
-                                    <IconButton
-                                        variant="text"
-                                        color="black"
-                                        onClick={() =>
+                                    <div className="flex flex-row items-center gap-2">
+                                        <IconButton
+                                            variant="text"
+                                            color="black"
+                                            onClick={() =>
                                             onOpenModal(
                                                 { id, name, year_id },
                                                 "view"
                                             )
                                         }
-                                    >
-                                        <EyeIcon className="h-5 w-5" />
-                                    </IconButton>
+                                        >
+                                            <EyeIcon className="h-5 w-5" />
+                                        </IconButton>
+                                        <IconButton
+                                            variant="text"
+                                            color="red"
+                                            onClick={() => onDelete && onDelete(documents[key])}
+                                        >
+                                            <TrashIcon className="h-5 w-5" />
+                                        </IconButton>
+                                    </div>
                                 </td>
                             </tr>
                         );

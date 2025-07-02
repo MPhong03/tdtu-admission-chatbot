@@ -8,7 +8,7 @@ const ChatRepo = new BaseRepository(Chat);
 const HistoryRepo = new BaseRepository(History);
 
 class HistoryService {
-    async saveChat({ userId, visitorId, chatId, question, answer, isError }) {
+    async saveChat({ userId, visitorId, chatId, question, answer, cypher, contextNodes, isError }) {
         try {
             let chat;
 
@@ -35,7 +35,9 @@ class HistoryService {
                 chatId: chat._id,
                 question,
                 answer,
-                status: isError ? "error" : "success"
+                status: isError ? "error" : "success",
+                cypher: cypher || "",
+                contextNodes: contextNodes ? JSON.stringify(contextNodes) : ""
             });
 
             return HttpResponse.success("Lưu tin nhắn thành công", { chatId: chat._id, history });

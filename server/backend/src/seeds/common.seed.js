@@ -12,51 +12,51 @@ const defaultConfigs = [
         value: '',
         name: 'Gemini API Key'
     },
-    {
-        key: 'elastic_url',
-        value: '',
-        name: 'Elastic URL'
-    },
-    {
-        key: 'elastic_username',
-        value: '',
-        name: 'Elastic Username'
-    },
-    {
-        key: 'elastic_password',
-        value: '',
-        name: 'Elastic Password'
-    },
-    {
-        key: 'neo4j_url',
-        value: '',
-        name: 'Neo4j URL'
-    },
-    {
-        key: 'neo4j_db',
-        value: '',
-        name: 'Neo4j Database'
-    },
-    {
-        key: 'neo4j_username',
-        value: '',
-        name: 'Neo4j Username'
-    },
-    {
-        key: 'neo4j_password',
-        value: '',
-        name: 'Neo4j Password'
-    },
-    {
-        key: 'gemini_api_key',
-        value: '',
-        name: 'Gemini API Key'
-    },
-    {
-        key: 'llm_api',
-        value: '',
-        name: 'LLM API'
-    }
+    // {
+    //     key: 'elastic_url',
+    //     value: '',
+    //     name: 'Elastic URL'
+    // },
+    // {
+    //     key: 'elastic_username',
+    //     value: '',
+    //     name: 'Elastic Username'
+    // },
+    // {
+    //     key: 'elastic_password',
+    //     value: '',
+    //     name: 'Elastic Password'
+    // },
+    // {
+    //     key: 'neo4j_url',
+    //     value: '',
+    //     name: 'Neo4j URL'
+    // },
+    // {
+    //     key: 'neo4j_db',
+    //     value: '',
+    //     name: 'Neo4j Database'
+    // },
+    // {
+    //     key: 'neo4j_username',
+    //     value: '',
+    //     name: 'Neo4j Username'
+    // },
+    // {
+    //     key: 'neo4j_password',
+    //     value: '',
+    //     name: 'Neo4j Password'
+    // },
+    // {
+    //     key: 'gemini_api_key',
+    //     value: '',
+    //     name: 'Gemini API Key'
+    // },
+    // {
+    //     key: 'llm_api',
+    //     value: '',
+    //     name: 'LLM API'
+    // }
 ];
 
 async function seedCommonConfigs() {

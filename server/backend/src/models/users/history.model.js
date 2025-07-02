@@ -11,7 +11,9 @@ const HistorySchema = new mongoose.Schema({
         type: String,
         enum: ['success', 'unanswered', 'error'],
         default: 'success'
-    }
+    },
+    cypher: { type: String, default: '' },
+    contextNodes: { type: String, default: '' }, // JSON string
 }, {
     timestamps: true
 });
