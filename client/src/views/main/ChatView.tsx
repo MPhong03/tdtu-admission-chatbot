@@ -8,14 +8,27 @@ import axiosClient from "@/api/axiosClient";
 import { io, Socket } from "socket.io-client";
 import { saveVisitorId, getVisitorId } from "@/utils/auth";
 import "./chat.css";
+import QuestionItem from "@/components/chat/QuestionItem";
+import AnswerItem from "@/components/chat/AnswerItem";
+import toast from "react-hot-toast";
 
 const TYPEWRITER_INTERVAL = 20;
+
+export interface FeedbackData {
+  _id: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface ChatHistoryItem {
   _id: string;
   question: string;
   answer: string;
   createdAt: string;
+  feedback?: FeedbackData | null;
+  isFeedback?: boolean;
 }
 
 interface ChatViewProps {
@@ -45,6 +58,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   const scrollToBottomRef = useRef(false);
   const socketRef = useRef<Socket | null>(null);
   const tempMessageIdRef = useRef<string | null>(null);
+  const tempToRealIdMapRef = useRef<Record<string, string>>({});
   const visitorId = getVisitorId();
 
   const pageSize = 5;
@@ -73,8 +87,9 @@ const ChatView: React.FC<ChatViewProps> = ({
   const typeWriteAnswer = useCallback((fullText: string) => {
     setBotTyping(true);
     setCurrentTypingAnswer("");
-    const tempId = tempMessageIdRef.current;
-    if (!tempId) return;
+    const tempOrRealId = tempMessageIdRef.current;
+    console.log("[Typewriter] Using ID:", tempOrRealId);
+    if (!tempOrRealId) return;
 
     let index = 0;
     const interval = setInterval(() => {
@@ -84,7 +99,7 @@ const ChatView: React.FC<ChatViewProps> = ({
 
       setChatItems((prev) =>
         prev.map((item) =>
-          item._id === tempId ? { ...item, answer: partial } : item
+          item._id === tempOrRealId ? { ...item, answer: partial } : item
         )
       );
 
@@ -92,8 +107,8 @@ const ChatView: React.FC<ChatViewProps> = ({
         clearInterval(interval);
         setBotTyping(false);
         tempMessageIdRef.current = null;
+        console.log("[Typewriter] Completed for ID:", tempOrRealId);
       }
-
     }, TYPEWRITER_INTERVAL);
   }, []);
 
@@ -111,7 +126,7 @@ const ChatView: React.FC<ChatViewProps> = ({
           params: { page: pageNumber, size: pageSize, visitorId: visitorId },
         });
 
-        const data = res.data.Data?.Data;
+        const data = res.data?.Data;
         if (data) {
           setHasMore(data.pagination.hasMore);
           const newItems = data.items.reverse();
@@ -185,21 +200,23 @@ const ChatView: React.FC<ChatViewProps> = ({
   useEffect(() => {
     if (!currentChatId) return;
 
-    // Ngắt kết nối socket cũ nếu có
     if (socketRef.current) {
+      console.log("[Socket] Disconnecting existing socket");
       socketRef.current.disconnect();
       socketRef.current = null;
     }
 
     const socket = io(socketBaseUrl);
     socketRef.current = socket;
+    console.log("[Socket] Connected to", socketBaseUrl);
 
-    const handleChatReceive = (data: {
-      chatId: string;
-      question: string;
-      answer: string;
-    }) => {
-      if (data.chatId !== currentChatId) return;
+    const handleChatReceive = (data: { chatId: string; question: string; answer: string; }) => {
+      console.log("[Socket] chat:receive:", data);
+
+      if (data.chatId !== currentChatId) {
+        console.log("[Socket] chatId mismatch: skipping");
+        return;
+      }
 
       const tempId = `temp-${Date.now()}`;
       tempMessageIdRef.current = tempId;
@@ -217,10 +234,72 @@ const ChatView: React.FC<ChatViewProps> = ({
       typeWriteAnswer(data.answer);
     };
 
+    const handleChatResponse = (response: any) => {
+      console.log("[Socket] chat:response:", response);
+
+      const tempId = tempMessageIdRef.current;
+      if (!tempId) {
+        console.warn("[Socket] No tempMessageIdRef when response received");
+        return;
+      }
+
+      if (response.Code !== 1) {
+        toast.error(response.Message || "Đã xảy ra lỗi.");
+        setBotTyping(false);
+        tempMessageIdRef.current = null;
+        return;
+      }
+
+      const data = response.Data;
+
+      // Update ID cho chat item
+      setChatItems((prev) => {
+        const updated = prev.map((item) => {
+          if (item._id === tempId) {
+            // Lưu mapping temp -> real
+            if (data.historyId) {
+              tempToRealIdMapRef.current[tempId] = data.historyId;
+            }
+            return { ...item, _id: data.historyId ?? tempId };
+          }
+          return item;
+        });
+        return updated;
+      });
+      tempMessageIdRef.current = data.historyId ?? tempId;
+      console.log("[Socket] Updated tempId -> real ID:", tempId, "->", data.historyId);
+
+      if (data.visitorId) saveVisitorId(data.visitorId);
+
+      if (data.chatId && data.chatId !== currentChatId) {
+        setCurrentChatId(data.chatId);
+        onNewChatCreated?.(data.chatId);
+      }
+
+      if (data.answer) {
+        typeWriteAnswer(data.answer);
+      } else {
+        setChatItems((prev) =>
+          prev.map((item) =>
+            item._id === (data.historyId ?? tempId)
+              ? {
+                ...item,
+                answer: "Xin lỗi, tôi chưa có câu trả lời cho câu hỏi này.",
+              }
+              : item
+          )
+        );
+        setBotTyping(false);
+      }
+    };
+
     socket.on("chat:receive", handleChatReceive);
+    socket.on("chat:response", handleChatResponse);
 
     return () => {
+      console.log("[Socket] Cleaning up socket");
       socket.off("chat:receive", handleChatReceive);
+      socket.off("chat:response", handleChatResponse);
       socket.disconnect();
       socketRef.current = null;
     };
@@ -256,8 +335,20 @@ const ChatView: React.FC<ChatViewProps> = ({
         });
 
         const data = res.data.Data;
+        console.log("[API/chatbot/chat] Response:", data);
 
         if (data.visitorId) saveVisitorId(data.visitorId);
+
+        if (data.historyId) {
+          setChatItems((prev) =>
+            prev.map((item) =>
+              item._id === tempId
+                ? { ...item, _id: data.historyId }
+                : item
+            )
+          );
+          tempMessageIdRef.current = data.historyId; // cập nhật tham chiếu ID
+        }
 
         if (data.chatId && data.chatId !== currentChatId) {
           setCurrentChatId(data.chatId);
@@ -269,12 +360,8 @@ const ChatView: React.FC<ChatViewProps> = ({
         } else {
           setChatItems((prev) =>
             prev.map((item) =>
-              item._id === tempId
-                ? {
-                  ...item,
-                  answer:
-                    "Xin lỗi, hiện tại tôi không có câu trả lời cho câu hỏi này.",
-                }
+              item._id === (data.historyId ?? tempId)
+                ? { ...item, answer: "Xin lỗi, hiện tại tôi không có câu trả lời cho câu hỏi này." }
                 : item
             )
           );
@@ -285,10 +372,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         setChatItems((prev) =>
           prev.map((item) =>
             item._id === tempId
-              ? {
-                ...item,
-                answer: "Đã có lỗi xảy ra, vui lòng thử lại sau.",
-              }
+              ? { ...item, answer: "Đã có lỗi xảy ra, vui lòng thử lại sau." }
               : item
           )
         );
@@ -304,6 +388,53 @@ const ChatView: React.FC<ChatViewProps> = ({
         Hãy bắt đầu đặt câu hỏi để tạo đoạn chat mới.
       </div>
     );
+
+  // GỬI FEEDBACK
+  const handleFeedback = async (
+    historyId: string,
+    rating: number,
+    comment: string,
+    feedbackId?: string
+  ) => {
+    try {
+      let res;
+      if (feedbackId) {
+        // Cập nhật feedback
+        res = await axiosClient.put(`/feedbacks/${feedbackId}`, { rating, comment });
+      } else {
+        // Tạo mới feedback
+        res = await axiosClient.post("/feedbacks", { historyId, rating, comment });
+      }
+      const response = res.data;
+      if (response.Code === 1) {
+        toast.success(feedbackId ? "Cập nhật phản hồi thành công!" : "Cảm ơn bạn đã gửi phản hồi!");
+        setChatItems((prev) =>
+          prev.map((ci) =>
+            ci._id === historyId
+              ? {
+                ...ci,
+                isFeedback: true,
+                feedback: {
+                  _id: feedbackId || response.Data._id,
+                  rating,
+                  comment,
+                  createdAt: feedbackId
+                    ? (ci.feedback?.createdAt ?? new Date().toISOString())
+                    : new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                },
+              }
+              : ci
+          )
+        );
+      } else {
+        toast.error(response.Message || "Thao tác thất bại!");
+      }
+    } catch (error) {
+      console.error("Error sending/updating feedback:", error);
+      toast.error("Có lỗi khi xử lý phản hồi. Vui lòng thử lại.");
+    }
+  };
 
   return (
     <div className="w-[80%] mx-auto p-4 flex flex-col h-[85vh] relative">
@@ -333,18 +464,16 @@ const ChatView: React.FC<ChatViewProps> = ({
               )}
               {chatItems.map((item) => (
                 <div key={item._id} className="space-y-1 my-4 flex flex-col">
-                  <div className="flex justify-end mb-3">
-                    <div className="bg-main-blue text-white max-w-[70%] rounded-lg px-4 py-2 break-words whitespace-pre-line">
-                      <ReactMarkdown>{item.question}</ReactMarkdown>
-                    </div>
-                  </div>
-                  <div className="markdown-body bg-gray-100 max-w-full rounded-lg px-4 py-2 whitespace-pre-line min-h-[40px]">
-                    <ReactMarkdown>
-                      {item._id === tempMessageIdRef.current && botTyping
-                        ? currentTypingAnswer
-                        : item.answer}
-                    </ReactMarkdown>
-                  </div>
+                  <QuestionItem content={item.question} />
+                  <AnswerItem
+                    content={item._id === tempMessageIdRef.current && botTyping
+                      ? currentTypingAnswer
+                      : item.answer}
+                    isFeedback={item.isFeedback || false}
+                    feedback={item.feedback || undefined}
+                    onFeedback={(value) => handleFeedback(item._id, value.rating, value.comment, value.feedbackId)}
+                  />
+
                 </div>
               ))}
               {botTyping && chatItems.length === 0 && (
@@ -379,7 +508,7 @@ const ChatView: React.FC<ChatViewProps> = ({
           </Tooltip>
         )}
       </div>
-      <ChatInputBox onSend={handleSend} chatId={currentChatId} />
+      <ChatInputBox onSend={handleSend} chatId={currentChatId} isDisabled={botTyping} />
     </div>
   );
 };

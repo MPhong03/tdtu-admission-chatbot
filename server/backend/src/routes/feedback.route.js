@@ -35,6 +35,13 @@ router.get('/:id', verifyToken, FeedbackController.getFeedbackById);
 router.get('/', verifyToken, FeedbackController.paginateFeedbacks);
 
 /**
+ * @route PUT /feedbacks/:id
+ * @desc Cập nhật phản hồi (chỉ owner mới được phép cập nhật)
+ * @access Yêu cầu đăng nhập (verifyToken)
+ */
+router.put('/:id', verifyToken, FeedbackController.updateFeedback);
+
+/**
  * @route PATCH /feedbacks/:id/status
  * @desc Cập nhật trạng thái xử lý phản hồi (chỉ cho admin)
  * @body { status: String (pending|reviewed|resolved) }

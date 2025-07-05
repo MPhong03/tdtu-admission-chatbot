@@ -68,6 +68,7 @@ class ChatbotController {
                     contextNodes,
                     chatId: saveResult?.Data?.chatId || chatId,
                     visitorId: req.isVisitor ? req.visitorId : null,
+                    historyId: saveResult?.Data?.history?._id || null
                 })
             );
         } catch (err) {
@@ -105,7 +106,7 @@ class ChatbotController {
                 size: parseInt(size)
             });
 
-            return res.json(HttpResponse.success("Nhận kết quả: ", result));
+            return res.json(result);
         } catch (err) {
             console.error(err);
             return res.json(HttpResponse.error("Lỗi lấy lịch sử chat", -1, err.message));

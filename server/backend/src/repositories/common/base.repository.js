@@ -84,12 +84,23 @@ class BaseRepository {
      * @param {number} size - Số lượng mỗi trang
      * @param {Array<string>} populate - Danh sách các field populate (nếu có)
      */
-    async paginate(filter = {}, page = 1, size = 10, populate = [], sort = { createdAt: -1 }) {
+    async paginate(filter = {}, page = 1, size = 10, populate = [], sort = { createdAt: -1 }, excludeFields = []) {
         const skip = (page - 1) * size;
-        const query = this.model.find(filter).sort(sort).skip(skip).limit(size);
+        let query = this.model.find(filter).sort(sort).skip(skip).limit(size);
 
         if (populate.length > 0) {
-            populate.forEach(p => query.populate(p));
+            populate.forEach(p => {
+                if (typeof p === 'string') {
+                    query.populate(p);
+                } else if (typeof p === 'object' && p.path) {
+                    query.populate(p);
+                }
+            });
+        }
+
+        if (excludeFields.length > 0) {
+            const projection = excludeFields.map(f => `-${f}`).join(' ');
+            query = query.select(projection);
         }
 
         const [items, total] = await Promise.all([

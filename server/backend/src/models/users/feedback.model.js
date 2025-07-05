@@ -4,8 +4,8 @@ const mongoose = require("mongoose");
 const FeedbackSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     historyId: { type: mongoose.Schema.Types.ObjectId, ref: 'History', required: true },
-    question: { type: Text, required: true },
-    answer: { type: Text, required: true },
+    question: { type: String, required: true },
+    answer: { type: String, required: true },
     cypher: { type: String, default: '' },
     contextNodes: { type: String, default: '' }, // JSON string
     rating: {

@@ -2,10 +2,12 @@ const BaseRepository = require("../../repositories/common/base.repository");
 
 const Chat = require("../../models/users/chat.model");
 const History = require("../../models/users/history.model");
+const Feedback = require("../../models/users/feedback.model");
 const HttpResponse = require("../../data/responses/http.response");
 
 const ChatRepo = new BaseRepository(Chat);
 const HistoryRepo = new BaseRepository(History);
+const FeedbackRepo = new BaseRepository(Feedback);
 
 class HistoryService {
     async saveChat({ userId, visitorId, chatId, question, answer, cypher, contextNodes, isError }) {
@@ -74,8 +76,34 @@ class HistoryService {
                 HistoryRepo.count(historyFilter)
             ]);
 
+            const historyIds = items.map((h) => h._id);
+            const feedbacks = await FeedbackRepo.asQueryable({ historyId: { $in: historyIds } }).select("historyId rating comment createdAt updatedAt").exec();
+            const feedbackMap = new Map();
+            feedbacks.forEach(fb => {
+                feedbackMap.set(String(fb.historyId), {
+                    _id: fb._id,
+                    rating: fb.rating,
+                    comment: fb.comment,
+                    createdAt: fb.createdAt,
+                    updatedAt: fb.updatedAt
+                });
+            });
+
+            const mappedItems = items.map((h) => {
+                const obj = h.toObject();
+                delete obj.cypher;
+                delete obj.contextNodes;
+
+                const feedback = feedbackMap.get(String(h._id));
+                return {
+                    ...obj,
+                    isFeedback: !!feedback,
+                    feedback: feedback || null
+                };
+            });
+
             return HttpResponse.success("Lấy lịch sử chat thành công", {
-                items,
+                items: mappedItems,
                 pagination: {
                     page: Number(page),
                     size: Number(size),
@@ -87,6 +115,11 @@ class HistoryService {
             console.error("Error fetching chat history:", error);
             return HttpResponse.error("Lỗi hệ thống khi lấy lịch sử chat");
         }
+    }
+
+    // Lấy history theo ID
+    async getHistoryId(chatId) {
+        return await HistoryRepo.getById(chatId);
     }
 
     // =========== ADMIN ==========

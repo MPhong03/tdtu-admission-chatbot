@@ -11,8 +11,8 @@ class DocumentController {
         try {
             const { year_id, html, ...document } = req.body;
             if (html) req.body.text = convertHtmlToText(html);
-            await N_DocumentService.create(req.body);
-            if (year_id) await N_YearService.linkToDocument(year_id, document.id);
+            var newDoc = await N_DocumentService.create(req.body);
+            if (year_id) await N_YearService.linkToDocument(year_id, newDoc.id);
             return res.json(HttpResponse.success('Tạo tài liệu thành công'));
         } catch (err) {
             logger.error('Error:', err);

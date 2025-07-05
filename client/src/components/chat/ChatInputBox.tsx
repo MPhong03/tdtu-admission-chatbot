@@ -3,11 +3,12 @@ import { TbLocationFilled } from "react-icons/tb";
 import { FaMicrophone, FaPlus } from "react-icons/fa6";
 
 interface ChatInputBoxProps {
-  chatId?: string; // có thể truyền hoặc không
+  chatId?: string;
   onSend: (question: string, chatId?: string) => Promise<void>;
+  isDisabled?: boolean;
 }
 
-const ChatInputBox = ({ onSend }: ChatInputBoxProps) => {
+const ChatInputBox = ({ onSend, isDisabled }: ChatInputBoxProps) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [input, setInput] = useState<string>("");
 
@@ -35,8 +36,8 @@ const ChatInputBox = ({ onSend }: ChatInputBoxProps) => {
   // Gửi tin bằng Enter nếu có nội dung
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey && input.trim()) {
-      e.preventDefault(); // Không xuống dòng
-      handleSend();
+      e.preventDefault();
+      if (!isDisabled) handleSend(); // chỉ gửi khi không bị disable
     }
   };
 
@@ -68,17 +69,17 @@ const ChatInputBox = ({ onSend }: ChatInputBoxProps) => {
 
           <button
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={isDisabled || !input.trim()}
             className={`w-8 h-8 p-2 flex justify-center items-center rounded-full transition
-              ${
-                input.trim()
-                  ? "text-main-blue hover:bg-teal-100 cursor-pointer"
-                  : "text-gray-400 bg-transparent"
-              }
+              ${input.trim() && !isDisabled
+                          ? "text-main-blue hover:bg-teal-100 cursor-pointer"
+                          : "text-gray-400 bg-transparent"
+                        }
             `}
           >
             <TbLocationFilled size={18} />
           </button>
+
         </div>
       </div>
     </div>

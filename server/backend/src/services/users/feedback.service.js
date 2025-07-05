@@ -1,4 +1,4 @@
-const Feedback = require("../../models/systemconfigs/feedback.model");
+const Feedback = require("../../models/users/feedback.model");
 const BaseRepository = require("../../repositories/common/base.repository");
 const HttpResponse = require("../../data/responses/http.response");
 
@@ -22,12 +22,25 @@ class FeedbackService {
     }
 
     /**
+     * Cập nhật feedback cho câu trả lời
+     */
+    async updateFeedback(feedbackId, feedbackData) {
+        try {
+            const updated = await this.repo.update(feedbackId, feedbackData);
+            return HttpResponse.success("Cập nhật phản hồi thành cong", updated);
+        } catch (error) {
+            console.error("Error updating feedback:", error);
+            return HttpResponse.error("Cập nhật phản hồi thất bại");
+        }
+    }
+
+    /**
      * Lấy danh sách feedback của user (có phân trang)
      */
     async paginateFeedbacks(userId, page = 1, size = 10) {
         try {
             const filter = { userId };
-            const result = await this.repo.paginate(filter, page, size, ["historyId"]);
+            const result = await this.repo.paginate(filter, page, size, [{ path: 'historyId', select: '-contextNodes' }], undefined, ["contextNodes"]);
             return HttpResponse.success("Lấy danh sách phản hồi thành công", result);
         } catch (error) {
             console.error("Error retrieving feedbacks:", error);

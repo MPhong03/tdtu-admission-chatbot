@@ -54,8 +54,11 @@ function initSocketHandler(io) {
                     isError
                 });
 
+                const newHistoryId = saveResult?.Data?.history?._id || null;
+
                 // Phản hồi cho client, trả visitorId nếu vừa tạo mới
                 socket.emit("chat:response", HttpResponse.success("Chat thành công", {
+                    historyId: newHistoryId,
                     answer,
                     prompt,
                     contextNodes,

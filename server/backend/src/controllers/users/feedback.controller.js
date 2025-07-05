@@ -1,5 +1,6 @@
 const HttpResponse = require("../../data/responses/http.response");
 const FeedbackService = require("../../services/users/feedback.service");
+const HistoryService = require("../../services/users/history.service");
 
 class FeedbackController {
     // Gửi phản hồi
@@ -8,15 +9,45 @@ class FeedbackController {
             const userId = req.user?.id;
             const feedbackData = req.body;
 
-            if (!feedbackData.historyId || !feedbackData.question || !feedbackData.answer) {
+            if (!feedbackData.historyId) {
                 return res.json(HttpResponse.error("Thiếu thông tin bắt buộc"));
             }
+
+            var history = await HistoryService.getHistoryId(feedbackData.historyId);
+            if (!history) {
+                return res.json(HttpResponse.error("Không tìm thấy đoạn tin nhắn này", -1));
+            }
+
+            feedbackData.answer = history.answer || "";
+            feedbackData.question = history.question || "";
+            feedbackData.cypher = history.cypher || "";
+            feedbackData.contextNodes = history.contextNodes || "";
 
             const result = await FeedbackService.createFeedback(userId, feedbackData);
             return res.json(result);
         } catch (err) {
             console.error(err);
             return res.json(HttpResponse.error("Gửi phản hồi thất bại", -1, err.message));
+        }
+    }
+
+    // Cập nhật phản hồi (chỉ owner mới được phép)
+    async updateFeedback(req, res) {
+        try {
+            const userId = req.user?.id;
+            const feedbackId = req.params.id;
+            const updateData = req.body;
+
+            const existingFeedback = await FeedbackService.getFeedbackById(userId, feedbackId);
+            if (!existingFeedback) {
+                return res.json(HttpResponse.error("Feedback không tồn tại", -1));
+            }
+
+            const updated = await FeedbackService.updateFeedback(feedbackId, updateData);
+            return res.json(updated);
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Cập nhật phản hồi thất bại", -1, err.message));
         }
     }
 

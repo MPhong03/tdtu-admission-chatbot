@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require("uuid");
 const verifyToken = (req, res, next) => {
     const authHeader = req.header("Authorization");
     if (!authHeader) {
-        return res.json({ Code: -1, Message: "Access Denied", Data: null });
+        return res.json({ Code: -1, Message: "Vui lòng đăng nhập", Data: null });
     }
 
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : authHeader;

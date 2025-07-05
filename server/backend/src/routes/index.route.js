@@ -10,6 +10,7 @@ const historyRoutes = require("./history.route");
 const statisticRoutes = require("./statistic.route");
 const userRoutes = require("./user.route");
 const commonRoutes = require("./common.route");
+const feedbackRoutes = require("./feedback.route");
 
 // V2
 const majorRoutes = require("./v2/major.route");
@@ -37,6 +38,7 @@ router.use("/histories", historyRoutes);
 router.use("/statistics", statisticRoutes);
 router.use("/users", userRoutes);
 router.use("/systemconfigs", commonRoutes);
+router.use("/feedbacks", feedbackRoutes);
 //...
 
 // V2
