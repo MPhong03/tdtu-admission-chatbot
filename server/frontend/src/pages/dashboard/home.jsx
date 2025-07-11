@@ -11,6 +11,7 @@ import { StatisticsChart } from "@/widgets/charts";
 import api from "@/configs/api";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
+import WordCloudVisx from "@/widgets/charts/wordcloud";
 
 export function Home() {
   const [startDate, setStartDate] = useState(null);
@@ -18,6 +19,7 @@ export function Home() {
   const [statistics, setStatistics] = useState(null);
   const [qaByDay, setQaByDay] = useState([]);
   const [qaByStatus, setQaByStatus] = useState([]);
+  const [wordCloudData, setWordCloudData] = useState([]);
 
   // Hàm lấy ngày đầu & cuối tháng
   const getDefaultDateRange = () => {
@@ -39,7 +41,7 @@ export function Home() {
 
   const fetchStatistics = async () => {
     try {
-      const [summaryRes, byDayRes, byStatusRes] = await Promise.all([
+      const [summaryRes, byDayRes, byStatusRes, wordCloudRes] = await Promise.all([
         api.get("/statistics/summary", {
           params: {
             startDate: startDate?.toISOString().split("T")[0],
@@ -58,10 +60,19 @@ export function Home() {
             endDate: endDate?.toISOString().split("T")[0],
           },
         }),
+        api.get("/statistics/word-cloud", {
+          params: {
+            startDate: startDate?.toISOString().split("T")[0],
+            endDate: endDate?.toISOString().split("T")[0],
+          },
+        }),
       ]);
       setStatistics(summaryRes.data.Data);
       setQaByDay(byDayRes.data.Data);
       setQaByStatus(byStatusRes.data.Data);
+      setWordCloudData(
+        wordCloudRes.data.Data.map(w => ({ text: w.word, value: w.count }))
+      );
     } catch (error) {
       console.error("Lỗi khi gọi API thống kê:", error);
     }
@@ -131,38 +142,51 @@ export function Home() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
         {/* {qaByDay.length > 0 && ( */}
-          <StatisticsChart
-            chart={{
-              type: "bar",
-              height: 320,
-              series: [{ name: "Số câu hỏi", data: qaByDay.map((d) => d.count) }],
-              options: {
-                chart: { toolbar: { show: false } },
-                xaxis: { categories: qaByDay.map((d) => d._id) },
-                dataLabels: { enabled: true },
-              },
-            }}
-            title="Số câu hỏi theo ngày"
-            description="Biểu đồ số lượng câu hỏi được hỏi theo từng ngày"
-          />
+        <StatisticsChart
+          chart={{
+            type: "bar",
+            height: 320,
+            series: [{ name: "Số câu hỏi", data: qaByDay.map((d) => d.count) }],
+            options: {
+              chart: { toolbar: { show: false } },
+              xaxis: { categories: qaByDay.map((d) => d._id) },
+              dataLabels: { enabled: true },
+            },
+          }}
+          title="Số câu hỏi theo ngày"
+          description="Biểu đồ số lượng câu hỏi được hỏi theo từng ngày"
+        />
         {/* )} */}
 
         {/* {qaByStatus.length > 0 && ( */}
-          <StatisticsChart
-            chart={{
-              type: "donut",
-              height: 320,
-              series: qaByStatus.map((s) => s.count),
-              options: {
-                labels: qaByStatus.map((s) => s._id),
-                legend: { position: "bottom" },
-                dataLabels: { formatter: (val) => `${val.toFixed(1)}%` },
-              },
-            }}
-            title="Số câu hỏi theo trạng thái"
-            description="Phân loại câu hỏi theo trạng thái xử lý"
-          />
+        <StatisticsChart
+          key={JSON.stringify(qaByStatus)}
+          chart={{
+            type: "donut",
+            height: 320,
+            series: qaByStatus.map((s) => s.count),
+            options: {
+              labels: qaByStatus.map((s) => s._id),
+              legend: { position: "bottom" },
+              dataLabels: { formatter: (val) => `${val.toFixed(1)}%` },
+            },
+          }}
+          title="Số câu hỏi theo trạng thái"
+          description="Phân loại câu hỏi theo trạng thái xử lý"
+        />
         {/* )} */}
+      </div>
+
+      {/* Word Cloud */}
+      <div className="bg-white p-6 rounded-lg shadow border">
+        <h3 className="text-xl font-semibold mb-4">Tần suất từ khóa</h3>
+        {wordCloudData.length > 0 ? (
+          <div className="w-full overflow-x-auto">
+            <WordCloudVisx words={wordCloudData} />
+          </div>
+        ) : (
+          <p className="text-gray-500">Không có dữ liệu từ khóa để hiển thị.</p>
+        )}
       </div>
     </div>
   );

@@ -4,9 +4,12 @@ const path = require("path");
 const logger = require("../../../utils/logger.util");
 const neo4jRepository = require("../../../repositories/v2/common/neo4j.repository");
 const CommonRepo = require('../../../repositories/systemconfigs/common.repository');
+const CacheService = require("../../v2/cachings/cache.service");
 
 class BotService {
     constructor() {
+        this.cacheService = new CacheService(process.env.REDIS_URL);
+
         this.apiUrl = process.env.GEMINI_API_URL;
         this.apiKey = process.env.GEMINI_API_KEY;
 
@@ -81,7 +84,23 @@ class BotService {
      * @param {string} question 
      * @returns {Promise<{ cypher: string, labels: Array }>}
      */
-    async generateCypher(question) {
+    async generateCypher(question, questionEmbedding) {
+        // 1. Tìm trong cache trước
+        if (this.cacheService && questionEmbedding) {
+            try {
+                const results = await this.cacheService.searchSimilar(questionEmbedding, 1);
+                if (results?.length > 0 && results[0].score < 0.3) {
+                    logger.info(`[Cache] Cache HIT (score=${results[0].score}): using cached query.`);
+                    return { cypher: results[0].query, labels: [] };
+                }
+            } catch (err) {
+                logger.warn("[Cache] Cache search error, fallback to AI.", err);
+            }
+        }
+
+        // 2. Nếu cache miss, gọi Gemini
+        logger.info("[Cache] Cache MISS → generate with Gemini");
+
         // Tạo prompt đầy đủ cho Gemini
         const prompt = [
             this.nodeEdgeDescription,
@@ -125,6 +144,19 @@ class BotService {
                     Array.isArray(result.labels) &&
                     typeof result.cypher === "string"
                 ) {
+                    // Lưu vào cache nếu Redis khả dụng
+                    if (this.cacheService && questionEmbedding) {
+                        try {
+                            await this.cacheService.addCache(
+                                `q_${Date.now()}`,
+                                question,
+                                questionEmbedding,
+                                result.cypher
+                            );
+                        } catch (err) {
+                            logger.warn("[Cache] Error saving to cache.", err);
+                        }
+                    }
                     return result;
                 }
 
@@ -162,7 +194,7 @@ class BotService {
      * @param {Array} contextNodes
      * @returns {Promise<{ answer: string, prompt: string, contextNodes: Array, isError: boolean }>}
      */
-    async generateAnswer(question) {
+    async generateAnswer(question, questionEmbedding) {
         let retries = 0;
         const maxRetries = 10;
         let lastError = null;
@@ -180,7 +212,7 @@ class BotService {
         logger.info("[1] Bắt đầu generateCypher...");
         while (retries < maxRetries) {
             try {
-                cypherResult = await this.generateCypher(question);
+                cypherResult = await this.generateCypher(question, questionEmbedding);
                 cypher = cypherResult?.cypher;
                 if (!cypher || typeof cypher !== "string" || !cypher.trim()) {
                     logger.warn("[1] Cypher rỗng, thử lại...");

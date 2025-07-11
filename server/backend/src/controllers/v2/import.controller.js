@@ -1,8 +1,10 @@
 const N_DataService = require('../../services/v2/import.neo4j-service');
+const ExcelService = require('../../services/v2/excel.service');
 const HttpResponse = require('../../data/responses/http.response');
 const logger = require('../../utils/logger.util');
 
 class ImportController {
+    // ================================= IMPORT JSON =================================
     /**
      * Import majors, programmes, major_programmes, years
      * Body: { majors, programmes, major_programmes, years }
@@ -90,6 +92,71 @@ class ImportController {
         } catch (err) {
             logger.error('Error:', err);
             return res.status(500).json(HttpResponse.error('Lỗi hệ thống'));
+        }
+    }
+
+    // ================================= IMPORT & EXPORT EXCEL =================================
+    /**
+   * Import chi tiết ngành học từ file Excel
+   */
+    async importMajorProgrammes(req, res) {
+        try {
+            const file = req.file;
+            if (!file) {
+                return res.status(400).json(HttpResponse.error("Vui lòng upload file Excel."));
+            }
+            const result = await ExcelService.importMajorProgrammes(file.path);
+            return res.json(HttpResponse.success("Import MajorProgramme thành công", result));
+        } catch (error) {
+            console.error("[ImportMajorProgrammes]", error);
+            return res.status(500).json(HttpResponse.error("Đã xảy ra lỗi khi import MajorProgramme."));
+        }
+    }
+
+    /**
+     * Export dữ liệu chi tiết ngành học ra file Excel
+     */
+    async exportMajorProgrammes(req, res) {
+        try {
+            const filePath = await ExcelService.exportMajorProgrammes();
+            return res.download(filePath);
+        } catch (error) {
+            console.error("[ExportMajorProgrammes]", error);
+            return res.status(500).json(HttpResponse.error("Đã xảy ra lỗi khi export MajorProgramme."));
+        }
+    }
+
+    /**
+     * Import các label khác từ file Excel
+     */
+    async importGeneric(req, res) {
+        try {
+            const file = req.file;
+            const { label } = req.params;
+            if (!file || !label) {
+                return res.status(400).json(HttpResponse.error("Vui lòng cung cấp label và file."));
+            }
+            const result = await ExcelService.importGeneric(label, file.path);
+            return res.json(HttpResponse.success(`Import ${label} thành công`, result));
+        } catch (error) {
+            console.error(`[Import ${req.params.label}]`, error);
+            return res.status(500).json(HttpResponse.error(`Đã xảy ra lỗi khi import ${req.params.label}`));
+        }
+    }
+
+    /**
+     * Export dữ liệu các label khác ra file Excel
+     */
+    async exportGeneric(req, res) {
+        try {
+            const { label } = req.params;
+            if (!label) return res.status(400).json(HttpResponse.error("Thiếu label"));
+
+            const filePath = await ExcelService.exportGeneric(label);
+            return res.download(filePath);
+        } catch (error) {
+            console.error(`[Export ${req.params.label}]`, error);
+            return res.status(500).json(HttpResponse.error(`Đã xảy ra lỗi khi export ${req.params.label}`));
         }
     }
 }

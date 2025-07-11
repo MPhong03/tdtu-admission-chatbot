@@ -8,6 +8,7 @@ function initSocketHandler(io) {
     io.on("connection", (socket) => {
         console.log("User connected:", socket.id);
 
+        // ĐÃ DÙNG API VÌ CHƯA CẦN THIẾT ĐỂ NHẮN REALTIME, SOCKET CHỈ DÙNG ĐỂ NHẬN TÍN HIỆU
         socket.on("chat:send", async (payload) => {
             const { question, chatId, token, visitorId } = payload || {};
             if (!question) {
@@ -38,10 +39,9 @@ function initSocketHandler(io) {
 
             try {
                 // Xử lý chatbot
+                let questionEmbedding = LLMService.getEmbeddingV2(question);
                 // const { answer, prompt, contextNodes, isError } = await RetrieverService.chatWithBot(question);
-                const { answer, prompt, contextNodes, cypher, isError } = await BotService.generateAnswer(question);
-
-                console.log(userId);
+                const { answer, prompt, contextNodes, cypher, isError } = await BotService.generateAnswer(question, questionEmbedding);
 
                 // Lưu lịch sử
                 const saveResult = await HistoryService.saveChat({

@@ -21,6 +21,7 @@ const scholarshipRoutes = require("./v2/scholarship.route");
 const documentRoutes = require("./v2/document.route");
 const importRoutes = require("./v2/import.route");
 const botRoutes = require("./v2/bot.route");
+const excelRoutes = require("./v2/excel.route");
 
 // Config routes here
 
@@ -50,5 +51,6 @@ router.use("/v2/scholarships", scholarshipRoutes);
 router.use("/v2/documents", documentRoutes);
 router.use("/v2/import", importRoutes);
 router.use("/v2/bots", botRoutes);
+router.use("/v2/excels", excelRoutes);
 
 module.exports = router;

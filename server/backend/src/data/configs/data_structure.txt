@@ -23,6 +23,7 @@ I. Mô tả các nodes
   - major_code: Mã ngành chi tiết
   - description: Mô tả chi tiết
   - name: Tên chi tiết ngành
+  - <dynamic_field>: Các trường thông tin thêm
 - Dùng để: Biểu diễn "ngành học A theo chương trình B", lưu mọi đặc điểm riêng biệt của ngành đó trong chương trình cụ thể.
 
 4. Year (Năm tuyển sinh)

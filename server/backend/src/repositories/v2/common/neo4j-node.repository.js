@@ -72,7 +72,7 @@ class Neo4jNodeRepository {
         const session = getSession();
         try {
             const query = `MATCH (n:${label}) RETURN n LIMIT $limit`;
-            const result = await session.run(query, { limit });
+            const result = await session.run(query, { limit: neo4j.int(limit, 10) });
             return result.records.map(r => r.get('n').properties);
         } finally {
             await session.close();

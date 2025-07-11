@@ -32,4 +32,13 @@ router.get('/qa-by-day', verifyToken, isAdmin, StatisticController.getCountQuest
  */
 router.get('/qa-by-status', verifyToken, isAdmin, StatisticController.getCountQuestionsByStatus);
 
+/**
+ * Thống kê tần suất từ xuất hiện trong các câu hỏi
+ * GET /statistics/word-frequency?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD&minLength=2&topN=100
+ * Headers: Authorization: Bearer <token>
+ * Không cần body   
+ * Phải là Admin
+ */
+router.get('/word-cloud', StatisticController.getWordCloud);
+
 module.exports = router;

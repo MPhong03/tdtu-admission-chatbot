@@ -37,6 +37,18 @@ class StatisticController {
             res.json(HttpResponse.error("Internal Server Error", -1, err.message));
         }
     }
+
+    // Thống kê tần suất từ xuất hiện trong các câu hỏi
+    async getWordCloud(req, res) {
+        try {
+            const { startDate, endDate, limit = 100 } = req.query;
+            const data = await StatisticService.getWordCloud(startDate, endDate, limit);
+            res.json(HttpResponse.success("Thống kê tần suất từ xuất hiện trong các câu hỏi", data));
+        } catch (err) {
+            console.error(err);
+            res.json(HttpResponse.error("Internal Server Error", -1, err.message));
+        }
+    }
 }
 
 module.exports = new StatisticController();

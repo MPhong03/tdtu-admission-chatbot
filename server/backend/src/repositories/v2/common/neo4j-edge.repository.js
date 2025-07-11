@@ -52,6 +52,21 @@ class Neo4jEdgeRepository {
             await session.close();
         }
     }
+
+    // Truy vấn các node đích được kết nối bởi source và type chỉ định
+    async findTargets(fromLabel, fromId, edgeType) {
+        const session = getSession();
+        try {
+            const query = `
+                MATCH (a:${fromLabel} {id: $fromId})-[:${edgeType}]->(b)
+                RETURN b
+            `;
+            const result = await session.run(query, { fromId });
+            return result.records.map(r => r.get("b").properties);
+        } finally {
+            await session.close();
+        }
+    }
 }
 
 module.exports = new Neo4jEdgeRepository();
