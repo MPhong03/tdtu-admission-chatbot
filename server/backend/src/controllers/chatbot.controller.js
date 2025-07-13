@@ -6,33 +6,33 @@ const EntityRecognizer = require('../services/regconizers/entity.regconizer');
 const BotService = require("../services/v2/bots/bot.service");
 
 class ChatbotController {
-    async retrieveEntities(req, res) {
-        try {
-            const { question } = req.body;
-            if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
+    // async retrieveEntities(req, res) {
+    //     try {
+    //         const { question } = req.body;
+    //         if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
-            const entities = await EntityRecognizer.recognizeEntities_V2(question);
+    //         const entities = await EntityRecognizer.recognizeEntities_V2(question);
 
-            return res.json(HttpResponse.success("Nhận kết quả: ", entities));
-        } catch (err) {
-            console.error(err);
-            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
-        }
-    }
+    //         return res.json(HttpResponse.success("Nhận kết quả: ", entities));
+    //     } catch (err) {
+    //         console.error(err);
+    //         return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
+    //     }
+    // }
 
-    async retrieveContext(req, res) {
-        try {
-            const { question } = req.body;
-            if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
+    // async retrieveContext(req, res) {
+    //     try {
+    //         const { question } = req.body;
+    //         if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
-            const context = await RetrieverService.retrieveContext(question);
+    //         const context = await RetrieverService.retrieveContext(question);
 
-            return res.json(HttpResponse.success("Nhận kết quả: ", context));
-        } catch (err) {
-            console.error(err);
-            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
-        }
-    }
+    //         return res.json(HttpResponse.success("Nhận kết quả: ", context));
+    //     } catch (err) {
+    //         console.error(err);
+    //         return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
+    //     }
+    // }
 
     async chatWithBot(req, res) {
         try {
@@ -79,19 +79,19 @@ class ChatbotController {
         }
     }
 
-    async testChat(req, res) {
-        try {
-            const { question } = req.body;
-            if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
+    // async testChat(req, res) {
+    //     try {
+    //         const { question } = req.body;
+    //         if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
-            const { answer, isError } = await LLMService.generateAnswer(question);
+    //         const { answer, isError } = await LLMService.generateAnswer(question);
 
-            return res.json(HttpResponse.success("Nhận kết quả: ", answer));
-        } catch (err) {
-            console.error(err);
-            return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
-        }
-    }
+    //         return res.json(HttpResponse.success("Nhận kết quả: ", answer));
+    //     } catch (err) {
+    //         console.error(err);
+    //         return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
+    //     }
+    // }
 
     async getHistory(req, res) {
         try {

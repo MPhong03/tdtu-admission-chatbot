@@ -105,6 +105,18 @@ class FeedbackController {
             return res.json(HttpResponse.error("Xóa phản hồi thất bại", -1, err.message));
         }
     }
+
+    // Lấy danh sách phản hồi (admin)
+    async getFeedbacks(req, res) {
+        try {
+            const { page = 1, size = 10, status } = req.query;
+            const result = await FeedbackService.getFeedbacks(parseInt(page), parseInt(size), status);
+            return res.json(result);
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lấy danh sách phản hồi thất bại", -1, err.message));
+        }
+    }
 }
 
 module.exports = new FeedbackController();

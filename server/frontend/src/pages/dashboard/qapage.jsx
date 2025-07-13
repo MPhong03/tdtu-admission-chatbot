@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Card } from "@material-tailwind/react";
+import { Card, Typography } from "@material-tailwind/react";
+import { ChatBubbleBottomCenterTextIcon } from "@heroicons/react/24/outline";
 import api from "@/configs/api";
-import QATable from "@/widgets/tables/history/qa-table";
+import QATable from "@/widgets/tables/qa-table";
 import QAModal from "@/widgets/modals/qa-modal";
-import Pagination from "@/widgets/tables/pagination";
+import Pagination from "@/widgets/tables/components/pagination";
 import LoadingTable from "@/widgets/tables/components/loadingtable";
 
 export function QAPage() {
@@ -49,27 +50,32 @@ export function QAPage() {
     };
 
     return (
-        <div className="mt-12 mb-8 flex flex-col gap-12">
-            <Card>
-                {loading && <LoadingTable text="Đang tải" />}
-                <QATable
-                    histories={histories}
-                    onOpenModal={handleOpenModal}
-                    page={page}
-                    size={size}
-                />
-                <Pagination
-                    page={page}
-                    totalPages={totalPages}
-                    onPageChange={handlePageChange}
-                />
-            </Card>
+        <div className="min-h-screen bg-gray-50">
+            <div className="max-w-7xl mx-auto">
+                {/* Main Content Card */}
+                <Card className="bg-white border border-gray-200 shadow-lg mt-12">
+                    {loading && <LoadingTable text="Đang tải dữ liệu..." />}
+                    <QATable
+                        histories={histories}
+                        onOpenModal={handleOpenModal}
+                        page={page}
+                        size={size}
+                    />
+                    <div className="border-t border-blue-gray-50 bg-gray-50/50">
+                        <Pagination
+                            page={page}
+                            totalPages={totalPages}
+                            onPageChange={handlePageChange}
+                        />
+                    </div>
+                </Card>
 
-            <QAModal
-                open={openModal}
-                onClose={handleCloseModal}
-                history={selectedHistory}
-            />
+                <QAModal
+                    open={openModal}
+                    onClose={handleCloseModal}
+                    history={selectedHistory}
+                />
+            </div>
         </div>
     );
 }

@@ -103,6 +103,10 @@ class HistoryService {
             });
 
             return HttpResponse.success("Lấy lịch sử chat thành công", {
+                chat: {
+                    _id: chat._id,
+                    name: chat.name,
+                },
                 items: mappedItems,
                 pagination: {
                     page: Number(page),

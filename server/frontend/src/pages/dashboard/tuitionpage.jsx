@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Card } from "@material-tailwind/react";
 import api from "@/configs/api";
-import TuitionTable from "@/widgets/tables/tuition/tuition-table";
+import TuitionTable from "@/widgets/tables/tuition-table";
 import LoadingTable from "@/widgets/tables/components/loadingtable";
-import Pagination from "@/widgets/tables/pagination";
+import Pagination from "@/widgets/tables/components/pagination";
 import TuitionModal from "@/widgets/modals/tuition-modal";
 import ConfirmDialog from "@/widgets/dialogs/confirm-dialog";
 import toast from "react-hot-toast";

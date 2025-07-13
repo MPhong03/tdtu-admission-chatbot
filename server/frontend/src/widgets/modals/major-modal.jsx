@@ -4,13 +4,13 @@ import {
     Tabs, TabsHeader, TabsBody, Tab, TabPanel,
     Input, Button, IconButton, Typography, Checkbox,
     Accordion, AccordionHeader, AccordionBody, Textarea,
-    Spinner, Alert, Dialog as ConfirmDialog,
+    Spinner, Alert, Dialog as ConfirmDialog, Card, CardBody,
 } from "@material-tailwind/react";
-import { PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, TrashIcon, DocumentTextIcon, AcademicCapIcon, EyeIcon } from "@heroicons/react/24/outline";
 import Select from "react-select";
 import api from "@/configs/api";
 
-// ===== DynamicFieldList =====
+// ===== DynamicFieldList với UI cải tiến =====
 function DynamicFieldList({ fields, onChange, error }) {
     const handleFieldChange = (idx, key, value) => {
         const copy = [...fields];
@@ -24,47 +24,58 @@ function DynamicFieldList({ fields, onChange, error }) {
     };
 
     return (
-        <div className="space-y-2">
-            <Typography variant="small" color="blue-gray" className="font-medium">
-                Thuộc tính mở rộng chương trình (Học phí, Thời gian đào tạo, ...)
-            </Typography>
-            {fields.map((field, idx) => (
-                <div className="flex gap-2 items-end" key={idx}>
-                    <Input
-                        label="Tên trường"
-                        value={field.key}
-                        onChange={e => handleFieldChange(idx, "key", e.target.value)}
-                        className="flex-1"
-                        error={error && !field.key}
-                        crossOrigin=""
-                    />
-                    <Input
-                        label="Giá trị"
-                        value={field.value}
-                        onChange={e => handleFieldChange(idx, "value", e.target.value)}
-                        className="flex-1"
-                        crossOrigin=""
-                    />
-                    <IconButton
-                        color="red"
-                        onClick={() => handleDelete(idx)}
-                        disabled={fields.length === 1}
-                        size="md"
-                        className="mb-1"
-                        variant="text"
-                    >
-                        <TrashIcon className="h-5 w-5" />
-                    </IconButton>
-                </div>
-            ))}
+        <div className="space-y-4">
+            <div className="flex items-center gap-2">
+                <div className="w-1 h-5 bg-blue-500 rounded"></div>
+                <Typography variant="small" color="blue-gray" className="font-semibold">
+                    Thuộc tính mở rộng chương trình
+                </Typography>
+            </div>
+            <div className="space-y-3">
+                {fields.map((field, idx) => (
+                    <Card key={idx} className="shadow-sm border border-blue-gray-100">
+                        <CardBody className="p-4">
+                            <div className="flex gap-3 items-start">
+                                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                    <Input
+                                        label="Tên trường"
+                                        value={field.key}
+                                        onChange={e => handleFieldChange(idx, "key", e.target.value)}
+                                        error={error && !field.key}
+                                        crossOrigin=""
+                                        className="bg-white"
+                                    />
+                                    <Input
+                                        label="Giá trị"
+                                        value={field.value}
+                                        onChange={e => handleFieldChange(idx, "value", e.target.value)}
+                                        crossOrigin=""
+                                        className="bg-white"
+                                    />
+                                </div>
+                                <IconButton
+                                    color="red"
+                                    onClick={() => handleDelete(idx)}
+                                    disabled={fields.length === 1}
+                                    size="sm"
+                                    variant="text"
+                                    className="mt-2"
+                                >
+                                    <TrashIcon className="h-4 w-4" />
+                                </IconButton>
+                            </div>
+                        </CardBody>
+                    </Card>
+                ))}
+            </div>
             <Button
                 variant="outlined"
                 size="sm"
                 color="blue"
-                className="flex items-center gap-1"
+                className="flex items-center gap-2 hover:bg-blue-50"
                 onClick={handleAdd}
             >
-                <PlusIcon className="h-5 w-5" /> Thêm trường mới
+                <PlusIcon className="h-4 w-4" /> Thêm trường mới
             </Button>
         </div>
     );
@@ -89,26 +100,73 @@ function ProgrammeMultiSelect({ programmes, selectedProgrammes, setSelectedProgr
         })) : []);
     };
 
+    const customStyles = {
+        control: (provided, state) => ({
+            ...provided,
+            minHeight: '44px',
+            border: error ? '1px solid #f44336' : '1px solid #e2e8f0',
+            borderRadius: '8px',
+            boxShadow: state.isFocused ? '0 0 0 2px rgba(59, 130, 246, 0.1)' : 'none',
+            '&:hover': {
+                borderColor: state.isFocused ? '#3b82f6' : '#cbd5e1'
+            }
+        }),
+        menu: (provided) => ({
+            ...provided,
+            zIndex: 9999,
+            borderRadius: '8px',
+            boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        }),
+        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+        multiValue: (provided) => ({
+            ...provided,
+            backgroundColor: '#e0f2fe',
+            borderRadius: '6px'
+        }),
+        multiValueLabel: (provided) => ({
+            ...provided,
+            color: '#0369a1',
+            fontWeight: '500'
+        }),
+        multiValueRemove: (provided) => ({
+            ...provided,
+            color: '#0369a1',
+            ':hover': {
+                backgroundColor: '#bae6fd',
+                color: '#0c4a6e'
+            }
+        })
+    };
+
     return (
-        <div className="mb-5">
-            <Typography variant="h6" className="mb-2">Chọn chương trình đào tạo <span className="text-red-500">*</span></Typography>
-            <Select
-                isMulti
-                options={options}
-                value={value}
-                onChange={handleChange}
-                placeholder="Chọn chương trình..."
-                closeMenuOnSelect={false}
-                menuPortalTarget={document.body}
-                classNamePrefix="react-select"
-                styles={{
-                    menu: provided => ({ ...provided, zIndex: 9999 }),
-                    menuPortal: base => ({ ...base, zIndex: 9999 }),
-                    control: base => error ? { ...base, borderColor: "#f44336" } : base,
-                }}
-            />
-            {error && <Typography color="red" className="text-xs mt-1">Vui lòng chọn ít nhất một chương trình đào tạo</Typography>}
-        </div>
+        <Card className="shadow-sm border border-blue-gray-100">
+            <CardBody className="p-6">
+                <div className="flex items-center gap-2 mb-4">
+                    <AcademicCapIcon className="h-5 w-5 text-blue-500" />
+                    <Typography variant="h6" className="text-blue-gray-800">
+                        Chọn chương trình đào tạo
+                        <span className="text-red-500 ml-1">*</span>
+                    </Typography>
+                </div>
+                <Select
+                    isMulti
+                    options={options}
+                    value={value}
+                    onChange={handleChange}
+                    placeholder="Chọn chương trình đào tạo..."
+                    closeMenuOnSelect={false}
+                    menuPortalTarget={document.body}
+                    classNamePrefix="react-select"
+                    styles={customStyles}
+                />
+                {error && (
+                    <Typography color="red" className="text-sm mt-2 flex items-center gap-1">
+                        <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+                        Vui lòng chọn ít nhất một chương trình đào tạo
+                    </Typography>
+                )}
+            </CardBody>
+        </Card>
     );
 }
 
@@ -148,73 +206,119 @@ function MajorProgrammeAccordion({
         });
     };
 
+    if (selectedProgrammes.length === 0) {
+        return (
+            <Card className="shadow-sm border border-blue-gray-100">
+                <CardBody className="p-8 text-center">
+                    <AcademicCapIcon className="h-12 w-12 text-blue-gray-300 mx-auto mb-4" />
+                    <Typography variant="h6" color="blue-gray" className="mb-2">
+                        Chưa có chương trình nào được chọn
+                    </Typography>
+                    <Typography color="blue-gray" className="text-sm">
+                        Vui lòng chọn chương trình đào tạo ở trên để tiếp tục cấu hình
+                    </Typography>
+                </CardBody>
+            </Card>
+        );
+    }
+
     return (
-        <div className="flex flex-col gap-3 mt-3">
+        <div className="space-y-4 mt-6">
+            <div className="flex items-center gap-2">
+                <div className="w-1 h-5 bg-green-500 rounded"></div>
+                <Typography variant="h6" color="blue-gray" className="font-semibold">
+                    Cấu hình chi tiết chương trình
+                </Typography>
+            </div>
             {selectedProgrammes.map(({ id, name }) => (
-                <Accordion key={id} open={openId === id}
-                    icon={<span className="ml-2 text-xs text-gray-400">{openId === id ? "▲" : "▼"}</span>}
-                    className={`rounded-lg border ${errorState[id] ? "border-red-400" : "border-blue-gray-100"}`}
-                >
-                    <AccordionHeader onClick={() => setOpenId(openId === id ? null : id)} className="font-medium px-4 py-3">
-                        <span>{name}</span>
-                        {errorState[id] && <span className="ml-2 text-red-500 text-xs">Thiếu thông tin *</span>}
-                    </AccordionHeader>
-                    <AccordionBody className="bg-blue-gray-50 rounded-b-lg px-4 py-3">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <Input
-                                label="Mã ngành *"
-                                value={formState[id]?.major_code || ""}
-                                onChange={e => handleFieldChange(id, "major_code", e.target.value)}
-                                className="bg-white"
-                                error={errorState[id] && !formState[id]?.major_code && touchedState[id]}
-                                crossOrigin=""
-                                onBlur={() => setTouchedState(ts => ({ ...ts, [id]: true }))}
-                            />
-                            <Input
-                                label="Tên chương trình *"
-                                value={formState[id]?.name || ""}
-                                onChange={e => handleFieldChange(id, "name", e.target.value)}
-                                className="bg-white"
-                                error={errorState[id] && !formState[id]?.name && touchedState[id]}
-                                crossOrigin=""
-                                onBlur={() => setTouchedState(ts => ({ ...ts, [id]: true }))}
-                            />
-                            <div className="md:col-span-2">
-                                <Input
-                                    label="Mô tả"
+                <Card key={id} className={`shadow-sm border-2 transition-all duration-200 ${errorState[id] ? 'border-red-300 bg-red-50' : 'border-blue-gray-100 hover:border-blue-200'
+                    }`}>
+                    <Accordion open={openId === id}>
+                        <AccordionHeader
+                            onClick={() => setOpenId(openId === id ? null : id)}
+                            className={`px-6 py-4 hover:bg-blue-gray-50 transition-colors ${openId === id ? "rounded-t-xl" : "rounded-xl"
+                                }`}
+                        >
+                            <div className="flex items-center justify-between w-full">
+                                <div className="flex items-center gap-3">
+                                    <div className={`w-3 h-3 rounded-full ${errorState[id] ? 'bg-red-500' : 'bg-blue-500'
+                                        }`}></div>
+                                    <Typography variant="h6" className="font-semibold">
+                                        {name}
+                                    </Typography>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {errorState[id] && (
+                                        <Typography color="red" className="text-sm font-medium">
+                                            Thiếu thông tin bắt buộc
+                                        </Typography>
+                                    )}
+                                    <span className={`text-sm transition-transform duration-200 ${openId === id ? 'rotate-180' : ''
+                                        }`}>
+                                        ▼
+                                    </span>
+                                </div>
+                            </div>
+                        </AccordionHeader>
+                        <AccordionBody className="bg-blue-gray-50 px-6 py-6 rounded-b-xl">
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <Input
+                                        label="Mã ngành *"
+                                        value={formState[id]?.major_code || ""}
+                                        onChange={e => handleFieldChange(id, "major_code", e.target.value)}
+                                        className="bg-white"
+                                        error={errorState[id] && !formState[id]?.major_code && touchedState[id]}
+                                        crossOrigin=""
+                                        onBlur={() => setTouchedState(ts => ({ ...ts, [id]: true }))}
+                                    />
+                                    <Input
+                                        label="Tên chương trình *"
+                                        value={formState[id]?.name || ""}
+                                        onChange={e => handleFieldChange(id, "name", e.target.value)}
+                                        className="bg-white"
+                                        error={errorState[id] && !formState[id]?.name && touchedState[id]}
+                                        crossOrigin=""
+                                        onBlur={() => setTouchedState(ts => ({ ...ts, [id]: true }))}
+                                    />
+                                </div>
+                                <Textarea
+                                    label="Mô tả chương trình"
                                     value={formState[id]?.description || ""}
                                     onChange={e => handleFieldChange(id, "description", e.target.value)}
                                     className="bg-white"
-                                    crossOrigin=""
+                                    rows={3}
                                 />
-                            </div>
-                            <div className="md:col-span-2">
-                                <Typography variant="small" color="blue-gray" className="font-medium mb-1">
-                                    Các năm áp dụng
-                                </Typography>
-                                <div className="flex flex-wrap gap-4">
-                                    {years.map(year => (
-                                        <Checkbox
-                                            key={year.id}
-                                            label={year.name}
-                                            checked={formState[id]?.years?.includes(year.id) || false}
-                                            onChange={() => handleYearsChange(id, year.id)}
-                                            crossOrigin=""
-                                            className="py-1"
-                                        />
-                                    ))}
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1 h-4 bg-purple-500 rounded"></div>
+                                        <Typography variant="small" color="blue-gray" className="font-semibold">
+                                            Các năm áp dụng
+                                        </Typography>
+                                    </div>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                        {years.map(year => (
+                                            <div key={year.id} className="flex items-center">
+                                                <Checkbox
+                                                    label={year.name}
+                                                    checked={formState[id]?.years?.includes(year.id) || false}
+                                                    onChange={() => handleYearsChange(id, year.id)}
+                                                    crossOrigin=""
+                                                    className="rounded-md"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="md:col-span-2">
                                 <DynamicFieldList
                                     fields={formState[id]?.fields || [{ key: "", value: "" }]}
                                     onChange={fields => handleFieldsChange(id, fields)}
                                     error={errorState[id] && (formState[id]?.fields || []).some(f => !f.key) && touchedState[id]}
                                 />
                             </div>
-                        </div>
-                    </AccordionBody>
-                </Accordion>
+                        </AccordionBody>
+                    </Accordion>
+                </Card>
             ))}
         </div>
     );
@@ -324,7 +428,6 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
 
     useEffect(() => {
         if (!open) return;
-        // if (majorId) return;
         api.get("/v2/programmes", { params: { page: 1, size: 99999 } })
             .then(res => {
                 const items = res.data.Data.items || [];
@@ -334,7 +437,6 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
 
     useEffect(() => {
         if (!open) return;
-        // if (majorId) return;
         api.get("/v2/years", { params: { page: 1, size: 99999 } })
             .then(res => {
                 const items = res.data.Data.items || [];
@@ -377,7 +479,6 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
     // Lưu lại state form ban đầu để detect dirty
     useEffect(() => {
         if (!open) return;
-        // clone lại state
         originalStateRef.current = {
             name, reasons, description, images: [...images],
             selectedProgrammes: [...selectedProgrammes],
@@ -400,7 +501,7 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
         setDirty(isDirty);
     }, [name, reasons, description, images, selectedProgrammes, majorProgrammeFormState, open]);
 
-    // Clear trước khi đóng modal nếu không có ngnahf nào được chọn
+    // Clear trước khi đóng modal nếu không có ngành nào được chọn
     useEffect(() => {
         if (open && !majorId) {
             setName("");
@@ -534,90 +635,133 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
         p => programmes.find(prog => prog.id === p.id) || p
     ).filter(Boolean);
 
+    const tabsConfig = [
+        {
+            value: "info",
+            label: "Thông tin ngành",
+            icon: <DocumentTextIcon className="h-4 w-4" />
+        },
+        {
+            value: "programme",
+            label: "Chương trình đào tạo",
+            icon: <AcademicCapIcon className="h-4 w-4" />
+        },
+        {
+            value: "preview",
+            label: "Xem trước",
+            icon: <EyeIcon className="h-4 w-4" />
+        }
+    ];
+
     return (
         <>
             <Dialog open={open} handler={handleClose} size="xxl" className="!h-screen !max-h-screen !w-screen">
-                <DialogHeader className="border-b border-blue-gray-100 px-8 py-5">
-                    <Typography variant="h5" color="blue-gray">
-                        {majorId ? "Chỉnh sửa ngành học" : "Tạo mới ngành học"}
-                    </Typography>
+                <DialogHeader className="bg-gradient-to-r from-gray-900 to-gray-800 text-white px-8 py-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-white bg-opacity-20 rounded-lg">
+                            <AcademicCapIcon className="h-6 w-6" />
+                        </div>
+                        <Typography variant="h4" className="font-bold text-white">
+                            {majorId ? "Chỉnh sửa ngành học" : "Tạo mới ngành học"}
+                        </Typography>
+                    </div>
                 </DialogHeader>
-                <DialogBody className="flex-1 flex flex-col min-h-0 p-0">
+                <DialogBody className="flex-1 flex flex-col min-h-0 p-0 bg-gray-50">
                     {loading ? (
                         <div className="flex-1 flex items-center justify-center min-h-[300px]">
-                            <Spinner color="blue" className="w-8 h-8" />
+                            <div className="text-center">
+                                <Spinner color="blue" className="w-8 h-8 mx-auto mb-4" />
+                                <Typography color="blue-gray">Đang tải dữ liệu...</Typography>
+                            </div>
                         </div>
                     ) : (
                         <Tabs value={tab} className="flex-1 flex flex-col h-full min-h-0">
-                            <TabsHeader className="px-8 pt-4 pb-2 bg-white shadow-none">
-                                <Tab value="info" onClick={() => setTab("info")} className="text-base px-4 py-2">Thông tin ngành</Tab>
-                                <Tab value="programme" onClick={() => setTab("programme")} className="text-base px-4 py-2">Chương trình đào tạo</Tab>
-                                <Tab value="preview" onClick={() => setTab("preview")} className="text-base px-4 py-2">Preview</Tab>
+                            <TabsHeader className="px-8 pt-6 pb-4 bg-white shadow-sm border-b border-blue-gray-100">
+                                {tabsConfig.map(({ value, label, icon }) => (
+                                    <Tab
+                                        key={value}
+                                        value={value}
+                                        onClick={() => setTab(value)}
+                                        className={`transition-all whitespace-nowrap ${tab === value
+                                                ? 'text-blue-600 bg-blue-50 border-b-2 border-blue-600'
+                                                : 'text-blue-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                                            }`}
+                                    >
+                                        <div className="flex items-center justify-center gap-2">
+                                            <span className="w-5 h-5">{icon}</span>
+                                            <span>{label}</span>
+                                        </div>
+                                    </Tab>
+                                ))}
                             </TabsHeader>
                             <TabsBody className="flex-1 flex flex-col h-full min-h-0">
                                 <TabPanel value="info" className="flex-1 flex flex-col h-full min-h-0 p-0">
                                     <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            <div className="md:col-span-2">
-                                                <Input label="Tên ngành *" value={name} onChange={e => setName(e.target.value)} crossOrigin="" error={!!submitError && !name} />
-                                            </div>
-                                            <div className="md:col-span-2">
+                                        <Card className="shadow-sm border border-blue-gray-100">
+                                            <CardBody className="p-6 space-y-6">
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <Input
+                                                        label="Tên ngành *"
+                                                        value={name}
+                                                        onChange={(e) => setName(e.target.value)}
+                                                        crossOrigin=""
+                                                        className="bg-white"
+                                                        error={!!submitError && !name.trim()}
+                                                    />
+                                                    <Input
+                                                        label="Lý do lựa chọn"
+                                                        value={reasons}
+                                                        onChange={(e) => setReasons(e.target.value)}
+                                                        crossOrigin=""
+                                                        className="bg-white"
+                                                    />
+                                                </div>
                                                 <Textarea
-                                                    label="Lý do chọn ngành"
-                                                    value={reasons}
-                                                    onChange={e => setReasons(e.target.value)}
-                                                    rows={3}
-                                                    className="py-2"
-                                                />
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <Textarea
-                                                    label="Mô tả"
+                                                    label="Mô tả ngành học"
                                                     value={description}
-                                                    onChange={e => setDescription(e.target.value)}
-                                                    rows={3}
-                                                    className="py-2"
+                                                    onChange={(e) => setDescription(e.target.value)}
+                                                    rows={4}
+                                                    className="bg-white"
                                                 />
-                                            </div>
-                                            <div className="md:col-span-2 flex flex-col gap-1">
-                                                <Typography variant="small" color="blue-gray" className="font-medium">
-                                                    Hình ảnh (URL)
-                                                </Typography>
-                                                <div className="flex flex-col gap-2">
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-1 h-5 bg-blue-500 rounded"></div>
+                                                        <Typography variant="small" color="blue-gray" className="font-semibold">
+                                                            Hình ảnh minh họa (URL)
+                                                        </Typography>
+                                                    </div>
                                                     {images.map((img, idx) => (
-                                                        <div className="flex gap-2 items-end" key={idx}>
+                                                        <div key={idx} className="flex items-center gap-3">
                                                             <Input
+                                                                label={`Ảnh ${idx + 1}`}
                                                                 value={img}
-                                                                onChange={e => handleImageChange(idx, e.target.value)}
-                                                                placeholder="Dán URL ảnh"
+                                                                onChange={(e) => handleImageChange(idx, e.target.value)}
                                                                 crossOrigin=""
-                                                                className="flex-1"
+                                                                className="flex-1 bg-white"
                                                             />
                                                             <IconButton
                                                                 color="red"
                                                                 onClick={() => handleRemoveImage(idx)}
                                                                 disabled={images.length === 1}
-                                                                size="md"
+                                                                size="sm"
                                                                 variant="text"
                                                             >
-                                                                <TrashIcon className="h-5 w-5" />
+                                                                <TrashIcon className="h-4 w-4" />
                                                             </IconButton>
                                                         </div>
                                                     ))}
+                                                    <Button
+                                                        variant="outlined"
+                                                        size="sm"
+                                                        color="blue"
+                                                        className="flex items-center gap-2 hover:bg-blue-50"
+                                                        onClick={handleAddImage}
+                                                    >
+                                                        <PlusIcon className="h-4 w-4" /> Thêm ảnh
+                                                    </Button>
                                                 </div>
-                                                <Button
-                                                    variant="outlined"
-                                                    size="sm"
-                                                    color="blue"
-                                                    className="flex items-center gap-1 mt-1 w-fit"
-                                                    onClick={handleAddImage}
-                                                >
-                                                    <PlusIcon className="h-5 w-5" /> Thêm ảnh
-                                                </Button>
-                                            </div>
-                                        </div>
-                                        {submitError && <Alert color="red" className="mt-4">{submitError}</Alert>}
-                                        {submitSuccess && <Alert color="green" className="mt-4">{submitSuccess}</Alert>}
+                                            </CardBody>
+                                        </Card>
                                     </div>
                                 </TabPanel>
                                 <TabPanel value="programme" className="flex-1 flex flex-col h-full min-h-0 p-0">
@@ -641,29 +785,16 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
                                 </TabPanel>
                                 <TabPanel value="preview" className="flex-1 flex flex-col h-full min-h-0 p-0">
                                     <div className="flex-1 min-h-0 overflow-y-auto px-8 py-6">
-                                        <Typography variant="h6" className="mb-2">Preview dữ liệu</Typography>
-                                        <pre className="bg-gray-100 p-4 rounded overflow-x-auto text-xs">
-                                            {JSON.stringify(
-                                                {
-                                                    major: {
-                                                        name,
-                                                        reasons,
-                                                        description,
-                                                        images: images.filter(img => img),
-                                                        ...(majorId && { id: majorId }),
-                                                    },
-                                                    programmes: selectedProgrammes.map(p => ({ id: p.id })),
-                                                    majorProgrammes: selectedProgrammes.map(p => ({
-                                                        ...(majorProgrammeFormState[p.id] || {}),
-                                                        programmeId: p.id,
-                                                        ...(majorProgrammeFormState[p.id]?.id && { id: majorProgrammeFormState[p.id].id }),
-                                                        fields: (majorProgrammeFormState[p.id]?.fields || []).filter(f => f.key),
-                                                    })),
-                                                    ...(majorId && deletedMajorProgrammeIds.length > 0 && { deletedMajorProgrammeIds }),
-                                                },
-                                                null,
-                                                2
-                                            )}
+                                        <Typography variant="h5" className="mb-4">Xem trước ngành học</Typography>
+                                        <pre className="bg-white p-4 rounded-lg text-sm overflow-auto max-h-[60vh] border border-blue-gray-100">
+                                            {JSON.stringify({
+                                                name,
+                                                reasons,
+                                                description,
+                                                images,
+                                                selectedProgrammes,
+                                                majorProgrammeFormState
+                                            }, null, 2)}
                                         </pre>
                                     </div>
                                 </TabPanel>
@@ -671,31 +802,51 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
                         </Tabs>
                     )}
                 </DialogBody>
-                <DialogFooter className="border-t border-blue-gray-100 px-8 py-4 flex justify-end gap-3">
-                    <Button variant="text" color="gray" onClick={handleClose}>
-                        Hủy
-                    </Button>
-                    {!majorId && (
-                        <Button variant="outlined" color="red" onClick={handleClearForm}>
-                            Làm mới
-                        </Button>
-                    )}
-                    <Button color="blue" variant="filled" onClick={handleSubmit} loading={submitting}>
-                        {submitting ? "Đang lưu..." : "Lưu"}
-                    </Button>
+                <DialogFooter className="border-t border-blue-gray-100 px-8 py-4 bg-white">
+                    <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2">
+                            <Button
+                                variant="text"
+                                color="blue-gray"
+                                onClick={handleClearForm}
+                                disabled={submitting || loading}
+                            >
+                                Xóa trắng
+                            </Button>
+                            <Button
+                                variant="outlined"
+                                color="red"
+                                onClick={handleClose}
+                                disabled={submitting || loading}
+                            >
+                                Hủy bỏ
+                            </Button>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            {submitError && <Typography color="red" className="text-sm">{submitError}</Typography>}
+                            {submitSuccess && <Typography color="green" className="text-sm">{submitSuccess}</Typography>}
+                            <Button
+                                color="blue"
+                                onClick={handleSubmit}
+                                loading={submitting}
+                            >
+                                {majorId ? "Lưu thay đổi" : "Tạo mới"}
+                            </Button>
+                        </div>
+                    </div>
                 </DialogFooter>
             </Dialog>
-            <ConfirmDialog open={confirmClose} handler={() => setConfirmClose(false)}>
-                <DialogHeader>Xác nhận</DialogHeader>
+            <ConfirmDialog open={confirmClose} handler={setConfirmClose} size="sm">
+                <DialogHeader>Bạn có chắc muốn đóng?</DialogHeader>
                 <DialogBody>
-                    <Typography>Bạn có chắc chắn muốn đóng khi form đã thay đổi? Thao tác chưa lưu sẽ bị mất.</Typography>
+                    Các thay đổi bạn đã thực hiện sẽ không được lưu. Bạn có chắc muốn thoát?
                 </DialogBody>
-                <DialogFooter>
-                    <Button variant="text" color="gray" onClick={() => setConfirmClose(false)}>
+                <DialogFooter className="gap-2">
+                    <Button variant="text" onClick={() => setConfirmClose(false)}>
                         Hủy
                     </Button>
                     <Button color="red" onClick={handleConfirmClose}>
-                        Đồng ý đóng
+                        Đồng ý thoát
                     </Button>
                 </DialogFooter>
             </ConfirmDialog>

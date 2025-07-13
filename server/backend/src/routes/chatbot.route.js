@@ -19,21 +19,21 @@ router.post("/chat", optionalAuth, ChatbotController.chatWithBot);
  * POST /chatbot/test-chat
  * Body: { "question": String }
  */
-router.post("/test-chat", apiLock, ChatbotController.testChat);
+// router.post("/test-chat", apiLock, ChatbotController.testChat);
 
 /**
  * Lấy context liên quan tới câu hỏi
  * POST /chatbot/retrieve-context
  * Body: { "question": String }
  */
-router.post("/retrieve-context", apiLock, ChatbotController.retrieveContext);
+// router.post("/retrieve-context", apiLock, ChatbotController.retrieveContext);
 
 /**
  * Nhận diện thực thể trong câu hỏi
  * POST /chatbot/retrieve-entities
  * Body: { "question": String }
  */
-router.post("/retrieve-entities", apiLock, ChatbotController.retrieveEntities);
+// router.post("/retrieve-entities", apiLock, ChatbotController.retrieveEntities);
 
 // ============= API HISTORY ============= //
 

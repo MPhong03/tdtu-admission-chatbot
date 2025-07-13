@@ -5,6 +5,7 @@ import ChatInputBox from "@/components/chat/ChatInputBox";
 import { useNavigate, useParams } from "react-router-dom";
 import { folderApi } from "@/api/folder.api";
 import { chatApi } from "@/api/chat.api";
+import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 
 const { Title, Paragraph } = Typography;
 
@@ -27,6 +28,8 @@ const FolderView = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const { setTitle } = useBreadcrumb();
+
   // Fetch folder + chat theo folderId
   useEffect(() => {
     const fetchData = async () => {
@@ -44,6 +47,8 @@ const FolderView = () => {
           setChats([]);
           return;
         }
+
+        setTitle(foundFolder.name || "Thư mục");
 
         setFolder({ id: foundFolder._id, name: foundFolder.name });
 

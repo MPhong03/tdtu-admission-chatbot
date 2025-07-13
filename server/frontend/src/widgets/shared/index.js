@@ -1,0 +1,1 @@
+export * from "@/widgets/shared/rich-text-editor";

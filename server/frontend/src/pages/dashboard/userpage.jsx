@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { Card } from "@material-tailwind/react";
 import api from "@/configs/api";
-import UserTable from "@/widgets/tables/user/user-table";
-import Pagination from "@/widgets/tables/pagination";
+import UserTable from "@/widgets/tables/user-table";
+import Pagination from "@/widgets/tables/components/pagination";
 import LoadingTable from "@/widgets/tables/components/loadingtable";
 
 export function UserPage() {

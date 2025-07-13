@@ -1,5 +1,6 @@
+// ChatView.tsx - Fixed version với debug logging
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { Spin, Tooltip } from "antd";
 import { DownOutlined } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
@@ -11,6 +12,7 @@ import "./chat.css";
 import QuestionItem from "@/components/chat/QuestionItem";
 import AnswerItem from "@/components/chat/AnswerItem";
 import toast from "react-hot-toast";
+import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 
 const TYPEWRITER_INTERVAL = 20;
 
@@ -32,8 +34,8 @@ export interface ChatHistoryItem {
 }
 
 interface ChatViewProps {
-  initialChatId?: string; // nếu có thể truyền chatId từ bên ngoài
-  onNewChatCreated?: (chatId: string) => void; // callback khi chat mới tạo
+  initialChatId?: string;
+  onNewChatCreated?: (chatId: string) => void;
 }
 
 const ChatView: React.FC<ChatViewProps> = ({
@@ -41,6 +43,9 @@ const ChatView: React.FC<ChatViewProps> = ({
   onNewChatCreated,
 }) => {
   const chatIdFromParams = useParams<{ chatId: string }>().chatId;
+  const location = useLocation();
+  const locationState = location.state as { initialQuestion?: string; fromHome?: boolean; chatName?: string } | null;
+  
   const [currentChatId, setCurrentChatId] = useState<string | undefined>(
     initialChatId || chatIdFromParams
   );
@@ -58,38 +63,85 @@ const ChatView: React.FC<ChatViewProps> = ({
   const scrollToBottomRef = useRef(false);
   const socketRef = useRef<Socket | null>(null);
   const tempMessageIdRef = useRef<string | null>(null);
-  const tempToRealIdMapRef = useRef<Record<string, string>>({});
+  const hasProcessedInitialQuestion = useRef(false);
   const visitorId = getVisitorId();
+  const { setTitle } = useBreadcrumb();
+
+  // Set breadcrumb title for ChatView
+  useEffect(() => {
+    setTitle(locationState?.chatName || "Cuộc trò chuyện");
+  }, [setTitle]);
 
   const pageSize = 5;
-
   const socketBaseUrl = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
+
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log("[DEBUG] chatItems updated:", chatItems.length, chatItems);
+  }, [chatItems]);
+
+  useEffect(() => {
+    console.log("[DEBUG] botTyping:", botTyping, "tempMessageId:", tempMessageIdRef.current);
+  }, [botTyping]);
+
+  useEffect(() => {
+    console.log("[DEBUG] currentTypingAnswer:", currentTypingAnswer);
+  }, [currentTypingAnswer]);
 
   // Reset khi initialChatId hoặc chatIdFromParams thay đổi
   useEffect(() => {
     const newChatId = initialChatId || chatIdFromParams;
     if (newChatId !== currentChatId) {
+      console.log("[ChatView] ChatId changed:", currentChatId, "->", newChatId);
       setCurrentChatId(newChatId);
       setChatItems([]);
       setPage(1);
       setHasMore(true);
+      setBotTyping(false);
+      setCurrentTypingAnswer("");
+      hasProcessedInitialQuestion.current = false;
     }
-  }, [initialChatId, chatIdFromParams]);
+  }, [initialChatId, chatIdFromParams, currentChatId]);
+
+  // Xử lý initial question từ HomeView
+  useEffect(() => {
+    if (
+      locationState?.initialQuestion && 
+      locationState?.fromHome && 
+      currentChatId && 
+      !hasProcessedInitialQuestion.current
+    ) {
+      console.log("[ChatView] Processing initial question:", locationState.initialQuestion);
+      hasProcessedInitialQuestion.current = true;
+      
+      // Delay để đảm bảo socket đã connect và component đã render
+      setTimeout(() => {
+        handleSend(locationState.initialQuestion || "");
+      }, 1000); // Tăng delay lên 1 giây
+    }
+  }, [currentChatId, locationState]);
 
   // Scroll xuống đáy khi currentTypingAnswer thay đổi
   useEffect(() => {
-    if (scrollToBottomRef.current && containerRef.current) {
+    if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [currentTypingAnswer]);
+  }, [currentTypingAnswer, chatItems]);
 
-  // Typewriter effect gõ từng chữ
+  // Enhanced typewriter effect với better logging
   const typeWriteAnswer = useCallback((fullText: string) => {
+    console.log("[Typewriter] Starting with text length:", fullText.length);
+    console.log("[Typewriter] Full text:", fullText.substring(0, 100) + "...");
+    
     setBotTyping(true);
     setCurrentTypingAnswer("");
     const tempOrRealId = tempMessageIdRef.current;
     console.log("[Typewriter] Using ID:", tempOrRealId);
-    if (!tempOrRealId) return;
+    
+    if (!tempOrRealId) {
+      console.error("[Typewriter] No temp message ID!");
+      return;
+    }
 
     let index = 0;
     const interval = setInterval(() => {
@@ -97,22 +149,35 @@ const ChatView: React.FC<ChatViewProps> = ({
       const partial = fullText.slice(0, index);
       setCurrentTypingAnswer(partial);
 
-      setChatItems((prev) =>
-        prev.map((item) =>
-          item._id === tempOrRealId ? { ...item, answer: partial } : item
-        )
-      );
+      // Update chatItems immediately
+      setChatItems((prev) => {
+        const updated = prev.map((item) => {
+          if (item._id === tempOrRealId) {
+            console.log("[Typewriter] Updating item:", item._id, "with partial length:", partial.length);
+            return { ...item, answer: partial };
+          }
+          return item;
+        });
+        return updated;
+      });
 
       if (index >= fullText.length) {
         clearInterval(interval);
         setBotTyping(false);
-        tempMessageIdRef.current = null;
+        setCurrentTypingAnswer("");
         console.log("[Typewriter] Completed for ID:", tempOrRealId);
+        tempMessageIdRef.current = null;
       }
     }, TYPEWRITER_INTERVAL);
+
+    // Cleanup function
+    return () => {
+      clearInterval(interval);
+      setBotTyping(false);
+    };
   }, []);
 
-  // Fetch lịch sử chat nếu có currentChatId
+  // Fetch lịch sử chat
   const fetchChatHistory = useCallback(
     async (pageNumber: number) => {
       if (!currentChatId || loadingMoreRef.current) return;
@@ -120,16 +185,18 @@ const ChatView: React.FC<ChatViewProps> = ({
       pageNumber === 1 ? setLoadingInitial(true) : setLoadingMore(true);
 
       try {
-        await new Promise((r) => setTimeout(r, 500));
-
+        console.log("[ChatView] Fetching history for page:", pageNumber);
+        
         const res = await axiosClient.get(`/chatbot/history/${currentChatId}`, {
           params: { page: pageNumber, size: pageSize, visitorId: visitorId },
         });
 
         const data = res.data?.Data;
         if (data) {
+          setTitle(data.chat?.name || "Cuộc trò chuyện");
           setHasMore(data.pagination.hasMore);
           const newItems = data.items.reverse();
+          console.log("[ChatView] Loaded history items:", newItems.length);
 
           if (pageNumber === 1) {
             setChatItems(newItems);
@@ -140,46 +207,33 @@ const ChatView: React.FC<ChatViewProps> = ({
               );
             }, 50);
           } else {
-            if (containerRef.current) {
-              const container = containerRef.current;
-              const prevScrollHeight = container.scrollHeight;
-              const prevScrollTop = container.scrollTop;
-
-              setChatItems((prev) => [...newItems, ...prev]);
-
-              setTimeout(() => {
-                if (!container) return;
-                const newScrollHeight = container.scrollHeight;
-                container.scrollTop =
-                  newScrollHeight - prevScrollHeight + prevScrollTop;
-              }, 50);
-            } else {
-              setChatItems((prev) => [...newItems, ...prev]);
-            }
+            setChatItems((prev) => [...newItems, ...prev]);
           }
           setPage(pageNumber);
         }
       } catch (err) {
         console.error("Failed to load chat history:", err);
+        toast.error("Không thể tải lịch sử chat");
       } finally {
         loadingMoreRef.current = false;
         setLoadingInitial(false);
         setLoadingMore(false);
       }
     },
-    [currentChatId]
+    [currentChatId, visitorId]
   );
 
-  // Tải lịch sử chat khi currentChatId thay đổi
+  // Load history khi chatId thay đổi
   useEffect(() => {
     if (currentChatId) {
+      console.log("[ChatView] Loading history for chatId:", currentChatId);
       fetchChatHistory(1);
     } else {
       setChatItems([]);
     }
   }, [currentChatId, fetchChatHistory]);
 
-  // Xử lý scroll event
+  // Xử lý scroll
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
       const target = e.currentTarget;
@@ -189,49 +243,68 @@ const ChatView: React.FC<ChatViewProps> = ({
       }
 
       const isAtBottom =
-        Math.abs(target.scrollHeight - target.scrollTop - target.clientHeight) <
-        5;
+        Math.abs(target.scrollHeight - target.scrollTop - target.clientHeight) < 5;
       setShowScrollDown(!isAtBottom);
     },
     [fetchChatHistory, hasMore, page]
   );
 
-  // Socket khởi tạo khi currentChatId thay đổi
+  // Socket setup với better error handling
   useEffect(() => {
     if (!currentChatId) return;
 
+    console.log("[Socket] Setting up for chatId:", currentChatId);
+
+    // Cleanup existing socket
     if (socketRef.current) {
       console.log("[Socket] Disconnecting existing socket");
       socketRef.current.disconnect();
       socketRef.current = null;
     }
 
-    const socket = io(socketBaseUrl);
+    const socket = io(socketBaseUrl, {
+      transports: ['websocket', 'polling'],
+      timeout: 20000,
+    });
     socketRef.current = socket;
-    console.log("[Socket] Connected to", socketBaseUrl);
+
+    socket.on('connect', () => {
+      console.log("[Socket] Connected successfully to", socketBaseUrl);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log("[Socket] Disconnected:", reason);
+    });
+
+    socket.on('error', (error) => {
+      console.error("[Socket] Error:", error);
+    });
 
     const handleChatReceive = (data: { chatId: string; question: string; answer: string; }) => {
       console.log("[Socket] chat:receive:", data);
 
       if (data.chatId !== currentChatId) {
-        console.log("[Socket] chatId mismatch: skipping");
+        console.log("[Socket] chatId mismatch: expected", currentChatId, "got", data.chatId);
         return;
       }
 
       const tempId = `temp-${Date.now()}`;
       tempMessageIdRef.current = tempId;
+      console.log("[Socket] Setting tempMessageId:", tempId);
 
-      setChatItems((prev) => [
-        ...prev,
-        {
+      setChatItems((prev) => {
+        const newItem = {
           _id: tempId,
           question: data.question,
           answer: "",
           createdAt: new Date().toISOString(),
-        },
-      ]);
+        };
+        console.log("[Socket] Adding new chat item:", newItem);
+        return [...prev, newItem];
+      });
 
-      typeWriteAnswer(data.answer);
+      // Start typewriter immediately
+      setTimeout(() => typeWriteAnswer(data.answer), 100);
     };
 
     const handleChatResponse = (response: any) => {
@@ -244,6 +317,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       }
 
       if (response.Code !== 1) {
+        console.error("[Socket] Error response:", response);
         toast.error(response.Message || "Đã xảy ra lỗi.");
         setBotTyping(false);
         tempMessageIdRef.current = null;
@@ -251,23 +325,22 @@ const ChatView: React.FC<ChatViewProps> = ({
       }
 
       const data = response.Data;
+      console.log("[Socket] Processing response data:", data);
 
-      // Update ID cho chat item
-      setChatItems((prev) => {
-        const updated = prev.map((item) => {
-          if (item._id === tempId) {
-            // Lưu mapping temp -> real
-            if (data.historyId) {
-              tempToRealIdMapRef.current[tempId] = data.historyId;
+      // Update chat item with real ID
+      if (data.historyId) {
+        setChatItems((prev) => {
+          const updated = prev.map((item) => {
+            if (item._id === tempId) {
+              console.log("[Socket] Updating temp ID to real ID:", tempId, "->", data.historyId);
+              return { ...item, _id: data.historyId };
             }
-            return { ...item, _id: data.historyId ?? tempId };
-          }
-          return item;
+            return item;
+          });
+          return updated;
         });
-        return updated;
-      });
-      tempMessageIdRef.current = data.historyId ?? tempId;
-      console.log("[Socket] Updated tempId -> real ID:", tempId, "->", data.historyId);
+        tempMessageIdRef.current = data.historyId;
+      }
 
       if (data.visitorId) saveVisitorId(data.visitorId);
 
@@ -277,19 +350,10 @@ const ChatView: React.FC<ChatViewProps> = ({
       }
 
       if (data.answer) {
-        typeWriteAnswer(data.answer);
+        setTimeout(() => typeWriteAnswer(data.answer), 100);
       } else {
-        setChatItems((prev) =>
-          prev.map((item) =>
-            item._id === (data.historyId ?? tempId)
-              ? {
-                ...item,
-                answer: "Xin lỗi, tôi chưa có câu trả lời cho câu hỏi này.",
-              }
-              : item
-          )
-        );
         setBotTyping(false);
+        console.warn("[Socket] No answer in response");
       }
     };
 
@@ -297,57 +361,59 @@ const ChatView: React.FC<ChatViewProps> = ({
     socket.on("chat:response", handleChatResponse);
 
     return () => {
-      console.log("[Socket] Cleaning up socket");
+      console.log("[Socket] Cleaning up socket for chatId:", currentChatId);
       socket.off("chat:receive", handleChatReceive);
       socket.off("chat:response", handleChatResponse);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [currentChatId, typeWriteAnswer]);
+  }, [currentChatId, typeWriteAnswer, onNewChatCreated]);
 
-  // Gửi câu hỏi mới
+  // Enhanced handleSend với better error handling
   const handleSend = useCallback(
     async (question: string) => {
       if (!question.trim()) return;
 
+      console.log("[ChatView] Sending question:", question);
+      
       const tempId = `temp-${Date.now()}`;
       tempMessageIdRef.current = tempId;
 
-      setCurrentTypingAnswer("");
-      setChatItems((prev) => [
-        ...prev,
-        {
-          _id: tempId,
-          question,
-          answer: "",
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      // Add question to chat immediately
+      const newChatItem = {
+        _id: tempId,
+        question,
+        answer: "",
+        createdAt: new Date().toISOString(),
+      };
 
+      console.log("[ChatView] Adding question to chat:", newChatItem);
+      setChatItems((prev) => [...prev, newChatItem]);
       setBotTyping(true);
-      scrollToBottomRef.current = true;
 
       try {
-        const res = await axiosClient.post("/chatbot/chat", {
+        const requestData = {
           question,
           chatId: currentChatId,
           visitorId,
-        });
+        };
+        console.log("[ChatView] Sending API request:", requestData);
 
+        const res = await axiosClient.post("/chatbot/chat", requestData);
         const data = res.data.Data;
         console.log("[API/chatbot/chat] Response:", data);
 
         if (data.visitorId) saveVisitorId(data.visitorId);
 
+        // Update with real history ID
         if (data.historyId) {
+          console.log("[ChatView] Updating with real historyId:", data.historyId);
           setChatItems((prev) =>
             prev.map((item) =>
-              item._id === tempId
-                ? { ...item, _id: data.historyId }
-                : item
+              item._id === tempId ? { ...item, _id: data.historyId } : item
             )
           );
-          tempMessageIdRef.current = data.historyId; // cập nhật tham chiếu ID
+          tempMessageIdRef.current = data.historyId;
         }
 
         if (data.chatId && data.chatId !== currentChatId) {
@@ -355,9 +421,12 @@ const ChatView: React.FC<ChatViewProps> = ({
           onNewChatCreated?.(data.chatId);
         }
 
+        // Start typewriter for answer
         if (data.answer) {
-          await typeWriteAnswer(data.answer);
+          console.log("[ChatView] Starting typewriter for answer length:", data.answer.length);
+          setTimeout(() => typeWriteAnswer(data.answer), 200);
         } else {
+          console.warn("[ChatView] No answer received");
           setChatItems((prev) =>
             prev.map((item) =>
               item._id === (data.historyId ?? tempId)
@@ -368,7 +437,8 @@ const ChatView: React.FC<ChatViewProps> = ({
           setBotTyping(false);
         }
       } catch (error) {
-        console.error("Failed to send question:", error);
+        console.error("[ChatView] Send error:", error);
+        toast.error("Không thể gửi tin nhắn. Vui lòng thử lại.");
         setChatItems((prev) =>
           prev.map((item) =>
             item._id === tempId
@@ -379,17 +449,10 @@ const ChatView: React.FC<ChatViewProps> = ({
         setBotTyping(false);
       }
     },
-    [currentChatId, onNewChatCreated, typeWriteAnswer]
+    [currentChatId, onNewChatCreated, typeWriteAnswer, visitorId]
   );
 
-  if (!currentChatId)
-    return (
-      <div className="text-center text-gray-500 mt-10">
-        Hãy bắt đầu đặt câu hỏi để tạo đoạn chat mới.
-      </div>
-    );
-
-  // GỬI FEEDBACK
+  // Feedback handler
   const handleFeedback = async (
     historyId: string,
     rating: number,
@@ -399,10 +462,8 @@ const ChatView: React.FC<ChatViewProps> = ({
     try {
       let res;
       if (feedbackId) {
-        // Cập nhật feedback
         res = await axiosClient.put(`/feedbacks/${feedbackId}`, { rating, comment });
       } else {
-        // Tạo mới feedback
         res = await axiosClient.post("/feedbacks", { historyId, rating, comment });
       }
       const response = res.data;
@@ -436,79 +497,118 @@ const ChatView: React.FC<ChatViewProps> = ({
     }
   };
 
+  if (!currentChatId) {
+    return (
+      <div className="w-[85%] mx-auto p-6 flex flex-col items-center justify-center h-[85vh] text-center">
+        <div className="max-w-md">
+          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">💬</span>
+          </div>
+          <h3 className="text-xl font-semibold text-gray-800 mb-2">
+            Bắt đầu cuộc trò chuyện
+          </h3>
+          <p className="text-gray-600 mb-6">
+            Hãy đặt câu hỏi để tạo đoạn chat mới với AI Assistant.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-[80%] mx-auto p-4 flex flex-col h-[85vh] relative">
+    <div className="w-[85%] mx-auto p-4 flex flex-col h-[85vh] relative">
+      {/* <div className="mb-2 p-2 bg-gray-100 rounded text-xs">
+        <div>ChatId: {currentChatId}</div>
+        <div>Items: {chatItems.length}</div>
+        <div>BotTyping: {botTyping ? 'true' : 'false'}</div>
+        <div>TempId: {tempMessageIdRef.current}</div>
+        <div>TypingAnswer: {currentTypingAnswer.length} chars</div>
+      </div> */}
+
+      {/* Chat messages */}
       <div
         ref={containerRef}
         className="mb-4 space-y-6 overflow-y-auto flex-grow"
         onScroll={handleScroll}
       >
-        <div
-          className="mb-4 space-y-6 overflow-y-auto flex-grow"
-          style={{ display: "flex", flexDirection: "column", minHeight: 0 }}
-        >
-          {loadingInitial ? (
-            <div className="flex justify-center mt-10">
-              <Spin size="large" />
+        {loadingInitial ? (
+          <div className="flex flex-col items-center justify-center mt-10">
+            <Spin size="large" />
+            <p className="text-gray-600 mt-3">Đang tải lịch sử chat...</p>
+          </div>
+        ) : chatItems.length === 0 ? (
+          <div className="flex flex-col items-center justify-center mt-10 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              <span className="text-2xl">💭</span>
             </div>
-          ) : chatItems.length === 0 ? (
-            <div className="text-center text-gray-500 mt-10">
-              Không có lịch sử hội thoại.
-            </div>
-          ) : (
-            <>
-              {loadingMore && (
-                <div className="flex justify-center py-2">
+            <h3 className="text-lg font-medium text-gray-800 mb-2">
+              {locationState?.fromHome ? "Đang khởi tạo cuộc trò chuyện..." : "Chưa có cuộc trò chuyện nào"}
+            </h3>
+            <p className="text-gray-600">
+              {locationState?.fromHome ? "Vui lòng chờ một chút..." : "Hãy bắt đầu bằng cách đặt câu hỏi đầu tiên."}
+            </p>
+          </div>
+        ) : (
+          <>
+            {loadingMore && (
+              <div className="flex justify-center py-4">
+                <div className="flex items-center gap-2">
                   <Spin size="small" />
+                  <span className="text-sm text-gray-600">Đang tải thêm...</span>
                 </div>
-              )}
-              {chatItems.map((item) => (
-                <div key={item._id} className="space-y-1 my-4 flex flex-col">
-                  <QuestionItem content={item.question} />
-                  <AnswerItem
-                    content={item._id === tempMessageIdRef.current && botTyping
-                      ? currentTypingAnswer
-                      : item.answer}
-                    isFeedback={item.isFeedback || false}
-                    feedback={item.feedback || undefined}
-                    onFeedback={(value) => handleFeedback(item._id, value.rating, value.comment, value.feedbackId)}
-                  />
-
-                </div>
-              ))}
-              {botTyping && chatItems.length === 0 && (
-                <div className="flex justify-start py-2">
-                  <Spin />
-                  <div className="ml-2 text-gray-600">
-                    Chatbot đang trả lời...
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {showScrollDown && (
-          <Tooltip title="Chuyển đến tin nhắn mới nhất">
-            <div
-              onClick={() => {
-                if (containerRef.current) {
-                  containerRef.current.scrollTo({
-                    top: containerRef.current.scrollHeight,
-                    behavior: "smooth",
-                  });
-                }
-              }}
-              className="fixed bottom-[80px] right-8 cursor-pointer z-50 bg-main-blue hover:bg-main-red text-white rounded-full shadow-lg select-none transition
-                       flex items-center justify-center"
-              style={{ width: 44, height: 44 }}
-            >
-              <DownOutlined style={{ fontSize: 24 }} />
-            </div>
-          </Tooltip>
+              </div>
+            )}
+            {chatItems.map((item, index) => (
+              <div key={`${item._id}-${index}`} className="space-y-4 my-6 flex flex-col">
+                <QuestionItem 
+                  content={item.question} 
+                  timestamp={item.createdAt}
+                />
+                <AnswerItem
+                  content={item._id === tempMessageIdRef.current && botTyping
+                    ? currentTypingAnswer
+                    : item.answer}
+                  isFeedback={item.isFeedback || false}
+                  feedback={item.feedback || undefined}
+                  onFeedback={(value) => handleFeedback(item._id, value.rating, value.comment, value.feedbackId)}
+                  isTyping={item._id === tempMessageIdRef.current && botTyping}
+                />
+              </div>
+            ))}
+          </>
         )}
       </div>
-      <ChatInputBox onSend={handleSend} chatId={currentChatId} isDisabled={botTyping} />
+
+      {/* Scroll to bottom button */}
+      {showScrollDown && (
+        <Tooltip title="Chuyển đến tin nhắn mới nhất">
+          <div
+            onClick={() => {
+              if (containerRef.current) {
+                containerRef.current.scrollTo({
+                  top: containerRef.current.scrollHeight,
+                  behavior: "smooth",
+                });
+              }
+            }}
+            className="fixed bottom-[100px] right-8 cursor-pointer z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg select-none transition-all duration-200 transform hover:scale-105 flex items-center justify-center"
+            style={{ width: 48, height: 48 }}
+          >
+            <DownOutlined style={{ fontSize: 20 }} />
+          </div>
+        </Tooltip>
+      )}
+
+      {/* Input section */}
+      <div className="relative">
+        <ChatInputBox 
+          onSend={handleSend} 
+          chatId={currentChatId} 
+          isDisabled={false}
+          isBotTyping={botTyping}
+          mode="chat"
+        />
+      </div>
     </div>
   );
 };

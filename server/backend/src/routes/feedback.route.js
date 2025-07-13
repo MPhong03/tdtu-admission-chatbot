@@ -56,4 +56,11 @@ router.patch('/:id/status', verifyToken, isAdmin, FeedbackController.updateFeedb
  */
 router.delete('/:id', verifyToken, FeedbackController.deleteFeedback);
 
+/**
+ * @route GET /admin/all-feedbacks
+ * @desc Lấy danh sách phản hồi (chỉ cho admin)
+ * @access Yêu cầu quyền admin (verifyToken + isAdmin)
+ */
+router.get('/admin/all-feedbacks', verifyToken, isAdmin, FeedbackController.getFeedbacks);
+
 module.exports = router;

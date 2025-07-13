@@ -9,3 +9,4 @@ export * from "@/pages/dashboard/majorpage";
 export * from "@/pages/dashboard/tuitionpage";
 export * from "@/pages/dashboard/scholarshippage";
 export * from "@/pages/dashboard/documentpage";
+export * from "@/pages/dashboard/feedbackpage";

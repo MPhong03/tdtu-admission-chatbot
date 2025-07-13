@@ -4,54 +4,26 @@ import { scaleLog } from "@visx/scale";
 const colors = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"];
 
 export default function WordCloudVisx({ words }) {
-  const width = 800;
-  const height = 400;
-
-  const fontScale = scaleLog({
-    domain: [
-      Math.min(...words.map((w) => w.value)),
-      Math.max(...words.map((w) => w.value)),
-    ],
-    range: [12, 60],
-  });
-
-  const getRotation = () => (Math.random() > 0.5 ? 0 : 90);
+  const maxValue = Math.max(...words.map(w => w.value));
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
   return (
-    <svg
-      viewBox={`0 0 ${width} ${height}`}
-      width="100%"
-      height="100%"
-      preserveAspectRatio="xMidYMid meet"
-    >
-      <g>
-        <Wordcloud
-          words={words}
-          width={width}
-          height={height}
-          font="Impact"
-          fontSize={(d) => fontScale(d.value)}
-          padding={2}
-          spiral="archimedean"
-          rotate={getRotation}
-          random={() => 0.5}
-        >
-          {(cloudWords) =>
-            cloudWords.map((w, i) => (
-              <text
-                key={w.text}
-                fontSize={w.size}
-                transform={`translate(${w.x}, ${w.y}) rotate(${w.rotate})`}
-                textAnchor="middle"
-                fill={colors[i % colors.length]}
-                fontFamily="Impact"
-              >
-                {w.text}
-              </text>
-            ))
-          }
-        </Wordcloud>
-      </g>
-    </svg>
+    <div className="flex flex-wrap gap-3 justify-center items-center py-8">
+      {words.map((word, index) => {
+        const fontSize = Math.max(12, (word.value / maxValue) * 48);
+        return (
+          <span
+            key={index}
+            className="font-semibold hover:scale-110 transition-transform cursor-pointer"
+            style={{
+              fontSize: `${fontSize}px`,
+              color: colors[index % colors.length]
+            }}
+          >
+            {word.text}
+          </span>
+        );
+      })}
+    </div>
   );
 }

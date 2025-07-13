@@ -53,10 +53,10 @@ class FeedbackService {
      */
     async getFeedbackById(userId, feedbackId) {
         try {
-            const feedback = await this.repo.getById(feedbackId, ["historyId"]);
-            if (!feedback || String(feedback.userId) !== String(userId)) {
-                return HttpResponse.error("Không tìm thấy phản hồi hoặc không có quyền", -1);
-            }
+            const feedback = await this.repo.getById(feedbackId, ["historyId", "userId"]);
+            // if (!feedback || String(feedback.userId) !== String(userId)) {
+            //     return HttpResponse.error("Không tìm thấy phản hồi hoặc không có quyền", -1);
+            // }
             return HttpResponse.success("Lấy phản hồi thành công", feedback);
         } catch (error) {
             console.error("Error retrieving feedback:", error);
@@ -94,6 +94,21 @@ class FeedbackService {
         } catch (error) {
             console.error("Error deleting feedback:", error);
             return HttpResponse.error("Xóa phản hồi thất bại");
+        }
+    }
+
+    /**
+     * Lấy danh sách feedback cdành cho admin (có phân trang)
+     */
+    async getFeedbacks(page = 1, size = 10, status = null) {
+        try {
+            const filter = {};
+            if (status) filter.status = status;
+            const result = await this.repo.paginate(filter, page, size, [{ path: 'historyId', select: '-contextNodes' }], { createdAt: -1 }, ["contextNodes"]);
+            return HttpResponse.success("Lấy danh sách phản hồi thành công", result);
+        } catch (error) {
+            console.error("Error retrieving feedbacks:", error);
+            return HttpResponse.error("Lấy danh sách phản hồi thất bại");
         }
     }
 }

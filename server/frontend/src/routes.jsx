@@ -17,10 +17,11 @@ import {
   MajorPage,
   TuitionPage,
   ScholarshipPage,
-  DocumentPage
+  DocumentPage,
+  FeedbackPage
 } from "@/pages/dashboard";
 import { SignIn } from "@/pages/auth";
-import { AdjustmentsHorizontalIcon, UserCircleIcon } from "@heroicons/react/24/outline";
+import { AdjustmentsHorizontalIcon, InboxIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 
 const icon = {
   className: "w-5 h-5 text-inherit",
@@ -43,6 +44,13 @@ export const routes = [
         name: "Lịch sử Q&A",
         path: "/qa",
         element: <QAPage />,
+        display: true
+      },
+      {
+        icon: <InboxIcon {...icon} />,
+        name: "Feedback",
+        path: "/feedback",
+        element: <FeedbackPage />,
         display: true
       },
       {

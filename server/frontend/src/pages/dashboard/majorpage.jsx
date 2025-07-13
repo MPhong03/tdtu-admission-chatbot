@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Card } from "@material-tailwind/react";
 import api from "@/configs/api";
-import MajorTable from "@/widgets/tables/major/major-table";
+import MajorTable from "@/widgets/tables/major-table";
 import LoadingTable from "@/widgets/tables/components/loadingtable";
-import Pagination from "@/widgets/tables/pagination";
+import Pagination from "@/widgets/tables/components/pagination";
 import MajorModal from "@/widgets/modals/major-modal";
 import ConfirmDialog from "@/widgets/dialogs/confirm-dialog";
 import toast from "react-hot-toast";

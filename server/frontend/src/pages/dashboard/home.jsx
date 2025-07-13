@@ -12,6 +12,7 @@ import api from "@/configs/api";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import WordCloudVisx from "@/widgets/charts/wordcloud";
+import { ChartBarIcon, FunnelIcon } from "@heroicons/react/24/solid";
 
 export function Home() {
   const [startDate, setStartDate] = useState(null);
@@ -80,32 +81,42 @@ export function Home() {
 
   return (
     <div className="mt-6 px-4">
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end bg-white p-4 rounded-lg shadow border mb-6">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Từ ngày</label>
-          <DatePicker
-            selected={startDate}
-            onChange={(date) => setStartDate(date)}
-            className="w-full px-3 py-2 border rounded-md"
-            dateFormat="yyyy-MM-dd"
-          />
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Đến ngày</label>
-          <DatePicker
-            selected={endDate}
-            onChange={(date) => setEndDate(date)}
-            className="w-full px-3 py-2 border rounded-md"
-            dateFormat="yyyy-MM-dd"
-          />
-        </div>
-        <div className="md:col-span-2 flex justify-start md:justify-end">
-          <button
-            onClick={fetchStatistics}
-            className="px-5 py-2 bg-black hover:bg-gray-700 text-white font-semibold rounded-md"
-          >
-            Áp dụng bộ lọc
-          </button>
+      {/* Date Filter */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-300 mb-6">
+        <div className="p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <FunnelIcon className="w-5 h-5 text-gray-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Bộ lọc thời gian</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Từ ngày</label>
+              <input
+                type="date"
+                value={startDate?.toISOString().split("T")[0] || ""}
+                onChange={(e) => setStartDate(new Date(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Đến ngày</label>
+              <input
+                type="date"
+                value={endDate?.toISOString().split("T")[0] || ""}
+                onChange={(e) => setEndDate(new Date(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+            <div className="md:col-span-2 flex justify-start md:justify-end">
+              <button
+                onClick={fetchStatistics}
+                className="px-6 py-2 bg-gray-900 hover:bg-gray-800 text-white font-medium rounded-lg transition-colors duration-200 flex items-center gap-2"
+              >
+                <FunnelIcon className="w-4 h-4" />
+                Áp dụng bộ lọc
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -178,15 +189,23 @@ export function Home() {
       </div>
 
       {/* Word Cloud */}
-      <div className="bg-white p-6 rounded-lg shadow border">
-        <h3 className="text-xl font-semibold mb-4">Tần suất từ khóa</h3>
-        {wordCloudData.length > 0 ? (
-          <div className="w-full overflow-x-auto">
-            <WordCloudVisx words={wordCloudData} />
+      <div className="bg-white rounded-xl shadow-sm border border-gray-300">
+        <div className="p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <ChartBarIcon className="w-5 h-5 text-gray-600" />
+            <h3 className="text-lg font-semibold text-gray-900">Tần suất từ khóa</h3>
           </div>
-        ) : (
-          <p className="text-gray-500">Không có dữ liệu từ khóa để hiển thị.</p>
-        )}
+          {wordCloudData.length > 0 ? (
+            <WordCloudVisx words={wordCloudData} />
+          ) : (
+            <div className="text-center py-12">
+              <div className="text-gray-400 mb-2">
+                <ChartBarIcon className="w-12 h-12 mx-auto" />
+              </div>
+              <p className="text-gray-500">Không có dữ liệu từ khóa để hiển thị.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

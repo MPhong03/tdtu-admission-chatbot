@@ -1,89 +1,64 @@
 import React, { useEffect, useState } from "react";
 import {
-    Dialog, DialogBody, DialogFooter, IconButton, Typography, Button, Input, Select, Option, Spinner
+    Dialog, DialogBody, DialogFooter, IconButton, Typography, Button, Input, Spinner
 } from "@material-tailwind/react";
-import { EyeIcon, XMarkIcon, PencilIcon } from "@heroicons/react/24/solid";
-import { Editor } from '@tinymce/tinymce-react';
+import { EyeIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import api from "@/configs/api";
 import toast from "react-hot-toast";
 
 const ProgrammeModal = ({ open, onClose, programmeId, title }) => {
     const [loading, setLoading] = useState(false);
-    const [form, setForm] = useState({
-        name: "",
-    });
-    const [mode, setMode] = useState(programmeId ? "view" : "create");
+    const [form, setForm] = useState({ name: "" });
+    const isCreate = !programmeId;
 
-    // Khi years đã có, mới load programme detail (nếu có programmeId)
+    // Reset form và load chi tiết (nếu có)
     useEffect(() => {
         if (!open) return;
-        // Chỉ load nếu đã có years xong
-        if (programmeId) {
-            setLoading(true);
-            api.get(`/v2/programmes/${programmeId}`)
-                .then(res => {
-                    const doc = res.data.Data || {};
-                    setForm({
-                        name: doc.name || "",
-                    });
-                    setMode("view");
-                })
-                .catch(() => {
-                    toast.error("Không tải được chương trình/hệ");
-                    setForm({
-                        name: "",
-                    });
-                    setMode("create");
-                })
-                .finally(() => setLoading(false));
-        } else {
-            setForm({
-                name: "",
-            });
-            setMode("create");
+
+        if (isCreate) {
+            setForm({ name: "" });
+            return;
         }
+
+        const fetchDetail = async () => {
+            setLoading(true);
+            try {
+                const res = await api.get(`/v2/programmes/${programmeId}`);
+                const data = res.data.Data || {};
+                setForm({ name: data.name || "" });
+            } catch {
+                toast.error("Không tải được chương trình/hệ!");
+                setForm({ name: "" });
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchDetail();
     }, [open, programmeId]);
 
-    const handleChange = e => {
+    const handleChange = (e) => {
         const { name, value } = e.target;
-        setForm(prev => ({ ...prev, [name]: value }));
+        setForm((prev) => ({ ...prev, [name]: value }));
     };
 
     const handleSubmit = async () => {
         setLoading(true);
         try {
-            if (mode === "create") {
+            if (isCreate) {
                 await api.post("/v2/programmes", form);
                 toast.success("Tạo chương trình/hệ thành công!");
-            } else if (mode === "edit" && programmeId) {
+            } else {
                 await api.put(`/v2/programmes/${programmeId}`, form);
                 toast.success("Cập nhật chương trình/hệ thành công!");
             }
             onClose(true);
-        } catch (e) {
+        } catch {
             toast.error("Không thể lưu chương trình/hệ. Vui lòng thử lại!");
         } finally {
             setLoading(false);
         }
     };
-
-    const handleEdit = () => setMode("edit");
-
-    const formView = (
-        <form className="flex flex-wrap -mx-4">
-            {/* Tên chương trình/hệ */}
-            <div className="w-full px-4 mb-4">
-                <Input
-                    label="Tên chương trình/hệ"
-                    name="name"
-                    value={form.name}
-                    onChange={handleChange}
-                    required
-                    disabled={mode === "view"}
-                />
-            </div>
-        </form>
-    );
 
     return (
         <Dialog open={open} handler={onClose} size="md" className="rounded-xl shadow-xl">
@@ -91,28 +66,33 @@ const ProgrammeModal = ({ open, onClose, programmeId, title }) => {
                 <Typography variant="h5" className="font-semibold flex items-center gap-2">
                     <EyeIcon className="h-6 w-6" /> {title}
                 </Typography>
-                <div className="flex gap-2">
-                    {mode === "view" && (
-                        <IconButton variant="text" color="white" onClick={handleEdit} title="Chỉnh sửa">
-                            <PencilIcon className="h-6 w-6" />
-                        </IconButton>
-                    )}
-                    <IconButton variant="text" color="white" onClick={onClose} className="hover:bg-white/10">
-                        <XMarkIcon className="h-6 w-6" />
-                    </IconButton>
-                </div>
+                <IconButton variant="text" color="white" onClick={onClose} className="hover:bg-white/10">
+                    <XMarkIcon className="h-6 w-6" />
+                </IconButton>
             </div>
-            <DialogBody className="px-6 py-4" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+
+            <DialogBody className="px-6 py-4" style={{ maxHeight: "70vh", overflowY: "auto" }}>
                 {loading ? (
                     <div className="flex justify-center items-center h-40">
                         <Spinner color="blue" />
                     </div>
                 ) : (
-                    <>{formView}</>
+                    <form className="flex flex-wrap -mx-4">
+                        <div className="w-full px-4 mb-4">
+                            <Input
+                                label="Tên chương trình/hệ"
+                                name="name"
+                                value={form.name}
+                                onChange={handleChange}
+                                required
+                            />
+                        </div>
+                    </form>
                 )}
             </DialogBody>
+
             <DialogFooter className="bg-gray-100 px-8 py-4 rounded-b-lg">
-                {(mode === "create" || mode === "edit") && !loading && (
+                {!loading && (
                     <Button variant="gradient" color="blue" onClick={handleSubmit}>
                         Lưu
                     </Button>
