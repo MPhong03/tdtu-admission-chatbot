@@ -7,21 +7,51 @@ const UserRepo = new BaseRepository(User);
 
 class UserService {
     // =========== ADMIN ==========
-    async getAllUsers({ page = 1, size = 10 }) {
+    async getAllUsers({ page = 1, size = 10, query = {} }) {
         try {
             const skip = (page - 1) * size;
 
-            const query = UserRepo.asQueryable()
-                // .populate("userId", "username email")
-                // .populate("chatId", "name")
-                .where({ role: "user" })
+            // Base condition: role = 'user'
+            const condition = { role: "user" };
+
+            // AND conditions
+            for (const [key, value] of Object.entries(query)) {
+                if (key === "$or") continue;
+                if (value !== null && value !== undefined && value !== "") {
+                    condition[key] = { $regex: value, $options: "i" };
+                }
+            }
+
+            // OR conditions
+            if (Array.isArray(query.$or) && query.$or.length > 0) {
+                const orConditions = [];
+
+                query.$or.forEach(orClause => {
+                    if (typeof orClause !== "object" || !orClause) return;
+
+                    for (const [key, value] of Object.entries(orClause)) {
+                        if (value !== null && value !== undefined && value !== "") {
+                            orConditions.push({
+                                [key]: { $regex: value, $options: "i" }
+                            });
+                        }
+                    }
+                });
+
+                if (orConditions.length > 0) {
+                    condition["$or"] = orConditions;
+                }
+            }
+
+            const queryBuilder = UserRepo.asQueryable(condition)
                 .sort({ createdAt: -1 })
                 .skip(skip)
-                .limit(size);
+                .limit(size)
+                .lean();
 
             const [users, totalItems] = await Promise.all([
-                query.exec(),
-                UserRepo.count()
+                queryBuilder.exec(),
+                UserRepo.count(condition)
             ]);
 
             return HttpResponse.success("Danh sách người dùng", {
@@ -30,6 +60,7 @@ class UserService {
                     page,
                     size,
                     totalItems,
+                    totalPages: Math.ceil(totalItems / size),
                     hasMore: page * size < totalItems
                 }
             });

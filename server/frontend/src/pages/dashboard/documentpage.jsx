@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Card } from "@material-tailwind/react";
 import api from "@/configs/api";
 import DocumentTable from "@/widgets/tables/document-table";
-// import QAModal from "@/widgets/modals/qa-modal";
 import LoadingTable from "@/widgets/tables/components/loadingtable";
 import Pagination from "@/widgets/tables/components/pagination";
 import DocumentModal from "@/widgets/modals/document-modal";
@@ -17,33 +16,46 @@ export function DocumentPage() {
     const [openModal, setOpenModal] = useState(false);
     const [modalMode, setModalMode] = useState("view");
     const [loading, setLoading] = useState(false);
+    const [keyword, setKeyword] = useState("");
 
     // Confirm dialog state
     const [confirmDelete, setConfirmDelete] = useState({ open: false, document: null });
 
     const size = 5;
 
-    const fetchDocuments = async (currentPage) => {
+    const fetchDocuments = async (currentPage, searchKeyword = "") => {
         setLoading(true);
         try {
-            const res = await api.get(`/v2/documents?page=${currentPage}&size=${size}`);
+            const params = new URLSearchParams({
+                page: currentPage,
+                size: size,
+                ...(searchKeyword && { keyword: searchKeyword })
+            });
+
+            const res = await api.get(`/v2/documents?${params}`);
             if (res.data.Code === 1) {
                 setDocuments(res.data.Data.items);
                 setTotalPages(Math.ceil(res.data.Data.pagination.totalItems / size));
             }
         } catch (error) {
             console.error("Error fetching Q&A document:", error);
+            toast.error("Lỗi khi tải danh sách tài liệu");
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchDocuments(page);
-    }, [page]);
+        fetchDocuments(page, keyword);
+    }, [page, keyword]);
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
+    };
+
+    const handleSearch = (searchKeyword) => {
+        setKeyword(searchKeyword);
+        setPage(1); // Reset to first page when searching
     };
 
     const handleOpenModal = (document, mode = "view") => {
@@ -55,7 +67,7 @@ export function DocumentPage() {
     const handleCloseModal = (refresh = false) => {
         setOpenModal(false);
         setSelectedDocument(null);
-        if (refresh) fetchDocuments(page);
+        if (refresh) fetchDocuments(page, keyword);
     };
 
     // ==== Xử lý xoá document ====
@@ -82,7 +94,7 @@ export function DocumentPage() {
                 if (documents.length === 1 && page > 1) {
                     setPage(page - 1);
                 } else {
-                    fetchDocuments(page);
+                    fetchDocuments(page, keyword);
                 }
             } else {
                 throw new Error(res.data.Message || "Xoá tài liệu thất bại");
@@ -99,7 +111,7 @@ export function DocumentPage() {
 
     return (
         <div className="mt-12 mb-8 flex flex-col gap-12">
-            <Card>
+            <Card className="shadow-lg">
                 {loading && <LoadingTable text="Đang tải" />}
                 <DocumentTable
                     documents={documents}
@@ -108,6 +120,8 @@ export function DocumentPage() {
                     onDelete={handleDeleteDocument}
                     page={page}
                     size={size}
+                    keyword={keyword}
+                    onSearch={handleSearch}
                 />
                 <Pagination
                     page={page}
@@ -126,10 +140,10 @@ export function DocumentPage() {
             {/* Dialog confirm xóa */}
             <ConfirmDialog
                 open={confirmDelete.open}
-                title="Xác nhận xoá chương trình/hệ"
+                title="Xác nhận xoá tài liệu"
                 content={
                     confirmDelete.document
-                        ? <>Bạn có chắc chắn muốn xoá chương trình/hệ "<b>{confirmDelete.document.name}</b>"?</>
+                        ? <>Bạn có chắc chắn muốn xoá tài liệu "<b>{confirmDelete.document.name}</b>"?</>
                         : "Bạn có chắc chắn muốn xoá mục này?"
                 }
                 onConfirm={handleConfirmDelete}

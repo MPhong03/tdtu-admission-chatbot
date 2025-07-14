@@ -1,5 +1,7 @@
 const jwt = require("jsonwebtoken");
 const HttpResponse = require("../data/responses/http.response");
+const CacheService = require('../services/v2/cachings/cache.service');
+const cache = new CacheService(process.env.REDIS_URL);
 const { v4: uuidv4 } = require("uuid");
 
 const verifyToken = (req, res, next) => {
@@ -87,5 +89,34 @@ function apiLock(req, res, next) {
     });
 }
 
+const rateLimiter = async (req, res, next) => {
+    const identifier = req.user?.id
+        ? `user:${req.user.id}`
+        : `ip:${req.ip}`;
 
-module.exports = { verifyToken, isAdmin, requireAuth, optionalAuth, apiLock };
+    const role = req.user ? 'user' : 'guest';
+    const config = {
+        guest: { limit: 20, window: 300 }, // 20 request / 5 phút
+        user:  { limit: 100, window: 3600 } // 100 request / 1 giờ
+    }[role];
+
+    try {
+        const isLimited = await cache.isRateLimited(identifier, config.limit, config.window);
+
+        if (isLimited) {
+            const info = await cache.getRemainingLimit(identifier, config.limit, config.window);
+            return res.status(429).json(HttpResponse.error(
+                `Bạn gửi quá nhanh. Vui lòng thử lại sau ${info.resetIn}s.`,
+                -1,
+                { remaining: info.remaining }
+            ));
+        }
+    } catch (err) {
+        console.warn("[RateLimiter] Redis error. Skipping rate limit.", err?.message || err);
+        // Không chặn request nếu Redis lỗi
+    }
+
+    next();
+};
+
+module.exports = { verifyToken, isAdmin, requireAuth, optionalAuth, apiLock, rateLimiter };

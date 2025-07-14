@@ -11,6 +11,7 @@ const statisticRoutes = require("./statistic.route");
 const userRoutes = require("./user.route");
 const commonRoutes = require("./common.route");
 const feedbackRoutes = require("./feedback.route");
+const helperRoutes = require("./helper.route");
 
 // V2
 const majorRoutes = require("./v2/major.route");
@@ -40,6 +41,7 @@ router.use("/statistics", statisticRoutes);
 router.use("/users", userRoutes);
 router.use("/systemconfigs", commonRoutes);
 router.use("/feedbacks", feedbackRoutes);
+router.use("/helpers", helperRoutes);
 //...
 
 // V2

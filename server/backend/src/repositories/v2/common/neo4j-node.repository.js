@@ -80,31 +80,72 @@ class Neo4jNodeRepository {
     }
 
     // pagination
-    async paginate(label, { page = 1, pageSize = 10 } = {}) {
+    async paginate(label, { page = 1, pageSize = 10, query = {} } = {}) {
         const session = getSession();
         const limit = parseInt(pageSize, 10);
         const skip = parseInt((page - 1) * limit, 10);
+
+        // === XỬ LÝ WHERE ===
+        const whereParts = [];
+        const params = {};
+        let paramCount = 0;
+
+        const buildCondition = (field, value) => {
+            const paramKey = `param_${paramCount++}`;
+            params[paramKey] = value;
+            return `apoc.text.clean(toLower(n.${field})) CONTAINS apoc.text.clean(toLower($${paramKey}))`;
+        };
+
+        // AND điều kiện thường
+        Object.entries(query).forEach(([key, value]) => {
+            if (key === '$or') return; // skip OR ở đây
+            if (value === null || value === undefined) return;
+            whereParts.push(buildCondition(key, value));
+        });
+
+        // OR điều kiện
+        if (Array.isArray(query.$or)) {
+            const orParts = [];
+            query.$or.forEach(cond => {
+                if (!cond || typeof cond !== 'object') return;
+                Object.entries(cond).forEach(([key, value]) => {
+                    if (value === null || value === undefined) return;
+                    orParts.push(buildCondition(key, value));
+                });
+            });
+            if (orParts.length > 0) {
+                whereParts.push(`(${orParts.join(' OR ')})`);
+            }
+        }
+
+        const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(" AND ")}` : '';
+
         try {
-            // 1. Lấy tổng số nodes
+            // === ĐẾM ===
             const countQuery = `
                 MATCH (n:${label})
-                RETURN count(n) as totalItems
+                ${whereClause}
+                RETURN count(n) AS totalItems
             `;
-            const countResult = await session.run(countQuery);
+            
+            const countResult = await session.run(countQuery, params);
             const totalItems = countResult.records[0].get('totalItems').toNumber();
 
-            // 2. Lấy dữ liệu phân trang
-            const query = `
+            // === DỮ LIỆU ===
+            const dataQuery = `
                 MATCH (n:${label})
+                ${whereClause}
                 RETURN n
                 ORDER BY coalesce(n.createdAt, "") DESC
                 SKIP $skip
                 LIMIT $limit
             `;
-            const result = await session.run(query, { skip: neo4j.int(skip), limit: neo4j.int(limit) });
 
-            // 3. Tính tổng số trang
-            const totalPages = Math.ceil(totalItems / limit);
+            const result = await session.run(dataQuery, {
+                ...params,
+                skip: neo4j.int(skip),
+                limit: neo4j.int(limit)
+            });
 
             return {
                 items: result.records.map(r => r.get('n').properties),
@@ -112,9 +153,9 @@ class Neo4jNodeRepository {
                     page,
                     size: limit,
                     totalItems,
-                    totalPages
+                    totalPages: Math.ceil(totalItems / limit)
                 }
-            }
+            };
         } finally {
             await session.close();
         }
@@ -125,7 +166,7 @@ class Neo4jNodeRepository {
         const session = getSession();
         try {
             const updatedAt = now();
-            
+
             let query = `MATCH (n:${label} {id: $id}) SET n += $props, n.updatedAt = $updatedAt`;
 
             // Nếu có thuộc tính cần xóa -> thêm REMOVE vào query

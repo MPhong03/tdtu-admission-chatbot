@@ -5,11 +5,17 @@ class UserController {
     // Paginate folders
     async paginates(req, res) {
         try {
-            const { page = 1, size = 10 } = req.query;
+            const { page = 1, size = 10, keyword } = req.query;
 
             const result = await UserService.getAllUsers({
                 page: parseInt(page),
-                size: parseInt(size)
+                size: parseInt(size),
+                query: {
+                    $or: [
+                        { username: keyword },
+                        { email: keyword },
+                    ]
+                }
             });
             
             return res.json(result);

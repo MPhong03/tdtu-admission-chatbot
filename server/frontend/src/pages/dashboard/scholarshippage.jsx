@@ -16,30 +16,43 @@ export function ScholarshipPage() {
     const [openModal, setOpenModal] = useState(false);
     const [modalMode, setModalMode] = useState("view");
     const [loading, setLoading] = useState(false);
+    const [keyword, setKeyword] = useState("");
     const [confirmDelete, setConfirmDelete] = useState({ open: false, scholarship: null });
     const size = 5;
 
-    const fetchScholarships = async (currentPage) => {
+    const fetchScholarships = async (currentPage, searchKeyword = "") => {
         setLoading(true);
         try {
-            const res = await api.get(`/v2/scholarships?page=${currentPage}&size=${size}`);
+            const params = new URLSearchParams({
+                page: currentPage,
+                size: size,
+                ...(searchKeyword && { keyword: searchKeyword })
+            });
+            
+            const res = await api.get(`/v2/scholarships?${params}`);
             if (res.data.Code === 1) {
                 setScholarships(res.data.Data.items);
                 setTotalPages(Math.ceil(res.data.Data.pagination.totalItems / size));
             }
         } catch (error) {
             console.error("Error fetching scholarships:", error);
+            toast.error("Lỗi khi tải danh sách học bổng");
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchScholarships(page);
-    }, [page]);
+        fetchScholarships(page, keyword);
+    }, [page, keyword]);
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
+    };
+
+    const handleSearch = (searchKeyword) => {
+        setKeyword(searchKeyword);
+        setPage(1); // Reset to first page when searching
     };
 
     const handleOpenModal = (scholarship, mode = "view") => {
@@ -51,7 +64,7 @@ export function ScholarshipPage() {
     const handleCloseModal = (refresh = false) => {
         setOpenModal(false);
         setSelectedScholarship(null);
-        if (refresh) fetchScholarships(page);
+        if (refresh) fetchScholarships(page, keyword);
     };
 
     const handleDeleteScholarship = (scholarship) => {
@@ -68,7 +81,7 @@ export function ScholarshipPage() {
                 if (scholarships.length === 1 && page > 1) {
                     setPage(page - 1);
                 } else {
-                    fetchScholarships(page);
+                    fetchScholarships(page, keyword);
                 }
             } else {
                 throw new Error(res.data.Message || "Xóa học bổng thất bại");
@@ -85,7 +98,7 @@ export function ScholarshipPage() {
 
     return (
         <div className="mt-12 mb-8 flex flex-col gap-12">
-            <Card>
+            <Card className="shadow-lg">
                 {loading && <LoadingTable text="Đang tải" />}
                 <ScholarshipTable
                     scholarships={scholarships}
@@ -94,6 +107,8 @@ export function ScholarshipPage() {
                     onDelete={handleDeleteScholarship}
                     page={page}
                     size={size}
+                    keyword={keyword}
+                    onSearch={handleSearch}
                 />
                 <Pagination page={page} totalPages={totalPages} onPageChange={handlePageChange} />
             </Card>

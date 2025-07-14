@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ChatbotController = require('../controllers/chatbot.controller');
-const { verifyToken, optionalAuth, apiLock } = require('../middlewares/auth.middleware');
+const { verifyToken, optionalAuth, apiLock, rateLimiter } = require('../middlewares/auth.middleware');
 
 // ============= API CHATBOT ============= //
 
@@ -12,7 +12,7 @@ const { verifyToken, optionalAuth, apiLock } = require('../middlewares/auth.midd
  * Body: { "question": String, "chatId": String (optional) }
  *    - Nếu không truyền chatId, hệ thống sẽ tự tạo mới
  */
-router.post("/chat", optionalAuth, ChatbotController.chatWithBot);
+router.post("/chat", optionalAuth, rateLimiter, ChatbotController.chatWithBot);
 
 /**
  * Test chat với Gemini

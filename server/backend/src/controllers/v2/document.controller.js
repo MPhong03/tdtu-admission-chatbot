@@ -59,8 +59,14 @@ class DocumentController {
 
     async list(req, res) {
         try {
-            const { page = 1, size = 10 } = req.query;
-            const data = await N_DocumentService.paginate({ page: +page, pageSize: +size });
+            const { page = 1, size = 10, keyword } = req.query;
+            const filter = {
+                $or: [
+                    { name: keyword },
+                    { text: keyword }
+                ]
+            };
+            const data = await N_DocumentService.paginate({ page: +page, pageSize: +size, query: filter });
             return res.json(HttpResponse.success('Lấy danh sách tài liệu thành công', data));
         } catch (err) {
             logger.error('Error:', err);

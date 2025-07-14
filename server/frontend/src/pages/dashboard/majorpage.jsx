@@ -16,16 +16,23 @@ export function MajorPage() {
     const [openModal, setOpenModal] = useState(false);
     const [modalMode, setModalMode] = useState("view");
     const [loading, setLoading] = useState(false);
+    const [keyword, setKeyword] = useState("");
 
     // Confirm dialog state
     const [confirmDelete, setConfirmDelete] = useState({ open: false, major: null });
 
     const size = 5;
 
-    const fetchMajors = async (currentPage) => {
+    const fetchMajors = async (currentPage, searchKeyword = "") => {
         setLoading(true);
         try {
-            const res = await api.get(`/v2/majors?page=${currentPage}&size=${size}`);
+            const params = new URLSearchParams({
+                page: currentPage,
+                size: size,
+                ...(searchKeyword && { keyword: searchKeyword })
+            });
+            
+            const res = await api.get(`/v2/majors?${params}`);
             if (res.data.Code === 1) {
                 setMajors(res.data.Data.items);
                 setTotalPages(Math.ceil(res.data.Data.pagination.totalItems / size));
@@ -39,11 +46,16 @@ export function MajorPage() {
     };
 
     useEffect(() => {
-        fetchMajors(page);
-    }, [page]);
+        fetchMajors(page, keyword);
+    }, [page, keyword]);
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
+    };
+
+    const handleSearch = (searchKeyword) => {
+        setKeyword(searchKeyword);
+        setPage(1); // Reset to first page when searching
     };
 
     const handleOpenModal = (major, mode = "view") => {
@@ -55,7 +67,7 @@ export function MajorPage() {
     const handleCloseModal = (refresh = false) => {
         setOpenModal(false);
         setSelectedMajor(null);
-        if (refresh) fetchMajors(page);
+        if (refresh) fetchMajors(page, keyword);
     };
 
     // ==== Xử lý xoá major ====
@@ -82,7 +94,7 @@ export function MajorPage() {
                 if (majors.length === 1 && page > 1) {
                     setPage(page - 1);
                 } else {
-                    fetchMajors(page);
+                    fetchMajors(page, keyword);
                 }
             } else {
                 throw new Error(res.data.Message || "Xoá ngành thất bại");
@@ -127,7 +139,7 @@ export function MajorPage() {
 
     return (
         <div className="mt-12 mb-8 flex flex-col gap-12">
-            <Card>
+            <Card className="shadow-lg">
                 {loading && <LoadingTable text="Đang tải" />}
                 <MajorTable
                     majors={majors}
@@ -136,6 +148,8 @@ export function MajorPage() {
                     onDelete={handleDeleteMajor}
                     page={page}
                     size={size}
+                    keyword={keyword}
+                    onSearch={handleSearch}
                 />
                 <Pagination
                     page={page}

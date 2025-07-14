@@ -15,30 +15,43 @@ export function TuitionPage() {
     const [selectedTuition, setSelectedTuition] = useState(null);
     const [openModal, setOpenModal] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [keyword, setKeyword] = useState("");
     const [confirmDelete, setConfirmDelete] = useState({ open: false, tuition: null });
     const size = 5;
 
-    const fetchTuitions = async (currentPage) => {
+    const fetchTuitions = async (currentPage, searchKeyword = "") => {
         setLoading(true);
         try {
-            const res = await api.get(`/v2/tuitions?page=${currentPage}&size=${size}`);
+            const params = new URLSearchParams({
+                page: currentPage,
+                size: size,
+                ...(searchKeyword && { keyword: searchKeyword })
+            });
+            
+            const res = await api.get(`/v2/tuitions?${params}`);
             if (res.data.Code === 1) {
                 setTuitions(res.data.Data.items);
                 setTotalPages(Math.ceil(res.data.Data.pagination.totalItems / size));
             }
         } catch (error) {
             console.error("Error fetching tuition data:", error);
+            toast.error("Lỗi khi tải danh sách học phí");
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        fetchTuitions(page);
-    }, [page]);
+        fetchTuitions(page, keyword);
+    }, [page, keyword]);
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
+    };
+
+    const handleSearch = (searchKeyword) => {
+        setKeyword(searchKeyword);
+        setPage(1); // Reset to first page when searching
     };
 
     const handleOpenModal = (tuition, mode = "view") => {
@@ -49,7 +62,7 @@ export function TuitionPage() {
     const handleCloseModal = (refresh = false) => {
         setOpenModal(false);
         setSelectedTuition(null);
-        if (refresh) fetchTuitions(page);
+        if (refresh) fetchTuitions(page, keyword);
     };
 
     const handleDeleteTuition = (tuition) => {
@@ -68,7 +81,7 @@ export function TuitionPage() {
             if (res.data.Code === 1) {
                 toast.success("Xoá học phí thành công!");
                 if (tuitions.length === 1 && page > 1) setPage(page - 1);
-                else fetchTuitions(page);
+                else fetchTuitions(page, keyword);
             } else {
                 throw new Error(res.data.Message || "Xoá học phí thất bại!");
             }
@@ -82,7 +95,7 @@ export function TuitionPage() {
 
     return (
         <div className="mt-12 mb-8 flex flex-col gap-12">
-            <Card>
+            <Card className="shadow-lg">
                 {loading && <LoadingTable text="Đang tải" />}
                 <TuitionTable
                     tuitions={tuitions}
@@ -91,6 +104,8 @@ export function TuitionPage() {
                     onDelete={handleDeleteTuition}
                     page={page}
                     size={size}
+                    keyword={keyword}
+                    onSearch={handleSearch}
                 />
                 <Pagination
                     page={page}

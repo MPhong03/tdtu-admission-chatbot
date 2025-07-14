@@ -126,6 +126,52 @@ class CacheService {
         }
     }
 
+    /**
+     * Kiểm tra giới hạn rate limit cho userId hoặc IP.
+     * @param {string} identifier - userId hoặc ip:<address>
+     * @param {number} limit - Số lượt tối đa
+     * @param {number} window - Thời gian tính bằng giây
+     * @returns {Promise<boolean>} - true nếu vượt giới hạn
+     */
+    async isRateLimited(identifier, limit = 5, window = 60) {
+        try {
+            await this.ensureConnected();
+
+            const key = `rate-limit:${identifier}`;
+            const current = await this.client.incr(key);
+
+            if (current === 1) {
+                await this.client.expire(key, window); // set TTL
+            }
+
+            return current > limit;
+        } catch (err) {
+            logger.error('[CacheService] Rate limit check failed:', err);
+            return false;
+        }
+    }
+
+    /**
+     * Trả về số lượt còn lại và thời gian reset
+     */
+    async getRemainingLimit(identifier, limit = 5, window = 60) {
+        try {
+            await this.ensureConnected();
+
+            const key = `rate-limit:${identifier}`;
+            const current = await this.client.get(key);
+            const ttl = await this.client.ttl(key);
+
+            return {
+                remaining: Math.max(limit - (parseInt(current) || 0), 0),
+                resetIn: ttl >= 0 ? ttl : window
+            };
+        } catch (err) {
+            logger.error('[CacheService] Failed to get remaining limit:', err);
+            return { remaining: limit, resetIn: window };
+        }
+    }
+
     async disconnect() {
         await this.client.quit();
         logger.info('[CacheService] Redis client disconnected.');

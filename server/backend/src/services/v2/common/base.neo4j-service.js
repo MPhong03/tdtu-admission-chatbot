@@ -29,8 +29,8 @@ class BaseNeo4jService {
         return nodeRepo.upsertMany(this.label, arr);
     }
 
-    async paginate({ page = 1, pageSize = 10 } = {}) {
-        return nodeRepo.paginate(this.label, { page, pageSize });
+    async paginate({ page = 1, pageSize = 10, query = {} } = {}) {
+        return nodeRepo.paginate(this.label, { page, pageSize, query });
     }
 
     async query(query = {}) {

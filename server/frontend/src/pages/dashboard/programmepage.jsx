@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import { Card } from "@material-tailwind/react";
 import api from "@/configs/api";
 import ProgrammeTable from "@/widgets/tables/programme-table";
-// import QAModal from "@/widgets/modals/qa-modal";
 import LoadingTable from "@/widgets/tables/components/loadingtable";
 import Pagination from "@/widgets/tables/components/pagination";
 import ProgrammeModal from "@/widgets/modals/programme-modal";
@@ -17,16 +16,23 @@ export function ProgrammePage() {
     const [openModal, setOpenModal] = useState(false);
     const [modalMode, setModalMode] = useState("view");
     const [loading, setLoading] = useState(false);
+    const [keyword, setKeyword] = useState("");
 
     // Confirm dialog state
     const [confirmDelete, setConfirmDelete] = useState({ open: false, programme: null });
 
     const size = 5;
 
-    const fetchProgrammes = async (currentPage) => {
+    const fetchProgrammes = async (currentPage, searchKeyword = "") => {
         setLoading(true);
         try {
-            const res = await api.get(`/v2/programmes?page=${currentPage}&size=${size}`);
+            const params = new URLSearchParams({
+                page: currentPage,
+                size: size,
+                ...(searchKeyword && { keyword: searchKeyword })
+            });
+
+            const res = await api.get(`/v2/programmes?${params}`);
             if (res.data.Code === 1) {
                 setProgrammes(res.data.Data.items);
                 setTotalPages(Math.ceil(res.data.Data.pagination.totalItems / size));
@@ -39,11 +45,16 @@ export function ProgrammePage() {
     };
 
     useEffect(() => {
-        fetchProgrammes(page);
-    }, [page]);
+        fetchProgrammes(page, keyword);
+    }, [page, keyword]);
 
     const handlePageChange = (newPage) => {
         if (newPage >= 1 && newPage <= totalPages) setPage(newPage);
+    };
+
+    const handleSearch = (searchKeyword) => {
+        setKeyword(searchKeyword);
+        setPage(1); // Reset to first page when searching
     };
 
     const handleOpenModal = (Programme, mode = "view") => {
@@ -55,7 +66,7 @@ export function ProgrammePage() {
     const handleCloseModal = (refresh = false) => {
         setOpenModal(false);
         setSelectedProgramme(null);
-        if (refresh) fetchProgrammes(page);
+        if (refresh) fetchProgrammes(page, keyword);
     };
 
     // ==== Xử lý xoá programme ====
@@ -82,7 +93,7 @@ export function ProgrammePage() {
                 if (programmes.length === 1 && page > 1) {
                     setPage(page - 1);
                 } else {
-                    fetchProgrammes(page);
+                    fetchProgrammes(page, keyword);
                 }
             } else {
                 throw new Error(res.data.Message || "Xoá chương trình/hệ thất bại");
@@ -99,7 +110,7 @@ export function ProgrammePage() {
 
     return (
         <div className="mt-12 mb-8 flex flex-col gap-12">
-            <Card>
+            <Card className="shadow-lg">
                 {loading && <LoadingTable text="Đang tải" />}
                 <ProgrammeTable
                     programmes={programmes}
@@ -108,6 +119,8 @@ export function ProgrammePage() {
                     onDelete={handleDeleteProgramme}
                     page={page}
                     size={size}
+                    keyword={keyword}
+                    onSearch={handleSearch}
                 />
                 <Pagination
                     page={page}
