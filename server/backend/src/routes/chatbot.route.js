@@ -12,7 +12,7 @@ const { verifyToken, optionalAuth, apiLock, rateLimiter } = require('../middlewa
  * Body: { "question": String, "chatId": String (optional) }
  *    - Nếu không truyền chatId, hệ thống sẽ tự tạo mới
  */
-router.post("/chat", optionalAuth, rateLimiter, ChatbotController.chatWithBot);
+router.post("/chat", optionalAuth, ChatbotController.chatWithBot);
 
 /**
  * Test chat với Gemini
