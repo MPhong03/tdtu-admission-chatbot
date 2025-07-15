@@ -56,6 +56,11 @@ II. Nguyên tắc sinh Cypher
      "cypher": ""
    }
 
+9. Phân biệt rõ intent:
+   - Nếu câu hỏi chứa các từ khóa như “mô tả”, “giới thiệu”, “ngành gì”, “hệ đào tạo” → ưu tiên truy vấn node Major, Programme, MajorProgramme.
+   - Không chuyển hướng sang Tuition nếu không có từ “học phí”, “chi phí”, “đóng tiền”…
+   - Nếu có cả từ khóa ngành và hệ → MATCH Major → Programme → MajorProgramme theo đúng chiều.
+
 III. Intent / Truy vấn cụ thể
 
 1. Học phí ngành:
