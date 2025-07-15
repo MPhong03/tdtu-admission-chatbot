@@ -32,7 +32,7 @@ export function StatisticsChart({ color, chart, title, description, footer }) {
 }
 
 StatisticsChart.defaultProps = {
-  color: "blue",
+  color: "white",
   footer: null,
 };
 
