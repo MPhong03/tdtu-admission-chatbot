@@ -18,12 +18,19 @@ class Neo4jRepository {
             if (options.raw) {
                 return result.records.map(r => r.toObject());
             }
-            // Trả về properties của node đầu tiên trong mỗi record
+
+            // Trả về tất cả properties của record
             return result.records.map(r => {
-                const firstKey = Object.keys(r.toObject())[0];
-                const value = r.get(firstKey);
-                // Nếu là Neo4j Node (có .properties), lấy properties, nếu không thì giữ nguyên
-                return value?.properties ?? value ?? null;
+                const recordObject = r.toObject();
+                const processedRecord = {};
+
+                // Xử lý từng field trong record
+                for (const [key, value] of Object.entries(recordObject)) {
+                    // Nếu là Neo4j Node, lấy properties; nếu không thì giữ nguyên
+                    processedRecord[key] = value?.properties ?? value ?? null;
+                }
+
+                return processedRecord;
             });
         } finally {
             await session.close();
