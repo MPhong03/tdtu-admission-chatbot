@@ -85,21 +85,21 @@ class BotService {
      * @returns {Promise<{ cypher: string, labels: Array }>}
      */
     async generateCypher(question, questionEmbedding) {
-        // 1. Tìm trong cache trước
-        if (this.cacheService && questionEmbedding) {
-            try {
-                const results = await this.cacheService.searchSimilar(questionEmbedding, 1);
-                if (results?.length > 0 && results[0].score < 0.3) {
-                    logger.info(`[Cache] Cache HIT (score=${results[0].score}): using cached query.`);
-                    return { cypher: results[0].query, labels: [] };
-                }
-            } catch (err) {
-                logger.warn("[Cache] Cache search error, fallback to AI.", err);
-            }
-        }
+        // // 1. Tìm trong cache trước
+        // if (this.cacheService && questionEmbedding) {
+        //     try {
+        //         const results = await this.cacheService.searchSimilar(questionEmbedding, 1);
+        //         if (results?.length > 0 && results[0].score < 0.3) {
+        //             logger.info(`[Cache] Cache HIT (score=${results[0].score}): using cached query.`);
+        //             return { cypher: results[0].query, labels: [] };
+        //         }
+        //     } catch (err) {
+        //         logger.warn("[Cache] Cache search error, fallback to AI.", err);
+        //     }
+        // }
 
-        // 2. Nếu cache miss, gọi Gemini
-        logger.info("[Cache] Cache MISS → generate with Gemini");
+        // // 2. Nếu cache miss, gọi Gemini
+        // logger.info("[Cache] Cache MISS → generate with Gemini");
 
         // Tạo prompt đầy đủ cho Gemini
         const prompt = [
@@ -144,19 +144,19 @@ class BotService {
                     Array.isArray(result.labels) &&
                     typeof result.cypher === "string"
                 ) {
-                    // Lưu vào cache nếu Redis khả dụng
-                    if (this.cacheService && questionEmbedding) {
-                        try {
-                            await this.cacheService.addCache(
-                                `q_${Date.now()}`,
-                                question,
-                                questionEmbedding,
-                                result.cypher
-                            );
-                        } catch (err) {
-                            logger.warn("[Cache] Error saving to cache.", err);
-                        }
-                    }
+                    // // Lưu vào cache nếu Redis khả dụng
+                    // if (this.cacheService && questionEmbedding) {
+                    //     try {
+                    //         await this.cacheService.addCache(
+                    //             `q_${Date.now()}`,
+                    //             question,
+                    //             questionEmbedding,
+                    //             result.cypher
+                    //         );
+                    //     } catch (err) {
+                    //         logger.warn("[Cache] Error saving to cache.", err);
+                    //     }
+                    // }
                     return result;
                 }
 
