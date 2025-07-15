@@ -33,6 +33,7 @@ II. Nguyên tắc sinh Cypher
 2. So sánh từ khóa:  
    - Phải chuẩn hóa: không dấu, chữ thường.  
    - Dùng apoc.text.clean(toLower(...)) CONTAINS apoc.text.clean(toLower('<keyword>'))
+   - Nếu từ khóa sai chính tả, hãy chuẩn hóa giúp tôi rồi đưa từ khóa đúng chính tả vào Cypher. Tuyệt đối không đưa từ khóa sai chính tả vào Cypher
 
 3. Không so sánh trên node không có dữ liệu mô tả (ví dụ: Programme.name rất tổng quát, không chứa nội dung ngành học).
 
