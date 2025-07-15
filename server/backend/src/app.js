@@ -9,6 +9,7 @@ const apiRoutes = require("./routes/index.route");
 const Logger = require("./utils/logger.util");
 const HttpResponse = require("./data/responses/http.response");
 const initSocketHandler = require("./handlers/socket.handler");
+const { default: axios } = require("axios");
 
 dotenv.config();
 connectDB();
