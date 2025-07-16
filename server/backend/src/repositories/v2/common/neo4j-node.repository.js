@@ -79,6 +79,24 @@ class Neo4jNodeRepository {
         }
     }
 
+    // Find multiple nodes by label and array of ids
+    async findManyByIds(label, ids) {
+        if (!ids || ids.length === 0) return [];
+
+        const session = getSession();
+        try {
+            const query = `
+                MATCH (n:${label})
+                WHERE n.id IN $ids
+                RETURN n
+            `;
+            const result = await session.run(query, { ids });
+            return result.records.map(r => r.get('n').properties);
+        } finally {
+            await session.close();
+        }
+    }
+
     // pagination
     async paginate(label, { page = 1, pageSize = 10, query = {} } = {}) {
         const session = getSession();
@@ -127,7 +145,7 @@ class Neo4jNodeRepository {
                 ${whereClause}
                 RETURN count(n) AS totalItems
             `;
-            
+
             const countResult = await session.run(countQuery, params);
             const totalItems = countResult.records[0].get('totalItems').toNumber();
 

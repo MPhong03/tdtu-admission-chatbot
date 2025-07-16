@@ -10,18 +10,84 @@ import { PlusIcon, TrashIcon, DocumentTextIcon, AcademicCapIcon, EyeIcon } from 
 import Select from "react-select";
 import api from "@/configs/api";
 
-// ===== DynamicFieldList với UI cải tiến =====
+// ===== DynamicFieldList =====
 function DynamicFieldList({ fields, onChange, error }) {
+    // Danh sách từ khóa hệ thống không được sử dụng
+    const RESERVED_KEYWORDS = [
+        "major_code", "name", "description", "years", "programmeId",
+        "programme_id", "programmes", "id", "major_id", "tab",
+        "createdAt", "updatedAt"
+    ];
+
+    const [keywordErrors, setKeywordErrors] = useState({});
+
+    const validateKeyword = (key, index) => {
+        if (!key) return null;
+
+        const normalizedKey = key.toLowerCase().trim();
+
+        // Kiểm tra từ khóa hệ thống
+        if (RESERVED_KEYWORDS.includes(normalizedKey)) {
+            return "Tên trường này là từ khóa hệ thống, vui lòng chọn tên khác";
+        }
+
+        // Kiểm tra trùng lặp trong cùng form
+        const duplicateIndex = fields.findIndex((field, idx) =>
+            idx !== index && field.key.toLowerCase().trim() === normalizedKey
+        );
+        if (duplicateIndex !== -1) {
+            return "Tên trường đã tồn tại, vui lòng chọn tên khác";
+        }
+
+        // Kiểm tra ký tự đặc biệt (chỉ cho phép chữ cái, số, dấu gạch dưới)
+        if (!/^[a-zA-Z0-9_\u00C0-\u1EF9\s]+$/.test(key)) {
+            return "Tên trường chỉ được chứa chữ cái, số, dấu gạch dưới và khoảng trắng";
+        }
+
+        return null;
+    };
+
     const handleFieldChange = (idx, key, value) => {
         const copy = [...fields];
         copy[idx][key] = value;
         onChange(copy);
+
+        // Validate nếu đang sửa key
+        if (key === "key") {
+            const errorMsg = validateKeyword(value, idx);
+            setKeywordErrors(prev => ({
+                ...prev,
+                [idx]: errorMsg
+            }));
+        }
     };
-    const handleAdd = () => onChange([...fields, { key: "", value: "" }]);
+
+    const handleAdd = () => {
+        onChange([...fields, { key: "", value: "" }]);
+    };
+
     const handleDelete = (idx) => {
         if (fields.length === 1) return;
         onChange(fields.filter((_, i) => i !== idx));
+
+        // Xóa lỗi của field bị xóa
+        setKeywordErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[idx];
+            // Cập nhật lại index cho các field phía sau
+            Object.keys(newErrors).forEach(key => {
+                const numKey = parseInt(key);
+                if (numKey > idx) {
+                    newErrors[numKey - 1] = newErrors[numKey];
+                    delete newErrors[numKey];
+                }
+            });
+            return newErrors;
+        });
     };
+
+    // Kiểm tra xem có lỗi nào không
+    const hasErrors = Object.values(keywordErrors).some(error => error !== null);
 
     return (
         <div className="space-y-4">
@@ -31,20 +97,30 @@ function DynamicFieldList({ fields, onChange, error }) {
                     Thuộc tính mở rộng chương trình
                 </Typography>
             </div>
+
             <div className="space-y-3">
                 {fields.map((field, idx) => (
-                    <Card key={idx} className="shadow-sm border border-blue-gray-100">
+                    <Card key={idx} className={`shadow-sm border transition-all ${keywordErrors[idx] ? 'border-red-300 bg-red-50' : 'border-blue-gray-100'
+                        }`}>
                         <CardBody className="p-4">
                             <div className="flex gap-3 items-start">
                                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <Input
-                                        label="Tên trường"
-                                        value={field.key}
-                                        onChange={e => handleFieldChange(idx, "key", e.target.value)}
-                                        error={error && !field.key}
-                                        crossOrigin=""
-                                        className="bg-white"
-                                    />
+                                    <div>
+                                        <Input
+                                            label="Tên trường"
+                                            value={field.key}
+                                            onChange={e => handleFieldChange(idx, "key", e.target.value)}
+                                            error={error && !field.key || !!keywordErrors[idx]}
+                                            crossOrigin=""
+                                            className="bg-white"
+                                        />
+                                        {keywordErrors[idx] && (
+                                            <Typography color="red" className="text-xs mt-1 flex items-center gap-1">
+                                                <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+                                                {keywordErrors[idx]}
+                                            </Typography>
+                                        )}
+                                    </div>
                                     <Input
                                         label="Giá trị"
                                         value={field.value}
@@ -68,15 +144,26 @@ function DynamicFieldList({ fields, onChange, error }) {
                     </Card>
                 ))}
             </div>
-            <Button
-                variant="outlined"
-                size="sm"
-                color="blue"
-                className="flex items-center gap-2 hover:bg-blue-50"
-                onClick={handleAdd}
-            >
-                <PlusIcon className="h-4 w-4" /> Thêm trường mới
-            </Button>
+
+            <div className="flex items-center justify-between">
+                <Button
+                    variant="outlined"
+                    size="sm"
+                    color="blue"
+                    className="flex items-center gap-2 hover:bg-blue-50"
+                    onClick={handleAdd}
+                    disabled={hasErrors}
+                >
+                    <PlusIcon className="h-4 w-4" /> Thêm trường mới
+                </Button>
+
+                {hasErrors && (
+                    <Typography color="red" className="text-sm flex items-center gap-1">
+                        <span className="w-1 h-1 bg-red-500 rounded-full"></span>
+                        Vui lòng sửa lỗi trước khi thêm trường mới
+                    </Typography>
+                )}
+            </div>
         </div>
     );
 }
@@ -399,7 +486,7 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
                         const fields = Object.entries(mp)
                             .filter(([k]) =>
                                 ![
-                                    "major_code", "name", "description", "years", "programmeId",
+                                    "major_code", "name", "description", "years", "programmeId", "programme_id",
                                     "programmes", "id", "major_id", "tab", "createdAt", "updatedAt",
                                 ].includes(k)
                             )
@@ -683,8 +770,8 @@ export default function MajorModal({ open, onClose, onSubmit, majorId }) {
                                         value={value}
                                         onClick={() => setTab(value)}
                                         className={`transition-all whitespace-nowrap ${tab === value
-                                                ? 'text-blue-600 bg-blue-50 border-b-2 border-blue-600'
-                                                : 'text-blue-gray-600 hover:text-blue-600 hover:bg-blue-50'
+                                            ? 'text-blue-600 bg-blue-50 border-b-2 border-blue-600'
+                                            : 'text-blue-gray-600 hover:text-blue-600 hover:bg-blue-50'
                                             }`}
                                     >
                                         <div className="flex items-center justify-center gap-2">

@@ -1,4 +1,4 @@
-// ChatView.tsx - Fixed version với debug logging
+// ChatView.tsx - Fixed typewriter effect
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { Spin, Tooltip } from "antd";
@@ -45,7 +45,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   const chatIdFromParams = useParams<{ chatId: string }>().chatId;
   const location = useLocation();
   const locationState = location.state as { initialQuestion?: string; fromHome?: boolean; chatName?: string } | null;
-  
+
   const [currentChatId, setCurrentChatId] = useState<string | undefined>(
     initialChatId || chatIdFromParams
   );
@@ -67,10 +67,20 @@ const ChatView: React.FC<ChatViewProps> = ({
   const visitorId = getVisitorId();
   const { setTitle } = useBreadcrumb();
 
+  // Typewriter state management
+  const typewriterRef = useRef<{
+    fullText: string;
+    currentIndex: number;
+    targetId: string;
+    isActive: boolean;
+    startTime: number;
+    intervalId?: NodeJS.Timeout;
+  } | null>(null);
+
   // Set breadcrumb title for ChatView
   useEffect(() => {
     setTitle(locationState?.chatName || "Cuộc trò chuyện");
-  }, [setTitle]);
+  }, [setTitle, locationState?.chatName]);
 
   const pageSize = 5;
   const socketBaseUrl = import.meta.env.VITE_API_URL.replace(/\/api\/?$/, '');
@@ -84,15 +94,132 @@ const ChatView: React.FC<ChatViewProps> = ({
     console.log("[DEBUG] botTyping:", botTyping, "tempMessageId:", tempMessageIdRef.current);
   }, [botTyping]);
 
+  // Enhanced typewriter effect with visibility API
+  const typeWriteAnswer = useCallback((fullText: string) => {
+    console.log("[Typewriter] Starting with text length:", fullText.length);
+
+    const tempOrRealId = tempMessageIdRef.current;
+    if (!tempOrRealId) {
+      console.error("[Typewriter] No temp message ID!");
+      return;
+    }
+
+    // Clear any existing typewriter
+    if (typewriterRef.current?.intervalId) {
+      clearInterval(typewriterRef.current.intervalId);
+    }
+
+    // Initialize typewriter state
+    typewriterRef.current = {
+      fullText,
+      currentIndex: 0,
+      targetId: tempOrRealId,
+      isActive: true,
+      startTime: Date.now(),
+    };
+
+    setBotTyping(true);
+    setCurrentTypingAnswer("");
+
+    // Optimized typewriter function
+    const typewriterStep = () => {
+      const state = typewriterRef.current;
+      if (!state || !state.isActive) return;
+
+      const { fullText, currentIndex, targetId } = state;
+
+      if (currentIndex >= fullText.length) {
+        // Typing completed
+        setBotTyping(false);
+        setCurrentTypingAnswer("");
+        typewriterRef.current = null;
+        tempMessageIdRef.current = null;
+        console.log("[Typewriter] Completed for ID:", targetId);
+        return;
+      }
+
+      // Calculate next chunk size (adaptive based on visibility)
+      const isVisible = !document.hidden;
+      const chunkSize = isVisible ? 1 : Math.min(5, fullText.length - currentIndex);
+      const nextIndex = Math.min(currentIndex + chunkSize, fullText.length);
+
+      const partial = fullText.slice(0, nextIndex);
+      setCurrentTypingAnswer(partial);
+
+      // Update chat items
+      setChatItems((prev) => {
+        return prev.map((item) => {
+          if (item._id === targetId) {
+            return { ...item, answer: partial };
+          }
+          return item;
+        });
+      });
+
+      // Update state and schedule next step
+      state.currentIndex = nextIndex;
+
+      // Adaptive timing based on visibility
+      const delay = isVisible ? TYPEWRITER_INTERVAL : 5;
+      state.intervalId = setTimeout(typewriterStep, delay);
+    };
+
+    // Start typewriter
+    typewriterStep();
+
+    // Handle page visibility changes
+    const handleVisibilityChange = () => {
+      if (typewriterRef.current && typewriterRef.current.isActive) {
+        if (document.hidden) {
+          console.log("[Typewriter] Page hidden, pausing...");
+        } else {
+          console.log("[Typewriter] Page visible, resuming...");
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Cleanup function
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (typewriterRef.current?.intervalId) {
+        clearTimeout(typewriterRef.current.intervalId);
+      }
+      if (typewriterRef.current) {
+        typewriterRef.current.isActive = false;
+      }
+      setBotTyping(false);
+    };
+  }, []);
+
+  // Cleanup typewriter on unmount
   useEffect(() => {
-    console.log("[DEBUG] currentTypingAnswer:", currentTypingAnswer);
-  }, [currentTypingAnswer]);
+    return () => {
+      if (typewriterRef.current?.intervalId) {
+        clearTimeout(typewriterRef.current.intervalId);
+      }
+      if (typewriterRef.current) {
+        typewriterRef.current.isActive = false;
+      }
+    };
+  }, []);
 
   // Reset khi initialChatId hoặc chatIdFromParams thay đổi
   useEffect(() => {
     const newChatId = initialChatId || chatIdFromParams;
     if (newChatId !== currentChatId) {
       console.log("[ChatView] ChatId changed:", currentChatId, "->", newChatId);
+
+      // Stop any active typewriter
+      if (typewriterRef.current) {
+        typewriterRef.current.isActive = false;
+        if (typewriterRef.current.intervalId) {
+          clearTimeout(typewriterRef.current.intervalId);
+        }
+        typewriterRef.current = null;
+      }
+
       setCurrentChatId(newChatId);
       setChatItems([]);
       setPage(1);
@@ -100,82 +227,34 @@ const ChatView: React.FC<ChatViewProps> = ({
       setBotTyping(false);
       setCurrentTypingAnswer("");
       hasProcessedInitialQuestion.current = false;
+      tempMessageIdRef.current = null;
     }
   }, [initialChatId, chatIdFromParams, currentChatId]);
 
   // Xử lý initial question từ HomeView
   useEffect(() => {
     if (
-      locationState?.initialQuestion && 
-      locationState?.fromHome && 
-      currentChatId && 
+      locationState?.initialQuestion &&
+      locationState?.fromHome &&
+      currentChatId &&
       !hasProcessedInitialQuestion.current
     ) {
       console.log("[ChatView] Processing initial question:", locationState.initialQuestion);
       hasProcessedInitialQuestion.current = true;
-      
+
       // Delay để đảm bảo socket đã connect và component đã render
       setTimeout(() => {
         handleSend(locationState.initialQuestion || "");
-      }, 1000); // Tăng delay lên 1 giây
+      }, 1000);
     }
   }, [currentChatId, locationState]);
 
   // Scroll xuống đáy khi currentTypingAnswer thay đổi
   useEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && (currentTypingAnswer || botTyping)) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [currentTypingAnswer, chatItems]);
-
-  // Enhanced typewriter effect với better logging
-  const typeWriteAnswer = useCallback((fullText: string) => {
-    console.log("[Typewriter] Starting with text length:", fullText.length);
-    console.log("[Typewriter] Full text:", fullText.substring(0, 100) + "...");
-    
-    setBotTyping(true);
-    setCurrentTypingAnswer("");
-    const tempOrRealId = tempMessageIdRef.current;
-    console.log("[Typewriter] Using ID:", tempOrRealId);
-    
-    if (!tempOrRealId) {
-      console.error("[Typewriter] No temp message ID!");
-      return;
-    }
-
-    let index = 0;
-    const interval = setInterval(() => {
-      index++;
-      const partial = fullText.slice(0, index);
-      setCurrentTypingAnswer(partial);
-
-      // Update chatItems immediately
-      setChatItems((prev) => {
-        const updated = prev.map((item) => {
-          if (item._id === tempOrRealId) {
-            console.log("[Typewriter] Updating item:", item._id, "with partial length:", partial.length);
-            return { ...item, answer: partial };
-          }
-          return item;
-        });
-        return updated;
-      });
-
-      if (index >= fullText.length) {
-        clearInterval(interval);
-        setBotTyping(false);
-        setCurrentTypingAnswer("");
-        console.log("[Typewriter] Completed for ID:", tempOrRealId);
-        tempMessageIdRef.current = null;
-      }
-    }, TYPEWRITER_INTERVAL);
-
-    // Cleanup function
-    return () => {
-      clearInterval(interval);
-      setBotTyping(false);
-    };
-  }, []);
+  }, [currentTypingAnswer, chatItems, botTyping]);
 
   // Fetch lịch sử chat
   const fetchChatHistory = useCallback(
@@ -186,7 +265,7 @@ const ChatView: React.FC<ChatViewProps> = ({
 
       try {
         console.log("[ChatView] Fetching history for page:", pageNumber);
-        
+
         const res = await axiosClient.get(`/chatbot/history/${currentChatId}`, {
           params: { page: pageNumber, size: pageSize, visitorId: visitorId },
         });
@@ -220,7 +299,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         setLoadingMore(false);
       }
     },
-    [currentChatId, visitorId]
+    [currentChatId, visitorId, setTitle]
   );
 
   // Load history khi chatId thay đổi
@@ -303,7 +382,7 @@ const ChatView: React.FC<ChatViewProps> = ({
         return [...prev, newItem];
       });
 
-      // Start typewriter immediately
+      // Start typewriter with delay
       setTimeout(() => typeWriteAnswer(data.answer), 100);
     };
 
@@ -340,6 +419,11 @@ const ChatView: React.FC<ChatViewProps> = ({
           return updated;
         });
         tempMessageIdRef.current = data.historyId;
+
+        // Update typewriter target ID if active
+        if (typewriterRef.current && typewriterRef.current.targetId === tempId) {
+          typewriterRef.current.targetId = data.historyId;
+        }
       }
 
       if (data.visitorId) saveVisitorId(data.visitorId);

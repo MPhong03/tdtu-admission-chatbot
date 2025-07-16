@@ -145,6 +145,7 @@ export function MajorPage() {
                     majors={majors}
                     onOpenModal={handleOpenModal}
                     onCreate={() => setOpenModal(true)}
+                    onRefresh={() => fetchMajors(page, keyword)}
                     onDelete={handleDeleteMajor}
                     page={page}
                     size={size}

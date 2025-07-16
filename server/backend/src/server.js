@@ -45,17 +45,17 @@ server.listen(PORT, "0.0.0.0", async () => {
   await BotService.loadGeminiConfig();
 
   // Kiểm tra kết nối Redis
-  try {
-    logger.info("[Cache] Connecting to Redis...");
-    await cache.connect();
+  // try {
+  //   logger.info("[Cache] Connecting to Redis...");
+  //   await cache.connect();
 
-    const isHealthy = await cache.healthCheck();
-    if (!isHealthy) {
-      logger.warn("[Cache] Redis is not healthy. Fallback will be used.");
-    } else {
-      await cache.createIndexIfNotExists();
-    }
-  } catch (error) {
-    logger.error("[Cache] Failed to initialize Redis cache service", error.message);
-  }
+  //   const isHealthy = await cache.healthCheck();
+  //   if (!isHealthy) {
+  //     logger.warn("[Cache] Redis is not healthy. Fallback will be used.");
+  //   } else {
+  //     await cache.createIndexIfNotExists();
+  //   }
+  // } catch (error) {
+  //   logger.error("[Cache] Failed to initialize Redis cache service", error.message);
+  // }
 });

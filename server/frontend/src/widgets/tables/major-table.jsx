@@ -20,6 +20,7 @@ import {
 import { truncateWords } from "@/utils/tools";
 import api from "@/configs/api";
 import toast from "react-hot-toast";
+import ImportMajorModal from "@/widgets/modals/import-major-modal";
 
 const fallbackImage = "/img/logo.jpg";
 
@@ -28,6 +29,7 @@ const MajorTable = ({
     onOpenModal,
     onCreate,
     onDelete,
+    onRefresh,
     page = 1,
     size = 5,
     keyword = "",
@@ -35,7 +37,7 @@ const MajorTable = ({
 }) => {
     const [searchInput, setSearchInput] = useState(keyword);
     const [exportLoading, setExportLoading] = useState(false);
-    const [importLoading, setImportLoading] = useState(false);
+    const [importModalOpen, setImportModalOpen] = useState(false); // State cho modal import
 
     const handleSearchSubmit = (e) => {
         e.preventDefault();
@@ -88,14 +90,17 @@ const MajorTable = ({
         }
     };
 
-    // Xử lý Import (placeholder)
+    // Xử lý Import - Mở modal
     const handleImport = () => {
-        setImportLoading(true);
-        // Simulate API call
-        setTimeout(() => {
-            setImportLoading(false);
-            toast.success("Chức năng import sẽ được phát triển sớm!");
-        }, 1000);
+        setImportModalOpen(true);
+    };
+
+    // Xử lý khi import thành công
+    const handleImportSuccess = () => {
+        if (onRefresh) {
+            onRefresh(); // Refresh data sau khi import thành công
+        }
+        toast.success("Import dữ liệu thành công!");
     };
 
     return (
@@ -165,20 +170,10 @@ const MajorTable = ({
                                 size="sm"
                                 variant="outlined"
                                 onClick={handleImport}
-                                disabled={importLoading}
                                 className="border-white/50 text-white hover:bg-white/10 whitespace-nowrap min-w-[90px] flex items-center justify-center gap-2"
                             >
-                                {importLoading ? (
-                                    <>
-                                        <div className="animate-spin h-4 w-4 border-2 border-white/30 border-t-white rounded-full"></div>
-                                        <span>Đang tải...</span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <ArrowUpTrayIcon className="h-4 w-4" />
-                                        Import
-                                    </>
-                                )}
+                                <ArrowUpTrayIcon className="h-4 w-4" />
+                                Import
                             </Button>
 
                             {/* Export Button */}
@@ -361,6 +356,13 @@ const MajorTable = ({
                     </table>
                 </div>
             </CardBody>
+
+            {/* Import Modal */}
+            <ImportMajorModal
+                open={importModalOpen}
+                onClose={() => setImportModalOpen(false)}
+                onSuccess={handleImportSuccess}
+            />
         </>
     );
 };

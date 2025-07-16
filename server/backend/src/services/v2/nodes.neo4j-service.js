@@ -16,8 +16,9 @@ class N_MajorService extends BaseService {
     async getDetail(majorId) {
         // 1. Lấy Major
         const majorCypher = `MATCH (m:Major {id: $majorId}) RETURN m`;
-        const major = await neo4jRepo.executeOne(majorCypher, { majorId });
-        if (!major) return null;
+        const majorResult  = await neo4jRepo.executeOne(majorCypher, { majorId });
+        if (!majorResult ) return null;
+        const major = majorResult.m;
 
         // 2. Lấy danh sách MajorProgramme kèm Programme và Year
         const majorProgrammesCypher = `

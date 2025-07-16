@@ -80,10 +80,10 @@ class BotService {
     }
 
     /**
-     * Sinh Cypher từ AI (chỉ trả về labels & cypher)
-     * @param {string} question 
-     * @returns {Promise<{ cypher: string, labels: Array }>}
-     */
+ * Sinh Cypher từ AI (chỉ trả về labels, cypher & is_social)
+ * @param {string} question 
+ * @returns {Promise<{ cypher: string, labels: Array, is_social: boolean }>}
+ */
     async generateCypher(question, questionEmbedding) {
         // // 1. Tìm trong cache trước
         // if (this.cacheService && questionEmbedding) {
@@ -91,7 +91,7 @@ class BotService {
         //         const results = await this.cacheService.searchSimilar(questionEmbedding, 1);
         //         if (results?.length > 0 && results[0].score < 0.3) {
         //             logger.info(`[Cache] Cache HIT (score=${results[0].score}): using cached query.`);
-        //             return { cypher: results[0].query, labels: [] };
+        //             return { cypher: results[0].query, labels: [], is_social: false };
         //         }
         //     } catch (err) {
         //         logger.warn("[Cache] Cache search error, fallback to AI.", err);
@@ -138,13 +138,20 @@ class BotService {
                     }
                 }
 
+                // Validate format với is_social
                 if (
                     result &&
                     typeof result === "object" &&
                     Array.isArray(result.labels) &&
-                    typeof result.cypher === "string"
+                    typeof result.cypher === "string" &&
+                    typeof result.is_social === "boolean"
                 ) {
-                    // // Lưu vào cache nếu Redis khả dụng
+                    // Nếu là câu xã giao, trả về ngay không retry
+                    if (result.is_social) {
+                        return result;
+                    }
+
+                    // // Lưu vào cache nếu Redis khả dụng (chỉ cache câu hỏi nghiệp vụ)
                     // if (this.cacheService && questionEmbedding) {
                     //     try {
                     //         await this.cacheService.addCache(
@@ -160,7 +167,20 @@ class BotService {
                     return result;
                 }
 
-                lastError = new Error("Gemini trả về sai định dạng, không có labels/cypher.");
+                // Fallback: nếu thiếu is_social, set mặc định là false
+                if (
+                    result &&
+                    typeof result === "object" &&
+                    Array.isArray(result.labels) &&
+                    typeof result.cypher === "string" &&
+                    result.is_social === undefined
+                ) {
+                    logger.warn("[generateCypher] Missing is_social field, defaulting to false");
+                    result.is_social = false;
+                    return result;
+                }
+
+                lastError = new Error("Gemini trả về sai định dạng, không có labels/cypher/is_social.");
                 retries++;
             } catch (err) {
                 lastError = err;
@@ -192,7 +212,7 @@ class BotService {
      * Gọi Gemini sinh câu trả lời dựa trên context nodes
      * @param {string} question
      * @param {Array} contextNodes
-     * @returns {Promise<{ answer: string, prompt: string, contextNodes: Array, isError: boolean }>}
+     * @returns {Promise<{ answer: string, prompt: string, contextNodes: Array, isError: boolean, is_social: boolean }>}
      */
     async generateAnswer(question, questionEmbedding) {
         let retries = 0;
@@ -204,6 +224,7 @@ class BotService {
         let prompt = "";
         let answer = "";
         let isError = false;
+        let is_social = false;
 
         const startTime = Date.now();
         logger.info(`=== Bắt đầu xử lý câu hỏi: "${question}" ===`);
@@ -214,6 +235,63 @@ class BotService {
             try {
                 cypherResult = await this.generateCypher(question, questionEmbedding);
                 cypher = cypherResult?.cypher;
+                is_social = cypherResult?.is_social || false;
+
+                // Nếu là câu xã giao, xử lý ngay
+                if (is_social) {
+                    logger.info("[1] Phát hiện câu xã giao, xử lý trực tiếp...");
+                    prompt = this.answerPromptTemplate
+                        .replace("<user_question>", question)
+                        .replace("<context_json>", "[]");
+
+                    // Gọi Gemini để sinh câu trả lời xã giao
+                    retries = 0;
+                    while (retries < maxRetries) {
+                        try {
+                            logger.info("[4] Gửi prompt xã giao cho Gemini...");
+                            const res = await axios.post(
+                                `${this.apiUrl}?key=${this.apiKey}`,
+                                {
+                                    contents: [{ parts: [{ text: prompt }] }]
+                                }
+                            );
+                            answer = res.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
+                            if (answer) {
+                                logger.info(`[4] Câu trả lời xã giao: ${answer}`);
+                                const totalTime = (Date.now() - startTime) / 1000;
+                                logger.info(`=== Hoàn thành xử lý xã giao (tổng thời gian: ${totalTime.toFixed(2)}s) ===`);
+                                return {
+                                    answer,
+                                    prompt,
+                                    cypher: "",
+                                    contextNodes: [],
+                                    isError: false,
+                                    is_social: true
+                                };
+                            }
+                            lastError = new Error("Gemini trả về rỗng cho câu xã giao.");
+                            retries++;
+                        } catch (err) {
+                            lastError = err;
+                            retries++;
+                            logger.error(`[4] Lỗi sinh answer xã giao, thử lại lần ${retries}/${maxRetries}`, err);
+                        }
+                    }
+
+                    // Fallback cho câu xã giao
+                    const totalTime = (Date.now() - startTime) / 1000;
+                    logger.info(`=== Hoàn thành xử lý xã giao (fallback) (tổng thời gian: ${totalTime.toFixed(2)}s) ===`);
+                    return {
+                        answer: "Chào bạn! Tôi sẵn sàng hỗ trợ thông tin tuyển sinh TDTU, bạn muốn hỏi gì nào?",
+                        prompt,
+                        cypher: "",
+                        contextNodes: [],
+                        isError: false,
+                        is_social: true
+                    };
+                }
+
+                // Câu hỏi nghiệp vụ - kiểm tra cypher
                 if (!cypher || typeof cypher !== "string" || !cypher.trim()) {
                     logger.warn("[1] Cypher rỗng, thử lại...");
                     retries++;
@@ -228,9 +306,9 @@ class BotService {
             }
         }
 
-        // **XỬ LÝ CHÀO HỎI XÃ GIAO HOẶC CYHPER RỖNG**
+        // **XỬ LÝ CYPHER RỖNG CHO CÂU HỎI NGHIỆP VỤ**
         if (!cypher || typeof cypher !== "string" || !cypher.trim()) {
-            logger.warn("[1] Không có Cypher hợp lệ, xử lý chào hỏi hoặc fallback...");
+            logger.warn("[1] Không có Cypher hợp lệ, xử lý fallback...");
             prompt = this.answerPromptTemplate
                 .replace("<user_question>", question)
                 .replace("<context_json>", "[]");
@@ -238,7 +316,7 @@ class BotService {
             retries = 0;
             while (retries < maxRetries) {
                 try {
-                    logger.info("[4] Gửi prompt chào hỏi/fallback cho Gemini...");
+                    logger.info("[4] Gửi prompt fallback cho Gemini...");
                     const res = await axios.post(
                         `${this.apiUrl}?key=${this.apiKey}`,
                         {
@@ -247,15 +325,16 @@ class BotService {
                     );
                     answer = res.data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || "";
                     if (answer) {
-                        logger.info(`[4] Câu trả lời (chào hỏi/fallback): ${answer}`);
+                        logger.info(`[4] Câu trả lời fallback: ${answer}`);
                         const totalTime = (Date.now() - startTime) / 1000;
-                        logger.info(`=== Hoàn thành xử lý (tổng thời gian: ${totalTime.toFixed(2)}s) ===`);
+                        logger.info(`=== Hoàn thành xử lý fallback (tổng thời gian: ${totalTime.toFixed(2)}s) ===`);
                         return {
                             answer,
                             prompt,
                             cypher,
                             contextNodes: [],
-                            isError: false
+                            isError: false,
+                            is_social: false
                         };
                     }
                     lastError = new Error("Gemini trả về rỗng.");
@@ -272,7 +351,8 @@ class BotService {
                 prompt,
                 cypher,
                 contextNodes: [],
-                isError: false
+                isError: false,
+                is_social: false
             };
         }
 
@@ -307,7 +387,8 @@ class BotService {
                         prompt,
                         cypher,
                         contextNodes,
-                        isError: false
+                        isError: false,
+                        is_social: false
                     };
                 }
                 lastError = new Error("Gemini trả về rỗng.");
@@ -328,7 +409,8 @@ class BotService {
             prompt,
             cypher,
             contextNodes,
-            isError: true
+            isError: true,
+            is_social: false
         };
     }
 }
