@@ -34,6 +34,7 @@ II. HƯỚNG DẪN TẠO CYPHER
 2. Chuẩn hóa từ khóa so sánh bằng cách sử dụng:
    apoc.text.clean(toLower(...)) CONTAINS apoc.text.clean(toLower('<keyword>')).
 3. Lưu ý phải đưa từ khóa phù hợp vào Cypher, không được máy móc.
+3.1. Tuyệt đối không đưa từ khóa viết tắt vào Cypher, phải chuẩn hóa từ khóa mới đưa vào Cypher.
 4. Chỉ tìm trên node có dữ liệu mô tả: Major.name, description, Tuition.name, content.
 5. Mặc định dùng năm hiện tại nếu không có năm trong câu hỏi.
 6. Loại trùng lặp: Dùng DISTINCT, WITH DISTINCT hoặc COLLECT kết hợp LIMIT.
