@@ -80,10 +80,10 @@ class BotService {
     }
 
     /**
- * Sinh Cypher từ AI (chỉ trả về labels, cypher & is_social)
- * @param {string} question 
- * @returns {Promise<{ cypher: string, labels: Array, is_social: boolean }>}
- */
+     * Sinh Cypher từ AI (chỉ trả về labels, cypher & is_social)
+     * @param {string} question 
+     * @returns {Promise<{ cypher: string, labels: Array, is_social: boolean }>}
+     */
     async generateCypher(question, questionEmbedding) {
         // // 1. Tìm trong cache trước
         // if (this.cacheService && questionEmbedding) {
@@ -214,7 +214,7 @@ class BotService {
      * @param {Array} contextNodes
      * @returns {Promise<{ answer: string, prompt: string, contextNodes: Array, isError: boolean, is_social: boolean }>}
      */
-    async generateAnswer(question, questionEmbedding) {
+    async generateAnswer(question, questionEmbedding, chatHistory = []) {
         let retries = 0;
         const maxRetries = 10;
         let lastError = null;
@@ -360,11 +360,19 @@ class BotService {
         logger.info("[2] Thực hiện truy vấn context từ cypher...");
         contextNodes = await this.getContextFromCypher(cypher);
 
+        // Convert chat history thành text để chèn vào prompt
+        const historyText = chatHistory.length
+            ? chatHistory.map((item, index) =>
+                `Lần ${index + 1}:\n- Người dùng: ${item.question}\n- Bot: ${item.answer}`).join('\n\n')
+            : "Không có lịch sử hội thoại.";
+
+
         // 3. Tạo prompt trả lời cho Gemini
         logger.info("[3] Tạo prompt trả lời dựa trên context...");
         prompt = this.answerPromptTemplate
             .replace("<user_question>", question)
-            .replace("<context_json>", JSON.stringify(contextNodes, null, 2));
+            .replace("<context_json>", JSON.stringify(contextNodes, null, 2))
+            .replace("<chat_history>", historyText);
 
         // 4. Gửi Gemini sinh answer chính
         retries = 0;

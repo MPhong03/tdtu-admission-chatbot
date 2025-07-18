@@ -5,7 +5,10 @@ import ChatInputBox from "@/components/chat/ChatInputBox";
 import { useNavigate, useParams } from "react-router-dom";
 import { folderApi } from "@/api/folder.api";
 import { chatApi } from "@/api/chat.api";
+import axiosClient from "@/api/axiosClient";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
+import { saveVisitorId, getVisitorId } from "@/utils/auth";
+import toast from "react-hot-toast";
 
 const { Title, Paragraph } = Typography;
 
@@ -27,6 +30,7 @@ const FolderView = () => {
   const [folder, setFolder] = useState<Folder | null>(null);
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chatCreationLoading, setChatCreationLoading] = useState(false);
 
   const { setTitle } = useBreadcrumb();
 
@@ -64,6 +68,50 @@ const FolderView = () => {
     fetchData();
   }, [folderId]);
 
+  // Handle send message - similar to HomeView but with folderId
+  const handleSend = async (question: string) => {
+    if (!question.trim()) return;
+    
+    setChatCreationLoading(true);
+    try {
+      // Bước 1: Tạo chat mới trong folder
+      const visitorId = getVisitorId();
+      console.log("[FolderView] Creating new chat in folder:", folderId);
+      
+      const createChatRes = await axiosClient.post("/chats", {
+        name: question.slice(0, 50) + (question.length > 50 ? "..." : ""), // Dùng 50 ký tự đầu làm tên
+        visitorId,
+        folderId
+      });
+
+      const createChatData = createChatRes.data;
+      if (createChatData.Code !== 1) {
+        throw new Error(createChatData.Message || "Không thể tạo đoạn chat mới");
+      }
+
+      const newChatId = createChatData.Data._id;
+      console.log("[FolderView] Chat created with ID:", newChatId);
+
+      if (createChatData.Data.visitorId) saveVisitorId(createChatData.Data.visitorId);
+
+      // Bước 2: Navigate đến trang chat với question trong state
+      navigate(`/chat/${newChatId}`, {
+        state: { 
+          initialQuestion: question,
+          chatName: createChatData.Data.name || "Cuộc trò chuyện mới",
+          fromHome: true,
+          // folderId: folderId
+        }
+      });
+      
+    } catch (error) {
+      console.error("[FolderView] Error:", error);
+      toast.error(error instanceof Error ? error.message : "Có lỗi xảy ra khi tạo cuộc trò chuyện");
+    } finally {
+      setChatCreationLoading(false);
+    }
+  };
+
   if (loading)
     return (
       <div className="flex justify-center items-center h-full mt-20">
@@ -81,11 +129,26 @@ const FolderView = () => {
   return (
     <div className="flex flex-col justify-center gap-4 w-[60%] mx-auto">
       <Title level={3}>{folder.name}</Title>
-      <ChatInputBox
-        onSend={async (question) => {
-          console.log("Câu hỏi:", question);
-        }}
-      />
+      
+      {/* Enhanced ChatInputBox với loading state */}
+      <div className="w-full">
+        <ChatInputBox
+          onSend={handleSend}
+          mode="home"
+          loading={chatCreationLoading}
+          placeholder="Đặt câu hỏi để bắt đầu trò chuyện mới trong thư mục..."
+        />
+        
+        {/* Loading feedback */}
+        {chatCreationLoading && (
+          <div className="flex items-center justify-center gap-2 mt-3 text-blue-600">
+            <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-1 h-1 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <span className="text-sm font-medium ml-2">Đang tạo cuộc trò chuyện...</span>
+          </div>
+        )}
+      </div>
 
       {chats.length === 0 ? (
         <div className="flex flex-col justify-center items-center gap-2 mt-20">

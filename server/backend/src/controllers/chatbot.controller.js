@@ -41,10 +41,19 @@ class ChatbotController {
 
             if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
 
-            let questionEmbedding = await LLMService.getEmbeddingV2(question);
+            // let questionEmbedding = await LLMService.getEmbeddingV2(question);
+            let questionEmbedding = null;
+
+            const chatHistory = await HistoryService.getLastNHistory({
+                chatId,
+                userId,
+                limit: 5
+            });
+
+            console.log("Chat history:", chatHistory);
 
             // 1. Gọi AI để lấy câu trả lời
-            const { answer, prompt, contextNodes, isError, cypher } = await BotService.generateAnswer(question, questionEmbedding);
+            const { answer, prompt, contextNodes, isError, cypher } = await BotService.generateAnswer(question, questionEmbedding, chatHistory);
 
             // 2. Lưu vào lịch sử chat
             const saveResult = await HistoryService.saveChat({

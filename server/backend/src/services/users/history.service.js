@@ -169,6 +169,36 @@ class HistoryService {
             return HttpResponse.error("Lỗi hệ thống khi lấy lịch sử chat");
         }
     }
+
+    /**
+     * Lấy N lịch sử chat gần nhất theo chatId, trả về dạng rút gọn (question + answer)
+     */
+    async getLastNHistory({ chatId, userId, visitorId, limit = 5 }) {
+        try {
+            const chat = await ChatRepo.getById(chatId);
+
+            const filter = { chatId };
+            if (userId) filter.userId = userId;
+            else if (visitorId) filter.visitorId = visitorId;
+
+            const items = await HistoryRepo.asQueryable(filter)
+                .sort({ createdAt: -1 })
+                .limit(limit)
+                .select("question answer")
+                .exec();
+
+            // Đảo ngược thứ tự để lịch sử cũ trước, mới sau
+            const result = items.map(item => ({
+                question: item.question,
+                answer: item.answer
+            }));
+
+            return result;
+        } catch (error) {
+            console.error("Error getting last N chat history:", error);
+            return null;
+        }
+    }
 }
 
 module.exports = new HistoryService();
