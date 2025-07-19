@@ -79,7 +79,7 @@ class HistoryService {
             ]);
 
             const historyIds = items.map((h) => h._id);
-            const feedbacks = await FeedbackRepo.asQueryable({ historyId: { $in: historyIds } }).select("historyId rating comment createdAt updatedAt").exec();
+            const feedbacks = await FeedbackRepo.asQueryable({ historyId: { $in: historyIds } }).select("historyId rating adminReplies comment createdAt updatedAt").exec();
             const feedbackMap = new Map();
             feedbacks.forEach(fb => {
                 feedbackMap.set(String(fb.historyId), {
@@ -87,7 +87,8 @@ class HistoryService {
                     rating: fb.rating,
                     comment: fb.comment,
                     createdAt: fb.createdAt,
-                    updatedAt: fb.updatedAt
+                    updatedAt: fb.updatedAt,
+                    adminReplies: fb.adminReplies || []
                 });
             });
 

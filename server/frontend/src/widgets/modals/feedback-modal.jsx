@@ -12,7 +12,8 @@ import {
     MenuHandler,
     MenuList,
     MenuItem,
-    Chip,
+    Textarea,
+    IconButton,
     Tooltip,
 } from "@material-tailwind/react";
 import {
@@ -32,6 +33,10 @@ import {
     CommandLineIcon,
     DocumentTextIcon,
     InformationCircleIcon,
+    PaperAirplaneIcon,
+    PencilIcon,
+    TrashIcon,
+    PlusIcon,
 } from "@heroicons/react/24/solid";
 import toast from "react-hot-toast";
 import api from "@/configs/api";
@@ -113,7 +118,6 @@ const InfoItem = ({
                         {value || "(no cypher query)"}
                     </pre>
 
-                    {/* Copy Button */}
                     {copyable && (
                         <Button
                             size="sm"
@@ -133,7 +137,6 @@ const InfoItem = ({
                                 />
                             </span>
                         </Button>
-
                     )}
                 </div>
             );
@@ -179,6 +182,288 @@ const InfoItem = ({
     );
 };
 
+// Component quản lý Admin Replies
+const AdminRepliesSection = ({ feedbackId, adminReplies, onRepliesUpdate }) => {
+    const [newReplyText, setNewReplyText] = useState("");
+    const [editingReply, setEditingReply] = useState(null);
+    const [editText, setEditText] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+    const [showAddForm, setShowAddForm] = useState(false);
+
+    const handleAddReply = async () => {
+        if (!newReplyText.trim()) {
+            toast.error("Vui lòng nhập nội dung phản hồi");
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const response = await api.post(`/feedbacks/${feedbackId}/admin-replies`, {
+                message: newReplyText.trim()
+            });
+
+            if (response.data.Code === 1) {
+                toast.success("Đã thêm phản hồi thành công");
+                setNewReplyText("");
+                setShowAddForm(false);
+                onRepliesUpdate();
+            } else {
+                toast.error("Không thể thêm phản hồi");
+            }
+        } catch (error) {
+            console.error("Error adding reply:", error);
+            toast.error("Lỗi khi thêm phản hồi");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleEditReply = async (replyId) => {
+        if (!editText.trim()) {
+            toast.error("Vui lòng nhập nội dung phản hồi");
+            return;
+        }
+
+        setSubmitting(true);
+        try {
+            const response = await api.put(`/feedbacks/${feedbackId}/admin-replies/${replyId}`, {
+                message: editText.trim()
+            });
+
+            if (response.data.Code === 1) {
+                toast.success("Đã cập nhật phản hồi thành công");
+                setEditingReply(null);
+                setEditText("");
+                onRepliesUpdate();
+            } else {
+                toast.error("Không thể cập nhật phản hồi");
+            }
+        } catch (error) {
+            console.error("Error updating reply:", error);
+            toast.error("Lỗi khi cập nhật phản hồi");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const handleDeleteReply = async (replyId) => {
+        if (!confirm("Bạn có chắc chắn muốn xóa phản hồi này?")) return;
+
+        setSubmitting(true);
+        try {
+            const response = await api.delete(`/feedbacks/${feedbackId}/admin-replies/${replyId}`);
+
+            if (response.data.Code === 1) {
+                toast.success("Đã xóa phản hồi thành công");
+                onRepliesUpdate();
+            } else {
+                toast.error("Không thể xóa phản hồi");
+            }
+        } catch (error) {
+            console.error("Error deleting reply:", error);
+            toast.error("Lỗi khi xóa phản hồi");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    const startEdit = (reply) => {
+        setEditingReply(reply.id);
+        setEditText(reply.message);
+    };
+
+    const cancelEdit = () => {
+        setEditingReply(null);
+        setEditText("");
+    };
+
+    const formatDate = (dateString) => {
+        return new Date(dateString).toLocaleString('vi-VN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    return (
+        <Card className="bg-white border-0 shadow-sm">
+            <CardBody className="p-6">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-purple-100 rounded-lg">
+                            <ShieldCheckIcon className="h-5 w-5 text-purple-600" />
+                        </div>
+                        <div>
+                            <Typography variant="h6" className="text-gray-900 font-semibold">
+                                Phản hồi của Admin
+                            </Typography>
+                            <Typography variant="small" className="text-gray-500">
+                                {adminReplies?.length || 0} phản hồi
+                            </Typography>
+                        </div>
+                    </div>
+
+                    {!showAddForm && (
+                        <Button
+                            size="sm"
+                            className="flex items-center bg-purple-600 hover:bg-purple-700 text-white"
+                            onClick={() => setShowAddForm(true)}
+                        >
+                            <PlusIcon className="h-4 w-4 mr-2" />
+                            Thêm phản hồi
+                        </Button>
+                    )}
+                </div>
+
+                {/* Form thêm phản hồi mới */}
+                {showAddForm && (
+                    <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                        <Typography variant="small" className="text-purple-700 font-medium mb-3">
+                            Thêm phản hồi mới
+                        </Typography>
+                        <Textarea
+                            value={newReplyText}
+                            onChange={(e) => setNewReplyText(e.target.value)}
+                            placeholder="Nhập nội dung phản hồi của bạn..."
+                            className="mb-3"
+                            rows={3}
+                        />
+                        <div className="flex gap-2">
+                            <Button
+                                size="sm"
+                                className="flex items-center bg-purple-600 hover:bg-purple-700 text-white"
+                                onClick={handleAddReply}
+                                disabled={submitting || !newReplyText.trim()}
+                            >
+                                {submitting ? (
+                                    <Spinner className="h-4 w-4" />
+                                ) : (
+                                    <PaperAirplaneIcon className="h-4 w-4" />
+                                )}
+                                <span className="ml-2">Gửi</span>
+                            </Button>
+
+                            <Button
+                                size="sm"
+                                variant="outlined"
+                                onClick={() => {
+                                    setShowAddForm(false);
+                                    setNewReplyText("");
+                                }}
+                                disabled={submitting}
+                            >
+                                Hủy
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Danh sách phản hồi */}
+                <div className="space-y-4">
+                    {adminReplies && adminReplies.length > 0 ? (
+                        adminReplies.map((reply) => (
+                            <div
+                                key={reply.id}
+                                className="bg-gray-50 rounded-lg p-4 border border-gray-200 hover:border-gray-300 transition-colors"
+                            >
+                                <div className="flex items-start justify-between mb-3">
+                                    <div className="flex items-center gap-2">
+                                        <div className="p-1 bg-purple-100 rounded-full">
+                                            <ShieldCheckIcon className="h-4 w-4 text-purple-600" />
+                                        </div>
+                                        <Typography variant="small" className="text-purple-700 font-medium">
+                                            Admin
+                                        </Typography>
+                                        <Typography variant="small" className="text-gray-500">
+                                            {formatDate(reply.createdAt)}
+                                        </Typography>
+                                    </div>
+
+                                    <div className="flex gap-1">
+                                        <Tooltip content="Chỉnh sửa">
+                                            <IconButton
+                                                size="sm"
+                                                variant="text"
+                                                className="text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                                onClick={() => startEdit(reply)}
+                                            >
+                                                <PencilIcon className="h-4 w-4" />
+                                            </IconButton>
+                                        </Tooltip>
+                                        <Tooltip content="Xóa">
+                                            <IconButton
+                                                size="sm"
+                                                variant="text"
+                                                className="text-gray-600 hover:text-red-600 hover:bg-red-50"
+                                                onClick={() => handleDeleteReply(reply.id)}
+                                                disabled={submitting}
+                                            >
+                                                <TrashIcon className="h-4 w-4" />
+                                            </IconButton>
+                                        </Tooltip>
+                                    </div>
+                                </div>
+
+                                {editingReply === reply.id ? (
+                                    <div>
+                                        <Textarea
+                                            value={editText}
+                                            onChange={(e) => setEditText(e.target.value)}
+                                            className="mb-3"
+                                            rows={3}
+                                        />
+                                        <div className="flex gap-2">
+                                            <Button
+                                                size="sm"
+                                                className="bg-blue-600 hover:bg-blue-700 flex items-center text-white"
+                                                onClick={() => handleEditReply(reply.id)}
+                                                disabled={submitting || !editText.trim()}
+                                            >
+                                                {submitting ? (
+                                                    <Spinner className="h-4 w-4" />
+                                                ) : (
+                                                    <CheckCircleIcon className="h-4 w-4" />
+                                                )}
+                                                <span className="ml-2">Lưu</span>
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outlined"
+                                                onClick={cancelEdit}
+                                                disabled={submitting}
+                                            >
+                                                Hủy
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <Typography className="text-gray-800 leading-relaxed whitespace-pre-wrap">
+                                        {reply.message}
+                                    </Typography>
+                                )}
+                            </div>
+                        ))
+                    ) : (
+                        <div className="text-center py-8">
+                            <div className="p-3 bg-gray-100 rounded-full w-fit mx-auto mb-3">
+                                <ChatBubbleLeftRightIcon className="h-6 w-6 text-gray-400" />
+                            </div>
+                            <Typography className="text-gray-500">
+                                Chưa có phản hồi nào từ admin
+                            </Typography>
+                            <Typography variant="small" className="text-gray-400 mt-1">
+                                Hãy thêm phản hồi đầu tiên để tương tác với người dùng
+                            </Typography>
+                        </div>
+                    )}
+                </div>
+            </CardBody>
+        </Card>
+    );
+};
+
 const FeedbackModal = ({ open, onClose, feedbackId }) => {
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState(null);
@@ -204,6 +489,23 @@ const FeedbackModal = ({ open, onClose, feedbackId }) => {
         },
     ];
 
+    const fetchDetail = async () => {
+        if (!feedbackId) return;
+        setLoading(true);
+        try {
+            const res = await api.get(`/feedbacks/${feedbackId}`);
+            if (res.data.Code === 1) {
+                setData(res.data.Data);
+            } else {
+                toast.error("Không thể tải chi tiết phản hồi");
+            }
+        } catch {
+            toast.error("Lỗi khi tải chi tiết phản hồi");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleChangeStatus = async (newStatus) => {
         if (!data || newStatus === data.status) return;
         try {
@@ -219,24 +521,11 @@ const FeedbackModal = ({ open, onClose, feedbackId }) => {
         }
     };
 
-    useEffect(() => {
-        const fetchDetail = async () => {
-            if (!feedbackId) return;
-            setLoading(true);
-            try {
-                const res = await api.get(`/feedbacks/${feedbackId}`);
-                if (res.data.Code === 1) {
-                    setData(res.data.Data);
-                } else {
-                    toast.error("Không thể tải chi tiết phản hồi");
-                }
-            } catch {
-                toast.error("Lỗi khi tải chi tiết phản hồi");
-            } finally {
-                setLoading(false);
-            }
-        };
+    const handleRepliesUpdate = () => {
+        fetchDetail(); // Reload data để cập nhật adminReplies
+    };
 
+    useEffect(() => {
         if (open) fetchDetail();
     }, [feedbackId, open]);
 
@@ -464,6 +753,13 @@ const FeedbackModal = ({ open, onClose, feedbackId }) => {
                                 </div>
                             </CardBody>
                         </Card>
+
+                        {/* Admin Replies Section */}
+                        <AdminRepliesSection
+                            feedbackId={feedbackId}
+                            adminReplies={data.adminReplies}
+                            onRepliesUpdate={handleRepliesUpdate}
+                        />
                     </div>
                 ) : (
                     <div className="text-center py-12">

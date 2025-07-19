@@ -18,7 +18,15 @@ const FeedbackSchema = new mongoose.Schema({
         type: String,
         enum: ['pending', 'reviewed', 'resolved'],
         default: 'pending',
-    }
+    },
+    adminReplies: [
+        {
+            id: { type: String, required: true },
+            adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // isAdmin: true
+            message: { type: String, required: true },
+            createdAt: { type: Date, default: Date.now }
+        }
+    ],
 }, {
     timestamps: true
 });

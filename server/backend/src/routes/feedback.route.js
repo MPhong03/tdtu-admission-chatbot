@@ -63,4 +63,27 @@ router.delete('/:id', verifyToken, FeedbackController.deleteFeedback);
  */
 router.get('/admin/all-feedbacks', verifyToken, isAdmin, FeedbackController.getFeedbacks);
 
+/**
+ * @route POST /feedbacks/:id/admin-replies
+ * @desc Thêm phản hồi của admin vào một phản hồi
+ * @access Yêu cầu quyền admin (verifyToken + isAdmin)
+ * @body { message: String }
+ */
+router.post('/:id/admin-replies', verifyToken, isAdmin, FeedbackController.modifyAdminReply);
+
+/**
+ * @route PUT /feedbacks/:id/admin-replies/:replyId
+ * @desc Cập nhật phản hồi của admin trong một phản hồi
+ * @access Yêu cầu quyền admin (verifyToken + isAdmin)
+ * @body { message: String }
+ */
+router.put('/:id/admin-replies/:replyId', verifyToken, isAdmin, FeedbackController.modifyAdminReply);
+
+/**
+ * @route DELETE /feedbacks/:id/admin-replies/:replyId
+ * @desc Xóa phản hồi của admin trong một phản hồi
+ * @access Yêu cầu quyền admin (verifyToken + isAdmin)
+ */
+router.delete('/:id/admin-replies/:replyId', verifyToken, isAdmin, FeedbackController.modifyAdminReply);
+
 module.exports = router;

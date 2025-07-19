@@ -1,7 +1,48 @@
-import React, { useState } from "react";
-import { CopyOutlined, CheckOutlined, CommentOutlined, EditOutlined, RobotOutlined, UserOutlined } from "@ant-design/icons";
-import { Button, Input, message, Popover, Rate, Tooltip, Divider } from "antd";
+import React, { useEffect, useState } from "react";
+import { 
+    CopyOutlined, 
+    CheckOutlined, 
+    CommentOutlined, 
+    EditOutlined, 
+    RobotOutlined, 
+    UserOutlined,
+    MessageOutlined,
+    HeartOutlined,
+    SmileOutlined,
+    TeamOutlined,
+    DotChartOutlined,
+    EyeFilled
+} from "@ant-design/icons";
+import { Button, Input, message, Popover, Rate, Tooltip, Divider, Tag, Avatar, Timeline } from "antd";
 import ReactMarkdown from "react-markdown";
+import { DotIcon } from "lucide-react";
+import { DotDuration } from "antd/es/carousel/style";
+
+// Thêm CSS animation cho fade in effect
+const fadeInStyle = `
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+`;
+
+interface AdminReply {
+    id: string;
+    adminId: string;
+    message: string;
+    createdAt: string;
+    _id: string;
+}
 
 interface FeedbackData {
     _id: string;
@@ -9,6 +50,7 @@ interface FeedbackData {
     comment: string;
     createdAt: string;
     updatedAt: string;
+    adminReplies?: AdminReply[];
 }
 
 interface AnswerItemProps {
@@ -16,7 +58,7 @@ interface AnswerItemProps {
     isFeedback?: boolean;
     feedback?: FeedbackData | null;
     onFeedback?: (value: { rating: number; comment: string; feedbackId?: string }) => void;
-    isTyping?: boolean; // Trạng thái đang typing
+    isTyping?: boolean;
     adminAnswer?: string;
     adminAnswerAt?: string;
     isAdminReviewed?: boolean;
@@ -26,13 +68,8 @@ interface AnswerItemProps {
 const TypingIndicator = () => {
     return (
         <div className="flex items-start gap-3 mb-6">
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                <RobotOutlined className="text-blue-600 text-sm" />
-            </div>
-            {/* Typing bubble */}
             <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-xs">
                 <div className="flex items-center gap-3">
-                    {/* Animated dots */}
                     <div className="flex gap-1">
                         <div
                             className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
@@ -71,20 +108,19 @@ const AdminReply: React.FC<{ adminAnswer: string; adminAnswerAt: string }> = ({
         <div className="mt-4">
             <Divider className="my-3">
                 <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <TeamOutlined />
                     <span>Phản hồi từ nhân viên</span>
                 </div>
             </Divider>
 
             <div className="flex items-start gap-3">
                 <div className="flex-1">
-                    {/* Admin answer bubble */}
                     <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl">
                         <div className="markdown-body prose prose-sm max-w-none text-gray-800">
                             <ReactMarkdown>{adminAnswer}</ReactMarkdown>
                         </div>
                     </div>
 
-                    {/* Admin action buttons */}
                     <div className="flex items-center gap-2 mt-2 ml-2">
                         <Tooltip title={copied ? "Đã copy!" : "Sao chép phản hồi nhân viên"}>
                             <div
@@ -109,6 +145,147 @@ const AdminReply: React.FC<{ adminAnswer: string; adminAnswerAt: string }> = ({
     );
 };
 
+// Component mới cho Admin Feedback Replies
+const AdminFeedbackReplies: React.FC<{ adminReplies: AdminReply[] }> = ({ adminReplies }) => {
+    const [expandedReplies, setExpandedReplies] = useState(false);
+    const [showReplies, setShowReplies] = useState(false); // State để ẩn/hiện phản hồi
+
+    if (!adminReplies || adminReplies.length === 0) {
+        return null;
+    }
+
+    const formatRelativeTime = (dateString: string) => {
+        const now = new Date();
+        const date = new Date(dateString);
+        const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+        
+        if (diffInMinutes < 1) return "Vừa xong";
+        if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
+        if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
+        return `${Math.floor(diffInMinutes / 1440)} ngày trước`;
+    };
+
+    // Hiển thị reply đầu tiên, các reply khác collapse
+    const firstReply = adminReplies[0];
+    const remainingReplies = adminReplies.slice(1);
+
+    return (
+        <div className="mt-4">
+            {/* Toggle Button - Compact Design */}
+            <div className="flex items-center justify-between mb-3">
+                <Button
+                    type="text"
+                    size="small"
+                    onClick={() => setShowReplies(!showReplies)}
+                    className="flex items-center gap-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1 rounded-lg transition-all duration-200"
+                >
+                    <MessageOutlined className={`transition-transform duration-200 ${showReplies ? 'rotate-180' : ''}`} />
+                    <span className="text-sm font-medium">
+                        {showReplies ? 'Ẩn phản hồi về đánh giá' : 'Xem phản hồi về đánh giá'}
+                    </span>
+                    <Tag color="blue" className="text-xs ml-1">
+                        {adminReplies.length}
+                    </Tag>
+                </Button>
+            </div>
+
+            {/* Replies Content - Có thể ẩn/hiện */}
+            {showReplies && (
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-100 animate-fadeIn">
+                    {/* Header */}
+                    <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                            {/* <Avatar size="small" className="bg-blue-500">
+                                <TeamOutlined />
+                            </Avatar> */}
+                            <span className="text-sm font-medium text-blue-700">
+                                Phản hồi từ nhân viên
+                            </span>
+                        </div>
+                        
+                        {remainingReplies.length > 0 && (
+                            <Button 
+                                type="text" 
+                                size="small"
+                                onClick={() => setExpandedReplies(!expandedReplies)}
+                                className="text-blue-600 hover:text-blue-800"
+                            >
+                                {expandedReplies ? "Thu gọn" : `Xem thêm ${remainingReplies.length}`}
+                            </Button>
+                        )}
+                    </div>
+
+            {/* Timeline của replies */}
+            <Timeline
+                mode="left"
+                className="mt-3"
+                items={[
+                    // Reply đầu tiên - luôn hiển thị
+                    {
+                        // dot: <EyeFilled />,
+                        children: (
+                            <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                        <p className="text-gray-800 mb-2 leading-relaxed">
+                                            {firstReply.message}
+                                        </p>
+                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                            <TeamOutlined />
+                                            <span>TDTU</span>
+                                            <span>•</span>
+                                            <span>{formatRelativeTime(firstReply.createdAt)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ),
+                    },
+                    
+                    // Các reply còn lại - hiển thị khi expand
+                    ...(expandedReplies ? remainingReplies.map((reply, index) => ({
+                        // dot: <EyeFilled className="bg-blue-50 p-0" />,
+                        children: (
+                            <div key={reply.id} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                        <p className="text-gray-800 mb-2 leading-relaxed">
+                                            {reply.message}
+                                        </p>
+                                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                                            <TeamOutlined />
+                                            <span>TDTU</span>
+                                            <span>•</span>
+                                            <span>{formatRelativeTime(reply.createdAt)}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ),
+                    })) : [])
+                ]}
+            />
+
+                    {/* Quick stats */}
+                    {adminReplies.length > 1 && (
+                        <div className="pt-3 border-t border-blue-200">
+                            <div className="flex items-center justify-between text-xs text-blue-600">
+                                <span>
+                                    Cuộc trò chuyện bắt đầu {formatRelativeTime(adminReplies[adminReplies.length - 1].createdAt)}
+                                </span>
+                                <span>
+                                    Phản hồi mới nhất {formatRelativeTime(adminReplies[0].createdAt)}
+                                </span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+// Component chính được nâng cấp
 const AnswerItem: React.FC<AnswerItemProps> = ({
     content,
     isFeedback = false,
@@ -123,6 +300,16 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
     const [feedbackVisible, setFeedbackVisible] = useState(false);
     const [rating, setRating] = useState<number>(feedback?.rating || 0);
     const [comment, setComment] = useState<string>(feedback?.comment || "");
+
+    // Inject CSS cho animation
+    useEffect(() => {
+        const style = document.createElement('style');
+        style.textContent = fadeInStyle;
+        document.head.appendChild(style);
+        return () => {
+            document.head.removeChild(style);
+        };
+    }, []);
 
     const handleSubmit = () => {
         if (rating === 0) {
@@ -188,8 +375,9 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
             <div className="flex items-start gap-3">
                 <div className="flex-1">
                     {/* Answer bubble */}
-                    <div className={`bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl transition-all duration-200 ${isTyping ? 'border-2 border-blue-200 bg-blue-50' : ''
-                        }`}>
+                    <div className={`bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl transition-all duration-200 ${
+                        isTyping ? 'border-2 border-blue-200 bg-blue-50' : ''
+                    }`}>
                         {/* Typing indicator khi đang gõ */}
                         {isTyping && (
                             <div className="flex items-center gap-2 mb-2 text-blue-600">
@@ -212,8 +400,9 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
                         )}
 
                         {/* Content */}
-                        <div className={`markdown-body prose prose-sm max-w-none ${isTyping ? 'text-gray-700' : 'text-gray-900'
-                            }`}>
+                        <div className={`markdown-body prose prose-sm max-w-none ${
+                            isTyping ? 'text-gray-700' : 'text-gray-900'
+                        }`}>
                             {content ? (
                                 <ReactMarkdown>{content}</ReactMarkdown>
                             ) : isTyping ? (
@@ -282,7 +471,17 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
                                 </div>
                             )}
 
-                            {/* Admin reviewed indicator */}
+                            {/* Admin feedback replies indicator - Simplified */}
+                            {feedback?.adminReplies && feedback.adminReplies.length > 0 && (
+                                <Tooltip title="Có phản hồi từ nhân viên về đánh giá của bạn">
+                                    <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full border border-blue-200 cursor-pointer hover:bg-blue-100 transition-colors">
+                                        <MessageOutlined />
+                                        <span>Nhân viên đã phản hồi</span>
+                                    </div>
+                                </Tooltip>
+                            )}
+
+                            {/* Traditional admin reviewed indicator */}
                             {isAdminReviewed && adminAnswer && (
                                 <div className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
                                     <span>Nhân viên đã phản hồi</span>
@@ -291,7 +490,12 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
                         </div>
                     )}
 
-                    {/* Admin Reply Section - chỉ hiển thị khi có adminAnswer */}
+                    {/* Admin Feedback Replies Section - TÍNH NĂNG MỚI */}
+                    {!isTyping && feedback?.adminReplies && feedback.adminReplies.length > 0 && (
+                        <AdminFeedbackReplies adminReplies={feedback.adminReplies} />
+                    )}
+
+                    {/* Admin Reply Section - phần cũ cho adminAnswer */}
                     {!isTyping && adminAnswer && adminAnswerAt && (
                         <AdminReply
                             adminAnswer={adminAnswer}

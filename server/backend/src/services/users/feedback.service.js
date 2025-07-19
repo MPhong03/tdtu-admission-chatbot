@@ -1,10 +1,15 @@
 const Feedback = require("../../models/users/feedback.model");
+const Notification = require("../../models/users/notification.model");
+const History = require("../../models/users/history.model");
 const BaseRepository = require("../../repositories/common/base.repository");
 const HttpResponse = require("../../data/responses/http.response");
+const { nanoid } = require("nanoid");
 
 class FeedbackService {
     constructor() {
         this.repo = new BaseRepository(Feedback);
+        this.notificationRepo = new BaseRepository(Notification);
+        this.historyRepo = new BaseRepository(History);
     }
 
     /**
@@ -109,6 +114,57 @@ class FeedbackService {
         } catch (error) {
             console.error("Error retrieving feedbacks:", error);
             return HttpResponse.error("Lấy danh sách phản hồi thất bại");
+        }
+    }
+
+    /**
+     * Thêm, sửa hoặc xóa phản hồi của admin
+     * @param {'add'|'update'|'delete'} action 
+     */
+    async modifyAdminReply(feedbackId, action, { replyId, adminId, message }) {
+        try {
+            const feedback = await this.repo.getById(feedbackId);
+            if (!feedback) return null;
+
+            switch (action) {
+                case 'add':
+                    feedback.adminReplies.push({
+                        id: nanoid(),
+                        adminId,
+                        message,
+                        createdAt: new Date()
+                    });
+                    break;
+                case 'update':
+                    const replyToUpdate = feedback.adminReplies.find(r => r.id === replyId);
+                    if (!replyToUpdate) return null;
+                    replyToUpdate.message = message;
+                    break;
+                case 'delete':
+                    feedback.adminReplies = feedback.adminReplies.filter(r => r.id !== replyId);
+                    break;
+            }
+
+            await feedback.save();
+
+            if (action === 'add' || action === 'update') {
+                const history = await this.historyRepo.getById(feedback.historyId);
+
+                if (history) {
+                    await this.notificationRepo.create({
+                        userId: feedback.userId,
+                        chatId: history.chatId,
+                        type: "admin_reply",
+                        message: "Nhân viên đã phản hồi feedback: " + message,
+                        historyId: feedback.historyId
+                    });
+                }
+            }
+
+            return feedback;
+        } catch (err) {
+            console.error("Lỗi khi thao tác với phản hồi admin:", err);
+            return null;
         }
     }
 }

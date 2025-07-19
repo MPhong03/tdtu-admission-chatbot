@@ -79,3 +79,7 @@ a:hover {
 .text-clip-nowrap {
   @apply flex text-sm items-center gap-2 w-full overflow-hidden whitespace-nowrap;
 }
+
+.ant-timeline-item-head .ant-timeline-item-head-custom .ant-timeline-item-head-blue {
+  padding: 0;
+}

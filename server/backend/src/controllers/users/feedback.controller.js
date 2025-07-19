@@ -117,6 +117,38 @@ class FeedbackController {
             return res.json(HttpResponse.error("Lấy danh sách phản hồi thất bại", -1, err.message));
         }
     }
+
+    // Admin thêm / sửa / xóa phản hồi feedback
+    async modifyAdminReply(req, res) {
+        try {
+            const adminId = req.user?.id;
+            const feedbackId = req.params.id;
+            const replyId = req.params.replyId || null;
+            const { message } = req.body;
+
+            let action;
+            if (req.method === "POST") {
+                action = "add";
+            } else if (req.method === "PUT") {
+                if (!replyId) return res.json(HttpResponse.error("Thiếu ID của phản hồi cần sửa"));
+                action = "update";
+            } else if (req.method === "DELETE") {
+                if (!replyId) return res.json(HttpResponse.error("Thiếu ID của phản hồi cần xóa"));
+                action = "delete";
+            }
+
+            const result = await FeedbackService.modifyAdminReply(feedbackId, action, { replyId, adminId, message });
+
+            if (!result) {
+                return res.json(HttpResponse.error("Không thể thao tác phản hồi", -1));
+            }
+
+            return res.json(HttpResponse.success("Thao tác phản hồi thành công", result));
+        } catch (err) {
+            console.error("Lỗi thao tác phản hồi admin:", err);
+            return res.json(HttpResponse.error("Lỗi xử lý phản hồi admin", -1, err.message));
+        }
+    }
 }
 
 module.exports = new FeedbackController();
