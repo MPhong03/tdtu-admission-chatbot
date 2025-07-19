@@ -14,6 +14,10 @@ const HistorySchema = new mongoose.Schema({
     },
     cypher: { type: String, default: '' },
     contextNodes: { type: String, default: '' }, // JSON string
+    adminAnswer: { type: String, default: '' }, // Trả lời của admin nếu có
+    adminAnswerAt: { type: Date, default: null },
+    isAdminReviewed: { type: Boolean, default: false }, // Đã được admin xem hay chưa
+    adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null }, // Admin đã trả lời
 }, {
     timestamps: true
 });

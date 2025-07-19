@@ -31,6 +31,9 @@ export interface ChatHistoryItem {
   createdAt: string;
   feedback?: FeedbackData | null;
   isFeedback?: boolean;
+  adminAnswer?: string;
+  adminAnswerAt?: string;
+  isAdminReviewed?: boolean;
 }
 
 interface ChatViewProps {
@@ -656,6 +659,9 @@ const ChatView: React.FC<ChatViewProps> = ({
                   feedback={item.feedback || undefined}
                   onFeedback={(value) => handleFeedback(item._id, value.rating, value.comment, value.feedbackId)}
                   isTyping={item._id === tempMessageIdRef.current && botTyping}
+                  adminAnswer={item.adminAnswer || ""}
+                  adminAnswerAt={item.adminAnswerAt || ""}
+                  isAdminReviewed={item.isAdminReviewed || false}
                 />
               </div>
             ))}

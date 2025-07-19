@@ -14,4 +14,13 @@ const { verifyToken, isAdmin } = require('../middlewares/auth.middleware');
  */
 router.get('/', verifyToken, isAdmin, HistoryController.paginates);
 
+/**
+ * Admin phản hồi câu hỏi của người dùng
+ * POST /histories/:id/reply
+ * Headers: Authorization: Bearer <token>
+ * Body: { "answer": String }
+ * Phải là Admin
+ */
+router.post('/:id/reply', verifyToken, isAdmin, HistoryController.updateAdminAnswer);
+
 module.exports = router;

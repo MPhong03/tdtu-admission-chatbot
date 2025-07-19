@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { CopyOutlined, CheckOutlined, CommentOutlined, EditOutlined, RobotOutlined } from "@ant-design/icons";
-import { Button, Input, message, Popover, Rate, Tooltip } from "antd";
+import { CopyOutlined, CheckOutlined, CommentOutlined, EditOutlined, RobotOutlined, UserOutlined } from "@ant-design/icons";
+import { Button, Input, message, Popover, Rate, Tooltip, Divider } from "antd";
 import ReactMarkdown from "react-markdown";
 
 interface FeedbackData {
@@ -17,31 +17,92 @@ interface AnswerItemProps {
     feedback?: FeedbackData | null;
     onFeedback?: (value: { rating: number; comment: string; feedbackId?: string }) => void;
     isTyping?: boolean; // Trạng thái đang typing
+    adminAnswer?: string;
+    adminAnswerAt?: string;
+    isAdminReviewed?: boolean;
 }
 
 // Component cho typing indicator
 const TypingIndicator = () => {
     return (
-        <div className="flex items-center gap-3 mb-6">
+        <div className="flex items-start gap-3 mb-6">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                <RobotOutlined className="text-blue-600 text-sm" />
+            </div>
             {/* Typing bubble */}
             <div className="bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-xs">
                 <div className="flex items-center gap-3">
                     {/* Animated dots */}
                     <div className="flex gap-1">
-                        <div 
-                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" 
+                        <div
+                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
                             style={{ animationDelay: '0ms', animationDuration: '1.4s' }}
                         ></div>
-                        <div 
-                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" 
+                        <div
+                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
                             style={{ animationDelay: '200ms', animationDuration: '1.4s' }}
                         ></div>
-                        <div 
-                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" 
+                        <div
+                            className="w-2 h-2 bg-gray-500 rounded-full animate-bounce"
                             style={{ animationDelay: '400ms', animationDuration: '1.4s' }}
                         ></div>
                     </div>
-                    {/* <span className="text-sm text-gray-600 font-medium">Đang soạn câu trả lời...</span> */}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+// Component cho Admin Reply
+const AdminReply: React.FC<{ adminAnswer: string; adminAnswerAt: string }> = ({
+    adminAnswer,
+    adminAnswerAt
+}) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopyAdmin = () => {
+        navigator.clipboard.writeText(adminAnswer);
+        message.success("Đã copy phản hồi của nhân viên!");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 3000);
+    };
+
+    return (
+        <div className="mt-4">
+            <Divider className="my-3">
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span>Phản hồi từ nhân viên</span>
+                </div>
+            </Divider>
+
+            <div className="flex items-start gap-3">
+                <div className="flex-1">
+                    {/* Admin answer bubble */}
+                    <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl">
+                        <div className="markdown-body prose prose-sm max-w-none text-gray-800">
+                            <ReactMarkdown>{adminAnswer}</ReactMarkdown>
+                        </div>
+                    </div>
+
+                    {/* Admin action buttons */}
+                    <div className="flex items-center gap-2 mt-2 ml-2">
+                        <Tooltip title={copied ? "Đã copy!" : "Sao chép phản hồi nhân viên"}>
+                            <div
+                                onClick={handleCopyAdmin}
+                                className="cursor-pointer text-gray-400 hover:text-purple-600 text-sm p-1.5 rounded-full transition-all duration-200 hover:bg-purple-50"
+                            >
+                                {copied ? (
+                                    <CheckOutlined className="text-green-500" />
+                                ) : (
+                                    <CopyOutlined />
+                                )}
+                            </div>
+                        </Tooltip>
+
+                        <span className="text-xs text-gray-400 ml-1">
+                            {new Date(adminAnswerAt).toLocaleString()}
+                        </span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -54,6 +115,9 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
     feedback,
     onFeedback,
     isTyping = false,
+    adminAnswer,
+    adminAnswerAt,
+    isAdminReviewed = false,
 }) => {
     const [copied, setCopied] = useState(false);
     const [feedbackVisible, setFeedbackVisible] = useState(false);
@@ -119,106 +183,122 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
     }
 
     return (
-        <div className="flex items-start gap-3 mb-6">
-            <div className="flex-1">
-                {/* Answer bubble */}
-                <div className={`bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl transition-all duration-200 ${
-                    isTyping ? 'border-2 border-blue-200 bg-blue-50' : ''
-                }`}>
-                    {/* Typing indicator khi đang gõ */}
-                    {isTyping && (
-                        <div className="flex items-center gap-2 mb-2 text-blue-600">
-                            <div className="flex gap-1">
-                                <div 
-                                    className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" 
-                                    style={{ animationDelay: '0ms', animationDuration: '1.4s' }}
-                                ></div>
-                                <div 
-                                    className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" 
-                                    style={{ animationDelay: '200ms', animationDuration: '1.4s' }}
-                                ></div>
-                                <div 
-                                    className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce" 
-                                    style={{ animationDelay: '400ms', animationDuration: '1.4s' }}
-                                ></div>
+        <div className="mb-6">
+            {/* Main Answer */}
+            <div className="flex items-start gap-3">
+                <div className="flex-1">
+                    {/* Answer bubble */}
+                    <div className={`bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl transition-all duration-200 ${isTyping ? 'border-2 border-blue-200 bg-blue-50' : ''
+                        }`}>
+                        {/* Typing indicator khi đang gõ */}
+                        {isTyping && (
+                            <div className="flex items-center gap-2 mb-2 text-blue-600">
+                                <div className="flex gap-1">
+                                    <div
+                                        className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce"
+                                        style={{ animationDelay: '0ms', animationDuration: '1.4s' }}
+                                    ></div>
+                                    <div
+                                        className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce"
+                                        style={{ animationDelay: '200ms', animationDuration: '1.4s' }}
+                                    ></div>
+                                    <div
+                                        className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-bounce"
+                                        style={{ animationDelay: '400ms', animationDuration: '1.4s' }}
+                                    ></div>
+                                </div>
+                                <span className="text-xs font-medium">Đang trả lời...</span>
                             </div>
-                            <span className="text-xs font-medium">Đang trả lời...</span>
+                        )}
+
+                        {/* Content */}
+                        <div className={`markdown-body prose prose-sm max-w-none ${isTyping ? 'text-gray-700' : 'text-gray-900'
+                            }`}>
+                            {content ? (
+                                <ReactMarkdown>{content}</ReactMarkdown>
+                            ) : isTyping ? (
+                                <span className="text-gray-500 italic">Đang soạn câu trả lời...</span>
+                            ) : (
+                                <span className="text-gray-400 italic">Chưa có nội dung</span>
+                            )}
                         </div>
-                    )}
-                    
-                    {/* Content */}
-                    <div className={`markdown-body prose prose-sm max-w-none ${
-                        isTyping ? 'text-gray-700' : 'text-gray-900'
-                    }`}>
-                        {content ? (
-                            <ReactMarkdown>{content}</ReactMarkdown>
-                        ) : isTyping ? (
-                            <span className="text-gray-500 italic">Đang soạn câu trả lời...</span>
-                        ) : (
-                            <span className="text-gray-400 italic">Chưa có nội dung</span>
+
+                        {/* Typing cursor effect */}
+                        {isTyping && content && (
+                            <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
                         )}
                     </div>
-                    
-                    {/* Typing cursor effect */}
-                    {isTyping && content && (
-                        <span className="inline-block w-0.5 h-4 bg-blue-500 ml-1 animate-pulse"></span>
-                    )}
-                </div>
-                
-                {/* Action buttons - chỉ hiển thị khi không typing và có content */}
-                {!isTyping && content && (
-                    <div className="flex items-center gap-2 mt-2 ml-2">
-                        {/* Copy button */}
-                        <Tooltip title={copied ? "Đã copy!" : "Sao chép câu trả lời"}>
-                            <div
-                                onClick={handleCopy}
-                                className="cursor-pointer text-gray-500 hover:text-blue-600 text-sm p-1.5 rounded-full transition-all duration-200 hover:bg-gray-100"
-                            >
-                                {copied ? (
-                                    <CheckOutlined className="text-green-500" />
-                                ) : (
-                                    <CopyOutlined />
-                                )}
-                            </div>
-                        </Tooltip>
 
-                        {/* Feedback button */}
-                        <Popover
-                            title={
-                                <div className="flex items-center gap-2">
-                                    <CommentOutlined className="text-blue-600" />
-                                    <span>{feedback ? "Chỉnh sửa đánh giá" : "Đánh giá câu trả lời"}</span>
-                                </div>
-                            }
-                            trigger="click"
-                            open={feedbackVisible}
-                            onOpenChange={setFeedbackVisible}
-                            content={feedbackContent}
-                            placement="topLeft"
-                        >
-                            <Tooltip title={feedback ? "Xem hoặc chỉnh sửa đánh giá" : "Đánh giá câu trả lời"}>
-                                <div className="cursor-pointer text-sm p-1.5 rounded-full transition-all duration-200 hover:bg-gray-100">
-                                    {feedback ? (
-                                        <div className="flex items-center gap-1 text-green-600 hover:text-blue-600">
-                                            <EditOutlined />
-                                            <span className="text-xs">Đã đánh giá</span>
-                                        </div>
+                    {/* Action buttons - chỉ hiển thị khi không typing và có content */}
+                    {!isTyping && content && (
+                        <div className="flex items-center gap-2 mt-2 ml-2">
+                            {/* Copy button */}
+                            <Tooltip title={copied ? "Đã copy!" : "Sao chép câu trả lời"}>
+                                <div
+                                    onClick={handleCopy}
+                                    className="cursor-pointer text-gray-500 hover:text-blue-600 text-sm p-1.5 rounded-full transition-all duration-200 hover:bg-gray-100"
+                                >
+                                    {copied ? (
+                                        <CheckOutlined className="text-green-500" />
                                     ) : (
-                                        <CommentOutlined className="text-gray-500 hover:text-blue-600" />
+                                        <CopyOutlined />
                                     )}
                                 </div>
                             </Tooltip>
-                        </Popover>
 
-                        {/* Rating display cho feedback đã có */}
-                        {feedback && (
-                            <div className="flex items-center gap-1 text-xs text-gray-500">
-                                <Rate disabled value={feedback.rating} />
-                                <span>({feedback.rating}/5)</span>
-                            </div>
-                        )}
-                    </div>
-                )}
+                            {/* Feedback button */}
+                            <Popover
+                                title={
+                                    <div className="flex items-center gap-2">
+                                        <CommentOutlined className="text-blue-600" />
+                                        <span>{feedback ? "Chỉnh sửa đánh giá" : "Đánh giá câu trả lời"}</span>
+                                    </div>
+                                }
+                                trigger="click"
+                                open={feedbackVisible}
+                                onOpenChange={setFeedbackVisible}
+                                content={feedbackContent}
+                                placement="topLeft"
+                            >
+                                <Tooltip title={feedback ? "Xem hoặc chỉnh sửa đánh giá" : "Đánh giá câu trả lời"}>
+                                    <div className="cursor-pointer text-sm p-1.5 rounded-full transition-all duration-200 hover:bg-gray-100">
+                                        {feedback ? (
+                                            <div className="flex items-center gap-1 text-green-600 hover:text-blue-600">
+                                                <EditOutlined />
+                                                <span className="text-xs">Đã đánh giá</span>
+                                            </div>
+                                        ) : (
+                                            <CommentOutlined className="text-gray-500 hover:text-blue-600" />
+                                        )}
+                                    </div>
+                                </Tooltip>
+                            </Popover>
+
+                            {/* Rating display cho feedback đã có */}
+                            {feedback && (
+                                <div className="flex items-center gap-1 text-xs text-gray-500">
+                                    <Rate disabled value={feedback.rating} />
+                                    <span>({feedback.rating}/5)</span>
+                                </div>
+                            )}
+
+                            {/* Admin reviewed indicator */}
+                            {isAdminReviewed && adminAnswer && (
+                                <div className="flex items-center gap-1 text-xs text-purple-600 bg-purple-50 px-2 py-1 rounded-full">
+                                    <span>Nhân viên đã phản hồi</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Admin Reply Section - chỉ hiển thị khi có adminAnswer */}
+                    {!isTyping && adminAnswer && adminAnswerAt && (
+                        <AdminReply
+                            adminAnswer={adminAnswer}
+                            adminAnswerAt={adminAnswerAt}
+                        />
+                    )}
+                </div>
             </div>
         </div>
     );

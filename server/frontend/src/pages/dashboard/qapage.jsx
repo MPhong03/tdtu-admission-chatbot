@@ -49,6 +49,17 @@ export function QAPage() {
         setSelectedHistory(null);
     };
 
+    // Callback
+    const handleUpdateHistory = (updatedHistory) => {
+        setHistories(prevHistories =>
+            prevHistories.map(history =>
+                history._id === updatedHistory._id ? updatedHistory : history
+            )
+        );
+        
+        setSelectedHistory(updatedHistory);
+    };
+
     return (
         <div className="min-h-screen bg-gray-50">
             <div className="max-w-7xl mx-auto">
@@ -74,6 +85,7 @@ export function QAPage() {
                     open={openModal}
                     onClose={handleCloseModal}
                     history={selectedHistory}
+                    onUpdateHistory={handleUpdateHistory}
                 />
             </div>
         </div>

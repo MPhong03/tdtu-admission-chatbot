@@ -3,11 +3,13 @@ const BaseRepository = require("../../repositories/common/base.repository");
 const Chat = require("../../models/users/chat.model");
 const History = require("../../models/users/history.model");
 const Feedback = require("../../models/users/feedback.model");
+const Notification = require("../../models/users/notification.model");
 const HttpResponse = require("../../data/responses/http.response");
 
 const ChatRepo = new BaseRepository(Chat);
 const HistoryRepo = new BaseRepository(History);
 const FeedbackRepo = new BaseRepository(Feedback);
+const NotificationRepo = new BaseRepository(Notification);
 
 class HistoryService {
     async saveChat({ userId, visitorId, chatId, question, answer, cypher, contextNodes, isError }) {
@@ -196,6 +198,36 @@ class HistoryService {
             return result;
         } catch (error) {
             console.error("Error getting last N chat history:", error);
+            return null;
+        }
+    }
+
+    /**
+     * Cập nhật phản hồi của admin cho một lịch sử chat
+     */
+    async updateAdminAnswer(historyId, adminId, answer) {
+        try {
+            const updatedHistory = await HistoryRepo.update(historyId, {
+                adminAnswer: answer,
+                adminAnswerAt: new Date(),
+                isAdminReviewed: true,
+                adminId: adminId
+            });
+
+            if (updatedHistory) {
+                await NotificationRepo.create({
+                    userId: updatedHistory.userId,
+                    visitorId: updatedHistory.visitorId,
+                    chatId: updatedHistory.chatId,
+                    type: "admin_reply",
+                    message: answer,
+                    historyId: updatedHistory._id
+                });
+            }
+
+            return updatedHistory;
+        } catch (error) {
+            console.error("Error updating admin answer:", error);
             return null;
         }
     }

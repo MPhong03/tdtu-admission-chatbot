@@ -1,0 +1,32 @@
+{
+  "name": "Toán ứng dụng",
+  "description": "Ngành Toán ứng dụng là một ngành học rất phù hợp với những bạn trẻ yêu thích tìm hiểu về khoa học tính toán. Được đánh giá là ngành học mang tính ứng dụng cao và có ảnh hưởng đến nhiều ngành khoa học, có tiềm năng phát triển lớn trong tương lai. Các ứng dụng có thể bao gồm về giải tích số, toán học tính toán, mô hình toán học, tối ưu hoá, toán sinh học, lý thuyết trò chơi, toán tài chính,…\nTheo học ngành Toán ứng dụng tại Trường Đại học Tôn Đức Thắng, người học sẽ được đào tạo chuyên sâu về nhiều mảng của Toán học và Tin học như: Toán rời rạc, Đại số tuyến tính, Giải tích, Ngôn ngữ lập trình, Cơ sở dữ liệu,… Sau khi tốt nghiệp, sinh viên còn được trang bị thêm nhiều kỹ năng như:\nCử nhân Toán ứng dụng có thể đảm nhận nhiều vị trí công việc như: chuyên viên quản lý ngân sách, chuyên viên phân tích đầu tư, chuyên viên phân tích nghiên cứu hoạt động tại các công ty tài chính, các cơ quan chính phủ, phi chính phủ, tổ chức nghiên cứu, tổ chức học thuật; chuyên viên thiết kế và xây dựng thuật toán cho các phần mềm ứng dụng, truy vấn cơ sở dữ liệu, phát triển các thủ tục kiểm thử và khắc phục lỗi, tùy chỉnh phần mềm cho phù hợp với yêu cầu; giảng viên giảng dạy Toán ứng dụng hoặc giáo viên môn Toán tại các trường phổ thông, trung cấp, cao đẳng, đại học, …",
+  "reasons": [
+    "Đội ngũ giảng viên giàu kinh nghiệm",
+    "Liên tục cập nhật xu hướng",
+    "100% sinh viên ra trường có việc làm trong vòng 12 tháng kể từ khi tốt nghiệp"
+  ],
+  "programs": [
+    {
+      "tab": "Tiêu chuẩn",
+      "major_code": "7460112",
+      "description": "Ngành Toán ứng dụng không chỉ cung cấp cho sinh viên kiến thức toán học hiện đại, mà còn trang bị cho sinh viên một số kỹ năng tính toán cơ bản, rèn luyện tư duy logic, khả năng phân tích, giải quyết vấn đề thực tế nhanh nhẹn và hiệu quả trong công việc và các kỹ năng mềm khác.\nSinh viên được trải nghiệm với môi trường làm việc thực tế bên ngoài trường thông qua học phần tập sự nghề nghiệp; được tham gia các workshop, seminar trong lĩnh vực liên quan đến ngành Toán ứng dụng. Các sinh viên giỏi và yêu thích nghiên cứu khoa học sẽ được hướng dẫn trong hoạt động nghiên cứu khoa học của sinh viên hoặc tham gia nghiên cứu và đăng kết quả nghiên cứu trên các tập san về Toán học ở trong nước và quốc tế.\nTối thiểu 10% môn học chuyên ngành trong chương trình đào tạo ngành Toán ứng dụng được giảng dạy bằng tiếng Anh. Chương trình đào tạo có tính liên thông với các chương trình Sau Đại học của Khoa.\nCử nhân\nToàn thời gian: 4 năm\nXem thông tin chi tiết về chương trình đào tạo\nXem thông tin chi tiết về chuẩn đầu ra\nKết quả quá trình học tập THPT\nKết quả bài thi ĐGNL năm 2025 của ĐHQG TP. HCM\nTổ hợp: Đang cập nhật\nĐiểm trúng tuyển 2024 (thang 40):31,00\nTháng 9, năm 2025\n29.770.000 đồng/năm",
+      "content": {
+        "Bằng cấp": "Cử nhân",
+        "Thời gian đào tạo": "Toàn thời gian: 4 năm",
+        "Chương trình đào tạo": "Xem thông tin chi tiết về chương trình đào tạo",
+        "Chuẩn đầu ra": "Xem thông tin chi tiết về chuẩn đầu ra",
+        "Phương thức xét tuyển riêng": "Kết quả quá trình học tập THPT Kết quả bài thi ĐGNL năm 2025 của ĐHQG TP. HCM",
+        "Xét tuyển theo điểm thi THPT": "Tổ hợp: Đang cập nhật Điểm trúng tuyển 2024 (thang 40):31,00",
+        "Khai giảng": "Tháng 9, năm 2025",
+        "Học phí": "29.770.000 đồng/năm"
+      },
+      "name": "Toán ứng dụng"
+    }
+  ],
+  "images": [
+    "https://admission.tdtu.edu.vn/sites/admission23/files/Tuyen-sinh/Dai-hoc/Nganh/T-UD/1.jpg",
+    "https://admission.tdtu.edu.vn/sites/admission23/files/Tuyen-sinh/Dai-hoc/Nganh/T-UD/2.jpg",
+    "https://admission.tdtu.edu.vn/sites/admission23/files/Tuyen-sinh/Dai-hoc/Nganh/T-UD/3.jpg"
+  ]
+}
