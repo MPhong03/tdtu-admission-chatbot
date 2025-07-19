@@ -24,7 +24,7 @@ const ProgrammeModal = ({ open, onClose, programmeId, title }) => {
             setLoading(true);
             try {
                 const res = await api.get(`/v2/programmes/${programmeId}`);
-                const data = res.data.Data || res.data.Data.p || {};
+                const data = res.data.Data.p || {};
                 setForm({ name: data.name || "" });
             } catch {
                 toast.error("Không tải được chương trình/hệ!");
