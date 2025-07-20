@@ -29,11 +29,11 @@ class TuitionController {
         try {
             const { year_id, programme_id, ...tuition } = req.body;
             if (req.body.content) req.body.text = convertHtmlToText(req.body.content);
-            await N_TuitionService.update(req.params.id, req.body);
-            if (year_id) await N_TuitionService.linkToYear(tuition.id, year_id);
+            const updated = await N_TuitionService.update(req.params.id, req.body);
+            if (year_id) await N_TuitionService.linkToYear(updated.id, year_id);
             if (programme_id) {
-                await N_TuitionService.linkToProgramme(tuition.id, programme_id);
-                await N_ProgrammeService.linkToTuition(programme_id, tuition.id);
+                await N_TuitionService.linkToProgramme(updated.id, programme_id);
+                await N_ProgrammeService.linkToTuition(programme_id, updated.id);
             }
             return res.json(HttpResponse.success('Cập nhật học phí thành công'));
         } catch (err) {

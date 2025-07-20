@@ -23,8 +23,8 @@ class ScholarshipController {
         try {
             const { year_id, ...scholarship } = req.body;
             if (req.body.content) req.body.text = convertHtmlToText(req.body.content);
-            await N_ScholarshipService.update(req.params.id, req.body);
-            if (year_id) await N_ScholarshipService.linkToYear(scholarship.id, year_id);
+            const updated = await N_ScholarshipService.update(req.params.id, req.body);
+            if (year_id) await N_ScholarshipService.linkToYear(updated.id, year_id);
             return res.json(HttpResponse.success('Cập nhật học bổng thành công'));
         } catch (err) {
             logger.error('Error:', err);

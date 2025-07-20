@@ -24,7 +24,7 @@ class DocumentController {
         try {
             const { year_id, html, ...document } = req.body;
             if (req.body.html) req.body.text = convertHtmlToText(req.body.html);
-            await N_DocumentService.update(req.params.id, req.body);
+            const updated = await N_DocumentService.update(req.params.id, req.body);
             if (year_id) await N_YearService.linkToDocument(year_id, req.params.id);
             return res.json(HttpResponse.success('Cập nhật tài liệu thành công'));
         } catch (err) {
