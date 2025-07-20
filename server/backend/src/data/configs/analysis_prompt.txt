@@ -1,0 +1,45 @@
+PHÂN TÍCH SÂU CÂU HỎI TUYỂN SINH PHỨC TẠP:
+
+Câu hỏi: "<user_question>"
+Classification: <classification_info>
+Lịch sử: <chat_history>
+
+Thực hiện phân tích chi tiết:
+
+1. ENTITY EXTRACTION:
+- Ngành học: [danh sách ngành được nhắc đến]
+- Hệ đào tạo: [tiêu chuẩn, tiên tiến, liên kết quốc tế...]
+- Năm học: [2024 nếu không rõ]
+- Loại thông tin: [học phí, học bổng, mô tả ngành, tài liệu...]
+
+2. INTENT ANALYSIS:
+- Primary intent: [so sánh, tư vấn, phân tích, đánh giá...]
+- Secondary intents: [các mục đích phụ]
+- Action required: [find, compare, analyze, recommend...]
+
+3. INFORMATION STRATEGY:
+- Main query targets: [node types chính cần query]
+- Enrichment targets: [thông tin bổ sung có giá trị]
+- Query complexity: [single, multi-step, comprehensive]
+
+Trả về JSON:
+{
+    "entities": {
+        "majors": ["công nghệ thông tin", "kỹ thuật phần mềm"],
+        "programmes": ["tiêu chuẩn", "tiên tiến"],
+        "year": "2024",
+        "infoTypes": ["tuition", "scholarship", "career_prospects"]
+    },
+    "intent": {
+        "primary": "comparison",
+        "secondary": ["advice", "cost_analysis"],
+        "action": "compare_and_recommend"
+    },
+    "strategy": {
+        "mainTargets": ["Major", "Programme", "Tuition"],
+        "enrichmentTargets": ["Scholarship", "Document"],
+        "needsEnrichment": true,
+        "complexity": "high"
+    },
+    "reasoning": "Câu hỏi yêu cầu so sánh chi tiết học phí 2 ngành và đưa ra tư vấn phù hợp"
+}

@@ -1,0 +1,31 @@
+ENRICHMENT PLANNING (Bước <step>/<max_steps>):
+
+Câu hỏi gốc: "<user_question>"
+Main context: <context_count> nodes
+Analysis: <analysis_info>
+Sample context: <sample_context>
+
+Enrichment targets: <enrichment_targets>
+
+QUY TẮC ENRICHMENT:
+1. Chỉ tạo query khi THỰC SỰ cần thiết
+2. Không duplicate với main context
+3. Focus vào info gaps cho intent chính
+4. Query phải valid theo Neo4j schema
+
+ENRICHMENT SCENARIOS:
+Main query về học phí -> Enrich với scholarship info
+Comparison thiếu 1 side -> Complete comparison
+Advice question thiếu decision factors -> Add career/market info
+Main context đã đầy đủ -> Skip enrichment
+Không liên quan intent -> Skip
+
+Trả về JSON:
+{
+    "shouldEnrich": true/false,
+    "reasoning": "Lý do cần/không cần enrichment",
+    "purpose": "Mục đích cụ thể của query",
+    "cypher": "MATCH ... RETURN ... LIMIT 10",
+    "expectedValue": "Giá trị dự kiến",
+    "infoType": "scholarship|career|requirements|comparison"
+}

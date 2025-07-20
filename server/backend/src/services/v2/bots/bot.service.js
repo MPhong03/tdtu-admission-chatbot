@@ -9,36 +9,136 @@ const CacheService = require("../../v2/cachings/cache.service");
 class BotService {
     constructor() {
         this.cacheService = new CacheService(process.env.REDIS_URL);
-
         this.apiUrl = process.env.GEMINI_API_URL;
         this.apiKey = process.env.GEMINI_API_KEY;
 
-        // Đọc mô tả cấu trúc node/edge
-        const descPath = path.join(__dirname, "../../../data/configs/data_structure.txt");
-        this.nodeEdgeDescription = fs.readFileSync(descPath, "utf-8");
-
-        // Đọc prompt Cypher cực kỳ chi tiết từ file cypher_prompt.txt
-        const cypherPromptPath = path.join(__dirname, "../../../data/configs/cypher_prompt.txt");
-        this.cypherPromptTemplate = fs.readFileSync(cypherPromptPath, "utf-8");
-
-        // Đọc prompt trả lời sử dụng ngữ cảnh
-        const answerPromptPath = path.join(__dirname, "../../../data/configs/answer_prompt.txt");
-        this.answerPromptTemplate = fs.existsSync(answerPromptPath)
-            ? fs.readFileSync(answerPromptPath, "utf-8")
-            : `
-            Bạn là trợ lý tuyển sinh. Dưới đây là ngữ cảnh dữ liệu liên quan, hãy trả lời ngắn gọn, rõ ràng, đúng thông tin nghiệp vụ dựa trên context này. Nếu context rỗng hãy báo không tìm thấy dữ liệu.
-
-            Câu hỏi: <user_question>
-            Ngữ cảnh: <context_json>
-            `.trim();
+        // Load all prompt templates
+        this.loadPromptTemplates();
 
         // Agent configuration
         this.agentConfig = {
             maxRetries: 3,
             confidenceThreshold: 0.7,
-            enableAgent: true,
+            enableClassification: true,
             maxEnrichmentQueries: 2
         };
+    }
+
+    /**
+     * Load all prompt templates from files
+     */
+    loadPromptTemplates() {
+        const configPath = path.join(__dirname, "../../../data/configs/");
+
+        try {
+            // Existing prompts
+            this.nodeEdgeDescription = fs.readFileSync(path.join(configPath, "data_structure.txt"), "utf-8");
+            this.cypherPromptTemplate = fs.readFileSync(path.join(configPath, "cypher_prompt.txt"), "utf-8");
+            this.answerPromptTemplate = fs.existsSync(path.join(configPath, "answer_prompt.txt"))
+                ? fs.readFileSync(path.join(configPath, "answer_prompt.txt"), "utf-8")
+                : this.getDefaultAnswerPrompt();
+
+            // New Agent prompts
+            this.classificationPromptTemplate = fs.existsSync(path.join(configPath, "classification_prompt.txt"))
+                ? fs.readFileSync(path.join(configPath, "classification_prompt.txt"), "utf-8")
+                : this.getDefaultClassificationPrompt();
+
+            this.analysisPromptTemplate = fs.existsSync(path.join(configPath, "analysis_prompt.txt"))
+                ? fs.readFileSync(path.join(configPath, "analysis_prompt.txt"), "utf-8")
+                : this.getDefaultAnalysisPrompt();
+
+            this.enrichmentPromptTemplate = fs.existsSync(path.join(configPath, "enrichment_prompt.txt"))
+                ? fs.readFileSync(path.join(configPath, "enrichment_prompt.txt"), "utf-8")
+                : this.getDefaultEnrichmentPrompt();
+
+            this.complexAnswerPromptTemplate = fs.existsSync(path.join(configPath, "complex_answer_prompt.txt"))
+                ? fs.readFileSync(path.join(configPath, "complex_answer_prompt.txt"), "utf-8")
+                : this.getDefaultComplexAnswerPrompt();
+
+            this.offTopicPromptTemplate = fs.existsSync(path.join(configPath, "off_topic_prompt.txt"))
+                ? fs.readFileSync(path.join(configPath, "off_topic_prompt.txt"), "utf-8")
+                : this.getDefaultOffTopicPrompt();
+
+            this.socialPromptTemplate = fs.existsSync(path.join(configPath, "social_prompt.txt"))
+                ? fs.readFileSync(path.join(configPath, "social_prompt.txt"), "utf-8")
+                : this.getDefaultSocialPrompt();
+
+            logger.info("[Prompts] Successfully loaded all prompt templates");
+        } catch (error) {
+            logger.error("[Prompts] Error loading prompt templates, using defaults", error);
+            this.loadDefaultPrompts();
+        }
+    }
+
+    /**
+     * Default prompt methods (fallbacks)
+     */
+    getDefaultAnswerPrompt() {
+        return `
+        Bạn là trợ lý tuyển sinh. Dưới đây là ngữ cảnh dữ liệu liên quan, hãy trả lời ngắn gọn, rõ ràng, đúng thông tin nghiệp vụ dựa trên context này. Nếu context rỗng hãy báo không tìm thấy dữ liệu.
+
+        Câu hỏi: <user_question>
+        Ngữ cảnh: <context_json>
+        `.trim();
+    }
+
+    getDefaultClassificationPrompt() {
+        return `
+        BẠN LÀ CHUYÊN GIA PHÂN LOẠI CÂU HỎI CHO HỆ THỐNG TUYỂN SINH TDTU.
+        
+        Phân tích câu hỏi: "<user_question>"
+        
+        Phân loại thành 4 loại:
+        1. inappropriate - thô tục/vi phạm
+        2. off_topic - không liên quan TDTU
+        3. simple_admission - tuyển sinh đơn giản
+        4. complex_admission - tuyển sinh phức tạp
+        
+        Trả về JSON với category, confidence, reasoning.
+        `.trim();
+    }
+
+    getDefaultAnalysisPrompt() {
+        return `
+        Phân tích sâu câu hỏi tuyển sinh phức tạp: "<user_question>"
+        
+        Extract entities, intents, và strategy.
+        Trả về JSON format với entities, intent, strategy.
+        `.trim();
+    }
+
+    getDefaultEnrichmentPrompt() {
+        return `
+        Quyết định có cần query bổ sung cho: "<user_question>"
+        
+        Trả về JSON với shouldEnrich, reasoning, cypher.
+        `.trim();
+    }
+
+    getDefaultComplexAnswerPrompt() {
+        return `
+        Bạn là trợ lý tuyển sinh chuyên nghiệp. Trả lời câu hỏi phức tạp dựa trên context và agent analysis.
+        
+        Câu hỏi: <user_question>
+        Context: <context_json>
+        Agent info: <agent_info>
+        `.trim();
+    }
+
+    getDefaultOffTopicPrompt() {
+        return `
+        Trả lời thân thiện câu hỏi không liên quan TDTU: "<user_question>"
+        
+        Hướng dẫn lịch sự về tuyển sinh TDTU.
+        `.trim();
+    }
+
+    getDefaultSocialPrompt() {
+        return `
+        Trả lời xã giao thân thiện: "<user_question>"
+        
+        Giới thiệu vai trò trợ lý tuyển sinh TDTU.
+        `.trim();
     }
 
     /**
@@ -85,227 +185,75 @@ class BotService {
     }
 
     /**
-     * Agent: Intelligent question classification
-     * Quyết định có nên sử dụng Agent mode hay RAG thông thường
+     * 4-Category Question Classification theo góp ý thầy
      */
-    async shouldUseAgentMode(question, chatHistory = []) {
-        if (!this.agentConfig.enableAgent) {
-            return false;
+    async classifyQuestion(question, chatHistory = []) {
+        if (!this.agentConfig.enableClassification) {
+            return {
+                category: 'simple_admission',
+                confidence: 0.8,
+                reasoning: 'Classification disabled, default to simple admission',
+                processingMethod: 'rag_simple'
+            };
         }
 
         try {
-            const classificationPrompt = `
-                ${this.nodeEdgeDescription}
-
-                BẠN LÀ CHUYÊN GIA PHÂN LOẠI CÂU HỎI TUYỂN SINH. Nhiệm vụ: Quyết định phương pháp xử lý tối ưu.
-
-                === PHÂN TÍCH CÂU HỎI ===
-                Câu hỏi: "${question}"
-                Lịch sử gần đây: ${JSON.stringify(chatHistory.slice(-2))}
-
-                === QUY TẮC PHÂN LOẠI ===
-
-                **AGENT MODE** - Xử lý thông minh đa bước:
-
-                **1. COMPARISON QUESTIONS** (So sánh)
-                Examples:
-                - "So sánh học phí CNTT hệ tiêu chuẩn và tiên tiến"
-                - "Ngành nào rẻ hơn giữa CNTT và KTPM?"
-                - "Compare tuition fees between programs"
-                - "Hệ nào tốt hơn về cơ hội việc làm?"
-                - "Khác biệt giữa hệ liên kết và hệ tiêu chuẩn"
-
-                **2. ADVICE/CONSULTATION QUESTIONS** (Tư vấn)
-                Examples:
-                - "Tư vấn tôi nên chọn ngành gì?"
-                - "Ngành nào phù hợp với người thích toán?"
-                - "Should I choose Computer Science or Software Engineering?"
-                - "Với điều kiện kinh tế khó khăn nên học hệ nào?"
-                - "Tôi muốn học về AI, nên chọn ngành gì?"
-
-                **3. COMPLEX ANALYSIS** (Phân tích phức tạp)
-                Examples:
-                - "Ngành nào có học phí rẻ nhất và học bổng nhiều nhất?"
-                - "Phân tích ưu nhược điểm của từng hệ đào tạo"
-                - "Tìm ngành có tỷ lệ việc làm cao với chi phí dưới 30 triệu"
-                - "Evaluate the best program for international students"
-
-                **4. MULTI-CRITERIA QUESTIONS** (Nhiều tiêu chí)
-                Examples:
-                - "Ngành có học phí vừa phải, dễ xin việc và phù hợp nữ sinh"
-                - "Tìm chương trình có thời gian học ngắn, chi phí thấp"
-                - "Best value programs with good career prospects"
-
-                **RAG MODE** - Truy vấn đơn giản:
-
-                **1. SIMPLE FACT LOOKUP** (Tìm thông tin cụ thể)
-                Examples:
-                - "Học phí ngành CNTT hệ tiêu chuẩn là bao nhiêu?"
-                - "Thông tin liên hệ phòng tuyển sinh"
-                - "What is the tuition for Computer Science standard program?"
-                - "Địa chỉ trường Đại học Tôn Đức Thắng"
-                - "Điểm chuẩn ngành Kế toán năm 2024"
-
-                **2. SINGLE INFORMATION REQUEST** (Một thông tin duy nhất)
-                Examples:
-                - "Có bao nhiêu ngành trong khoa CNTT?"
-                - "Thời gian đào tạo ngành Kinh tế là bao lâu?"
-                - "Requirements for Software Engineering program"
-                - "Lịch thi đầu vào năm 2024"
-
-                **3. SOCIAL/GREETING** (Xã giao)
-                Examples:
-                - "Xin chào", "Hello", "Hi"
-                - "Cảm ơn", "Thank you"
-                - "Tạm biệt", "Goodbye"
-                - "Bạn là ai?", "What's your name?"
-
-                === EDGE CASES HANDLING ===
-
-                **UNCLEAR QUESTIONS** → Default RAG (Safe choice)
-                - Câu hỏi mơ hồ, không rõ intent
-                - Typos nhiều, không hiểu được
-
-                **MIXED LANGUAGE** → Focus on intent, not language
-                - "Compare học phí CNTT và KTPM"
-                - "So sánh tuition fees các ngành"
-
-                **PARTIAL INFORMATION** → Agent if implies comparison/advice
-                - "Ngành CNTT như thế nào?" (có thể dẫn đến tư vấn)
-                - "Tell me about Computer Science" (fact lookup)
-
-                === CONFIDENCE SCORING ===
-
-                **High Confidence (0.8-1.0):**
-                - Clear keywords: "so sánh", "tư vấn", "nên chọn", "compare", "advise"
-                - Multiple criteria mentioned
-                - Question implies analysis needed
-
-                **Medium Confidence (0.6-0.8):**
-                - Some complexity signals but not clear
-                - Could go either way
-
-                **Low Confidence (0.0-0.6):**
-                - Simple, direct questions
-                - Single fact lookup
-                - Social interactions
-
-                === OUTPUT FORMAT ===
-
-                Phân tích theo steps:
-                1. Identify question type và intent
-                2. Check for complexity signals  
-                3. Determine confidence level
-                4. Make final decision
-
-                Trả về JSON:
-                {
-                    "useAgent": true/false,
-                    "confidence": 0.8,
-                    "questionType": "comparison|advice|complex|simple|social",
-                    "reasoning": "Chi tiết tại sao chọn Agent/RAG và confidence level",
-                    "detectedIntent": "primary intent của câu hỏi",
-                    "complexitySignals": ["signal1", "signal2"],
-                    "expectedComplexity": "low|medium|high"
-                }
-
-                === VALIDATION RULES ===
-                - useAgent = true CHỈ KHI confidence >= 0.7
-                - Nếu không chắc chắn → useAgent = false (safe default)
-                - Luôn có reasoning chi tiết cho decision
-                - questionType phải match với examples đã cho
-
-                Hãy phân tích câu hỏi theo framework trên và đưa ra quyết định chính xác.
-            `;
+            const classificationPrompt = this.nodeEdgeDescription + '\n\n' +
+                this.classificationPromptTemplate
+                    .replace("<user_question>", question)
+                    .replace("<chat_history>", JSON.stringify(chatHistory.slice(-2)));
 
             const result = await this.callGemini(classificationPrompt);
 
             // Enhanced validation
             if (result && typeof result === 'object') {
-                const isValidResult =
-                    typeof result.useAgent === 'boolean' &&
+                const validCategories = ['inappropriate', 'off_topic', 'simple_admission', 'complex_admission'];
+                const isValid =
+                    validCategories.includes(result.category) &&
                     typeof result.confidence === 'number' &&
                     result.confidence >= 0 && result.confidence <= 1 &&
                     typeof result.reasoning === 'string' &&
-                    result.reasoning.length > 10; // Reasoning phải có substance
+                    result.reasoning.length > 10;
 
-                if (isValidResult && result.useAgent === true && result.confidence >= this.agentConfig.confidenceThreshold) {
-                    logger.info(`[Agent] Sử dụng Agent mode (confidence: ${result.confidence}): ${result.reasoning}`);
+                if (isValid) {
+                    logger.info(`[Classification] ${result.category} (confidence: ${result.confidence}): ${result.reasoning}`);
                     return result;
-                } else {
-                    logger.info(`[Agent] Sử dụng RAG mode: ${result.reasoning || 'Confidence thấp hoặc câu hỏi đơn giản'}`);
-                    return false;
                 }
-            } else {
-                logger.warn("[Agent] Invalid classification result format");
-                return false;
             }
+
+            // Fallback classification
+            logger.warn("[Classification] Invalid result, using safe fallback");
+            return {
+                category: 'simple_admission',
+                confidence: 0.5,
+                reasoning: 'Fallback classification due to parsing error',
+                processingMethod: 'rag_simple'
+            };
         } catch (error) {
-            logger.warn("[Agent] Classification failed, fallback to RAG mode", error);
-            return false;
+            logger.error("[Classification] Failed, using safe fallback", error);
+            return {
+                category: 'simple_admission',
+                confidence: 0.3,
+                reasoning: 'Error in classification, defaulting to safe mode',
+                processingMethod: 'rag_simple'
+            };
         }
     }
 
     /**
-     * Agent: Deep question analysis
-     * Phân tích sâu câu hỏi để lập chiến lược
+     * Complex admission analysis (cho Agent mode)
      */
-    async analyzeQuestion(question, chatHistory, classification) {
-        const analysisPrompt = `
-        ${this.nodeEdgeDescription}
-
-        Phân tích sâu câu hỏi để lập chiến lược truy vấn:
-
-        Câu hỏi: "${question}"
-        Phân loại: ${classification.questionType} (complexity: ${classification.expectedComplexity})
-        Lịch sử: ${JSON.stringify(chatHistory)}
-
-        Thực hiện phân tích:
-
-        1. ENTITY EXTRACTION:
-        - Ngành học được nhắc đến
-        - Hệ đào tạo (tiêu chuẩn, tiên tiến, liên kết...)
-        - Năm học (2024 nếu không rõ)
-        - Loại thông tin cần (học phí, học bổng, mô tả, tài liệu...)
-
-        2. INTENT ANALYSIS:
-        - Primary intent (mục đích chính)
-        - Secondary intents (mục đích phụ)
-        - Action required (tìm, so sánh, tư vấn, phân tích...)
-
-        3. INFORMATION STRATEGY:
-        - Main query targets (node types chính cần query)
-        - Potential enrichment (thông tin bổ sung có giá trị)
-        - Query sequence (thứ tự truy vấn tối ưu)
-
-        Trả về JSON:
-        {
-            "entities": {
-                "majors": ["công nghệ thông tin"],
-                "programmes": ["tiêu chuẩn", "tiên tiến"],
-                "year": "2024",
-                "infoTypes": ["tuition", "scholarship"]
-            },
-            "intent": {
-                "primary": "comparison",
-                "secondary": ["advice"],
-                "action": "compare_and_recommend"
-            },
-            "strategy": {
-                "mainTargets": ["Major", "Programme", "Tuition"],
-                "enrichmentTargets": ["Scholarship"],
-                "needsEnrichment": true,
-                "querySequence": ["main", "enrichment"]
-            },
-            "reasoning": "Câu hỏi yêu cầu so sánh học phí CNTT các hệ và cần thêm info học bổng để tư vấn tốt"
-        }
-        `;
+    async analyzeComplexQuestion(question, chatHistory, classification) {
+        const analysisPrompt = this.nodeEdgeDescription + '\n\n' +
+            this.analysisPromptTemplate
+                .replace("<user_question>", question)
+                .replace("<classification_info>", JSON.stringify(classification))
+                .replace("<chat_history>", JSON.stringify(chatHistory));
 
         try {
             return await this.callGemini(analysisPrompt);
         } catch (error) {
-            logger.error("[Agent] Question analysis failed", error);
-            // Fallback analysis
+            logger.error("[Agent] Complex question analysis failed", error);
             return {
                 entities: { majors: [], programmes: [], year: "2024", infoTypes: ["general"] },
                 intent: { primary: "search", secondary: [], action: "find_info" },
@@ -316,42 +264,22 @@ class BotService {
     }
 
     /**
-     * Agent: Plan enrichment query
-     * Quyết định có cần query bổ sung không và query gì
+     * Plan enrichment query cho complex questions
      */
     async planEnrichmentQuery(question, mainContext, analysis, step = 1) {
         if (!analysis.strategy?.needsEnrichment || step > this.agentConfig.maxEnrichmentQueries) {
             return null;
         }
 
-        const enrichmentPrompt = `
-        ${this.nodeEdgeDescription}
-
-        Quyết định query bổ sung (bước ${step}):
-
-        Câu hỏi gốc: "${question}"
-        Context chính đã có: ${mainContext.length} nodes
-        Phân tích: ${JSON.stringify(analysis)}
-        Sample context: ${JSON.stringify(mainContext.slice(0, 2))}
-
-        Enrichment targets: ${analysis.strategy.enrichmentTargets?.join(', ')}
-
-        Chỉ tạo query nếu:
-        1. Thực sự cần thiết cho câu trả lời tốt hơn
-        2. Không trùng lặp với context hiện có
-        3. Khả năng cao tìm được info hữu ích
-
-        Query phải tuân thủ đúng Neo4j schema đã định nghĩa.
-
-        Trả về JSON:
-        {
-            "shouldEnrich": true/false,
-            "reasoning": "Lý do cần/không cần",
-            "purpose": "Mục đích của query này",
-            "cypher": "MATCH ... RETURN ... LIMIT 10",
-            "expectedValue": "Giá trị dự kiến"
-        }
-        `;
+        const enrichmentPrompt = this.nodeEdgeDescription + '\n\n' +
+            this.enrichmentPromptTemplate
+                .replace("<user_question>", question)
+                .replace("<step>", step)
+                .replace("<max_steps>", this.agentConfig.maxEnrichmentQueries)
+                .replace("<context_count>", mainContext.length)
+                .replace("<analysis_info>", JSON.stringify(analysis))
+                .replace("<sample_context>", JSON.stringify(mainContext.slice(0, 2)))
+                .replace("<enrichment_targets>", analysis.strategy.enrichmentTargets?.join(', ') || 'none');
 
         try {
             const result = await this.callGemini(enrichmentPrompt);
@@ -367,44 +295,33 @@ class BotService {
     }
 
     /**
-     * Agent: Generate enhanced answer
-     * Tổng hợp câu trả lời dựa trên context đã thu thập và agent reasoning
+     * Generate enhanced answer cho complex questions
      */
-    async generateAgentAnswer(question, allContext, analysis, agentSteps, chatHistory) {
-        // Convert chat history thành text
+    async generateComplexAnswer(question, allContext, analysis, agentSteps, chatHistory) {
         const historyText = chatHistory.length
             ? chatHistory.map((item, index) =>
                 `Lần ${index + 1}:\n- Người dùng: ${item.question}\n- Bot: ${item.answer}`).join('\n\n')
             : "Không có lịch sử hội thoại.";
 
-        const enhancedPrompt = this.answerPromptTemplate
+        const agentStepsText = agentSteps.map(step =>
+            `- ${step.step}: ${step.description} (${step.resultCount || 0} nodes)`
+        ).join('\n');
+
+        const enhancedPrompt = this.complexAnswerPromptTemplate
             .replace("<user_question>", question)
+            .replace("<chat_history>", historyText)
             .replace("<context_json>", JSON.stringify(allContext, null, 2))
-            .replace("<chat_history>", historyText) + `
-
-=== THÔNG TIN XỬ LÝ AGENT ===
-Intent: ${analysis.intent?.primary} (${analysis.intent?.secondary?.join(', ') || 'none'})
-Entities: ${JSON.stringify(analysis.entities)}
-Complexity: ${analysis.strategy?.needsEnrichment ? 'High' : 'Medium'}
-
-Agent đã thực hiện ${agentSteps.length} bước:
-${agentSteps.map(step => `- ${step.step}: ${step.description} (${step.resultCount || 0} kết quả)`).join('\n')}
-
-Reasoning: ${analysis.reasoning}
-
-Hãy tổng hợp câu trả lời thông minh dựa trên:
-1. Context data đã thu thập
-2. Quá trình phân tích của Agent  
-3. Intent chính: ${analysis.intent?.primary}
-4. Đưa ra đề xuất cụ thể nếu là câu hỏi tư vấn/so sánh
-
-Đảm bảo câu trả lời chuyên nghiệp, đầy đủ và hữu ích.
-        `;
+            .replace("<primary_intent>", analysis.intent?.primary || 'unknown')
+            .replace("<secondary_intents>", analysis.intent?.secondary?.join(', ') || 'none')
+            .replace("<entities_info>", JSON.stringify(analysis.entities))
+            .replace("<steps_count>", agentSteps.length)
+            .replace("<agent_steps>", agentStepsText)
+            .replace("<analysis_reasoning>", analysis.reasoning);
 
         try {
             return await this.callGemini(enhancedPrompt);
         } catch (error) {
-            logger.error("[Agent] Enhanced answer generation failed", error);
+            logger.error("[Agent] Complex answer generation failed", error);
             // Fallback to simple template
             const simplePrompt = this.answerPromptTemplate
                 .replace("<user_question>", question)
@@ -416,144 +333,249 @@ Hãy tổng hợp câu trả lời thông minh dựa trên:
     }
 
     /**
-     * Main method: Generate answer with Agent intelligence
-     * Giữ nguyên signature và format trả về như cũ
+     * MAIN METHOD: Generate answer với 4-category logic
      */
     async generateAnswer(question, questionEmbedding, chatHistory = []) {
         const startTime = Date.now();
         logger.info(`=== Bắt đầu xử lý: "${question}" ===`);
 
+        try {
+            // PHASE 1: 4-Category Classification
+            const classification = await this.classifyQuestion(question, chatHistory);
+            logger.info(`[Classification] Category: ${classification.category}, Method: ${classification.processingMethod}`);
+
+            switch (classification.category) {
+                case 'inappropriate':
+                    return await this.handleInappropriateQuestion(question, classification);
+
+                case 'off_topic':
+                    return await this.handleOffTopicQuestion(question, classification, chatHistory);
+
+                case 'simple_admission':
+                    return await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
+
+                case 'complex_admission':
+                    return await this.handleComplexAdmission(question, questionEmbedding, chatHistory, classification);
+
+                default:
+                    // Safe fallback
+                    logger.warn(`[Classification] Unknown category: ${classification.category}, fallback to simple`);
+                    return await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
+            }
+        } catch (error) {
+            logger.error("[System] Critical error, emergency fallback", error);
+            return this.emergencyFallback(question);
+        }
+    }
+
+    /**
+     * Handler cho inappropriate questions
+     */
+    async handleInappropriateQuestion(question, classification) {
+        const warningMessage = `
+**Xin lỗi, tôi không thể trả lời câu hỏi này vì nội dung không phù hợp.**
+> Đây là lời nhắc nhở về việc duy trì môi trường giao tiếp lịch sự và tôn trọng.
+
+---
+
+### Tôi là trợ lý tuyển sinh TDTU, chuyên hỗ trợ các nội dung:
+- **Ngành học & chương trình đào tạo**
+- **Học phí & học bổng**
+- **Thông tin tuyển sinh & điều kiện đầu vào**
+- **Tư vấn chọn ngành học phù hợp**
+
+---
+
+**Liên hệ hỗ trợ:**
+- Điện thoại: [1900 2024 (phím 2)](tel:19002024)
+- Email: [tuyensinh@tdtu.edu.vn](mailto:tuyensinh@tdtu.edu.vn)
+- Fanpage: [facebook.com/tonducthanguniversity](https://www.facebook.com/tonducthanguniversity)
+
+**Bạn có câu hỏi nào khác về tuyển sinh TDTU không ạ?**
+`.trim();
+
+        return {
+            answer: warningMessage,
+            prompt: "",
+            cypher: "",
+            contextNodes: [],
+            isError: false,
+            is_social: false,
+            category: 'inappropriate',
+            processingTime: 0.1
+        };
+    }
+
+    /**
+     * Handler cho off-topic questions
+     */
+    async handleOffTopicQuestion(question, classification, chatHistory) {
+        const offTopicPrompt = this.offTopicPromptTemplate
+            .replace("<user_question>", question);
+
+        try {
+            const answer = await this.callGemini(offTopicPrompt);
+            const totalTime = (Date.now() - Date.now()) / 1000;
+
+            return {
+                answer: answer || `Cảm ơn bạn đã hỏi! Tuy nhiên câu hỏi này không liên quan đến tuyển sinh TDTU. Tôi chuyên hỗ trợ thông tin về các ngành học, học phí, và tư vấn tuyển sinh tại TDTU. Bạn có muốn tìm hiểu về ngành nào không ạ?`,
+                prompt: "",
+                cypher: "",
+                contextNodes: [],
+                isError: false,
+                is_social: false,
+                category: 'off_topic',
+                processingTime: totalTime
+            };
+        } catch (error) {
+            return {
+                answer: "Tôi chuyên hỗ trợ thông tin tuyển sinh TDTU. Bạn có câu hỏi nào về học phí, ngành học, hay thông tin tuyển sinh không ạ?",
+                prompt: "",
+                cypher: "",
+                contextNodes: [],
+                isError: false,
+                is_social: false,
+                category: 'off_topic'
+            };
+        }
+    }
+
+    /**
+     * Handler cho simple admission questions (RAG truyền thống)
+     */
+    async handleSimpleAdmission(question, questionEmbedding, chatHistory, classification) {
+        logger.info("[Simple] Processing with traditional RAG");
+        const result = await this.generateAnswerTraditional(question, questionEmbedding, chatHistory);
+
+        // Add classification metadata
+        result.category = 'simple_admission';
+        result.processingMethod = 'rag_simple';
+
+        return result;
+    }
+
+    /**
+     * Handler cho complex admission questions (Agent mode)
+     */
+    async handleComplexAdmission(question, questionEmbedding, chatHistory, classification) {
+        logger.info("[Complex] Processing with Agent intelligence");
+
         let agentSteps = [];
         let allContext = [];
         let cypher = "";
-        let isAgent = false;
 
         try {
-            // Phase 1: Intelligent classification
-            const classification = await this.shouldUseAgentMode(question, chatHistory);
+            // Step 1: Deep analysis
+            const analysis = await this.analyzeComplexQuestion(question, chatHistory, classification);
+            agentSteps.push({
+                step: "analysis",
+                description: "Phân tích sâu câu hỏi phức tạp",
+                result: analysis
+            });
 
-            if (classification) {
-                // AGENT MODE
-                isAgent = true;
-                logger.info("[Agent] Entering Agent mode");
+            // Step 2: Main query (reuse existing logic)
+            const cypherResult = await this.generateCypher(question, questionEmbedding);
+            cypher = cypherResult?.cypher || "";
+            const is_social = cypherResult?.is_social || false;
 
-                // Phase 2: Deep analysis
-                const analysis = await this.analyzeQuestion(question, chatHistory, classification);
+            if (is_social) {
+                // Edge case: classified as complex but actually social
+                const socialAnswer = await this.handleSocialQuestion(question, chatHistory);
+                return {
+                    answer: socialAnswer,
+                    prompt: "",
+                    cypher: "",
+                    contextNodes: [],
+                    isError: false,
+                    is_social: true,
+                    category: 'complex_admission',
+                    processingMethod: 'agent_complex'
+                };
+            }
+
+            if (cypher) {
+                const mainContext = await this.getContextFromCypher(cypher);
+                allContext.push(...mainContext);
                 agentSteps.push({
-                    step: "analysis",
-                    description: "Phân tích câu hỏi và lập chiến lược",
-                    result: analysis
+                    step: "main_query",
+                    description: "Truy vấn dữ liệu chính",
+                    resultCount: mainContext.length,
+                    cypher: cypher
                 });
 
-                // Phase 3: Main query (sử dụng lại logic cũ)
-                const cypherResult = await this.generateCypher(question, questionEmbedding);
-                cypher = cypherResult?.cypher || "";
-                const is_social = cypherResult?.is_social || false;
+                // Step 3: Smart enrichment (if needed)
+                if (analysis.strategy?.needsEnrichment && mainContext.length > 0) {
+                    for (let step = 1; step <= this.agentConfig.maxEnrichmentQueries; step++) {
+                        const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, step);
+                        if (!enrichment) break;
 
-                if (is_social) {
-                    // Xử lý câu xã giao như cũ
-                    const socialAnswer = await this.handleSocialQuestion(question, chatHistory);
-                    const totalTime = (Date.now() - startTime) / 1000;
-                    logger.info(`=== Hoàn thành xã giao (${totalTime.toFixed(2)}s) ===`);
-
-                    return {
-                        answer: socialAnswer,
-                        prompt: "",
-                        cypher: "",
-                        contextNodes: [],
-                        isError: false,
-                        is_social: true,
-                        isAgent: true,
-                        processingTime: totalTime
-                    };
-                }
-
-                if (cypher) {
-                    const mainContext = await this.getContextFromCypher(cypher);
-                    allContext.push(...mainContext);
-                    agentSteps.push({
-                        step: "main_query",
-                        description: "Truy vấn chính",
-                        resultCount: mainContext.length,
-                        cypher: cypher
-                    });
-
-                    // Phase 4: Smart enrichment (nếu cần)
-                    if (analysis.strategy?.needsEnrichment && mainContext.length > 0) {
-                        for (let step = 1; step <= this.agentConfig.maxEnrichmentQueries; step++) {
-                            const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, step);
-                            if (!enrichment) break;
-
-                            try {
-                                const enrichmentContext = await this.getContextFromCypher(enrichment.cypher);
+                        try {
+                            const enrichmentContext = await this.getContextFromCypher(enrichment.cypher);
+                            if (enrichmentContext.length > 0) {
                                 allContext.push(...enrichmentContext);
                                 agentSteps.push({
                                     step: `enrichment_${step}`,
                                     description: enrichment.purpose,
                                     resultCount: enrichmentContext.length,
-                                    cypher: enrichment.cypher
+                                    cypher: enrichment.cypher,
+                                    infoType: enrichment.infoType
                                 });
-
-                                if (enrichmentContext.length === 0) break; // Không tìm thấy thêm gì thì dừng
-                            } catch (enrichError) {
-                                logger.warn(`[Agent] Enrichment step ${step} failed`, enrichError);
+                            } else {
+                                logger.info(`[Agent] Enrichment step ${step} returned no results, stopping`);
                                 break;
                             }
+                        } catch (enrichError) {
+                            logger.warn(`[Agent] Enrichment step ${step} failed`, enrichError);
+                            break;
                         }
                     }
-
-                    // Phase 5: Enhanced answer generation
-                    const answer = await this.generateAgentAnswer(question, allContext, analysis, agentSteps, chatHistory);
-
-                    const totalTime = (Date.now() - startTime) / 1000;
-                    logger.info(`=== Agent hoàn thành (${totalTime.toFixed(2)}s, ${agentSteps.length} steps) ===`);
-
-                    return {
-                        answer: answer || "Xin lỗi, tôi không thể trả lời câu hỏi này.",
-                        prompt: "", // Không expose internal prompt
-                        cypher: cypher,
-                        contextNodes: allContext,
-                        isError: false,
-                        is_social: false,
-                        isAgent: true,
-                        agentSteps: agentSteps,
-                        processingTime: totalTime
-                    };
-                } else {
-                    // Không có cypher hợp lệ, fallback
-                    logger.warn("[Agent] No valid cypher generated, fallback to social response");
-                    const fallbackAnswer = await this.handleSocialQuestion(question, chatHistory);
-                    const totalTime = (Date.now() - startTime) / 1000;
-
-                    return {
-                        answer: fallbackAnswer,
-                        prompt: "",
-                        cypher: "",
-                        contextNodes: [],
-                        isError: false,
-                        is_social: false,
-                        isAgent: true,
-                        processingTime: totalTime
-                    };
                 }
-            } else {
-                // RAG MODE (logic cũ)
-                logger.info("[RAG] Using traditional RAG mode");
-                return await this.generateAnswerTraditional(question, questionEmbedding, chatHistory);
-            }
 
+                // Step 4: Enhanced answer generation
+                const answer = await this.generateComplexAnswer(question, allContext, analysis, agentSteps, chatHistory);
+
+                const totalTime = (Date.now() - startTime) / 1000;
+                logger.info(`[Complex] Agent completed with ${agentSteps.length} steps`);
+
+                return {
+                    answer: answer || "Xin lỗi, tôi không thể trả lời câu hỏi phức tạp này.",
+                    prompt: "", // Không expose internal prompt
+                    cypher: cypher,
+                    contextNodes: allContext,
+                    isError: false,
+                    is_social: false,
+                    category: 'complex_admission',
+                    processingMethod: 'agent_complex',
+                    agentSteps: agentSteps,
+                    analysis: analysis,
+                    processingTime: totalTime
+                };
+            } else {
+                // No valid cypher generated
+                logger.warn("[Complex] No valid cypher, fallback response");
+                const fallbackAnswer = await this.handleSocialQuestion(question, chatHistory);
+
+                return {
+                    answer: fallbackAnswer,
+                    prompt: "",
+                    cypher: "",
+                    contextNodes: [],
+                    isError: false,
+                    is_social: false,
+                    category: 'complex_admission',
+                    processingMethod: 'agent_complex'
+                };
+            }
         } catch (error) {
-            logger.error("[System] Critical error, fallback to traditional RAG", error);
-            // Complete fallback
-            return await this.generateAnswerTraditional(question, questionEmbedding, chatHistory);
+            logger.error("[Complex] Agent processing failed, fallback to simple", error);
+            return await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
         }
     }
 
     /**
-     * Traditional RAG mode (logic cũ)
+     * Traditional RAG mode
      */
     async generateAnswerTraditional(question, questionEmbedding, chatHistory = []) {
-        // Logic y hệt như method generateAnswer cũ
         let retries = 0;
         const maxRetries = 10;
         let lastError = null;
@@ -583,7 +605,8 @@ Hãy tổng hợp câu trả lời thông minh dựa trên:
                         cypher: "",
                         contextNodes: [],
                         isError: false,
-                        is_social: true
+                        is_social: true,
+                        processingTime: totalTime
                     };
                 }
 
@@ -636,7 +659,8 @@ Hãy tổng hợp câu trả lời thông minh dựa trên:
                         cypher,
                         contextNodes,
                         isError: false,
-                        is_social: false
+                        is_social: false,
+                        processingTime: totalTime
                     };
                 }
                 lastError = new Error("Gemini trả về rỗng.");
@@ -661,13 +685,8 @@ Hãy tổng hợp câu trả lời thông minh dựa trên:
      * Handle social questions
      */
     async handleSocialQuestion(question, chatHistory) {
-        const socialPrompt = `
-        Bạn là trợ lý tuyển sinh TDTU thân thiện. Trả lời câu xã giao này một cách tự nhiên:
-        
-        Câu hỏi: "${question}"
-        
-        Hãy trả lời ngắn gọn, thân thiện và có thể gợi mở người dùng hỏi về thông tin tuyển sinh nếu phù hợp.
-        `;
+        const socialPrompt = this.socialPromptTemplate
+            .replace("<user_question>", question);
 
         try {
             const answer = await this.callGemini(socialPrompt);
@@ -675,6 +694,39 @@ Hãy tổng hợp câu trả lời thông minh dựa trên:
         } catch (error) {
             return "Chào bạn! Tôi sẵn sàng hỗ trợ thông tin tuyển sinh TDTU, bạn muốn hỏi gì nào?";
         }
+    }
+
+    /**
+     * Emergency fallback
+     */
+    emergencyFallback(question) {
+        const emergencyMessage = `
+**Xin lỗi, hệ thống đang gặp sự cố kỹ thuật.**
+
+Để được hỗ trợ tốt nhất, bạn vui lòng liên hệ trực tiếp:
+
+---
+
+**Hotline:** [1900 2024 (phím 2)](tel:19002024)  
+**Email:** [tuyensinh@tdtu.edu.vn](mailto:tuyensinh@tdtu.edu.vn)  
+**Fanpage:** [facebook.com/tonducthanguniversity](https://www.facebook.com/tonducthanguniversity)  
+**Địa chỉ:** 19 Nguyễn Hữu Thọ, Tân Phong, Quận 7, TP.HCM
+
+---
+
+**Cảm ơn bạn đã thông cảm!**
+`.trim();
+
+        return {
+            answer: emergencyMessage,
+            prompt: "",
+            cypher: "",
+            contextNodes: [],
+            isError: true,
+            is_social: false,
+            category: 'emergency_fallback',
+            processingTime: 0.1
+        };
     }
 
     /**

@@ -14,7 +14,7 @@ import AnswerItem from "@/components/chat/AnswerItem";
 import toast from "react-hot-toast";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 
-const TYPEWRITER_INTERVAL = 20;
+const TYPEWRITER_INTERVAL = 10;
 
 export interface FeedbackData {
   _id: string;
