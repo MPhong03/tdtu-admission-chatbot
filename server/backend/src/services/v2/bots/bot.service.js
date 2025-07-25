@@ -357,10 +357,13 @@ class BotService {
     }
 
     async callGeminiDirect(prompt) {
+        const timeInfo = this.getCurrentTimeInfo();
+        const enhancedPrompt = `${timeInfo}\n\n${prompt}`;
+
         const response = await axios.post(
             `${this.apiUrl}?key=${this.apiKey}`,
             {
-                contents: [{ parts: [{ text: prompt }] }]
+                contents: [{ parts: [{ text: enhancedPrompt }] }]
             },
             {
                 timeout: 30000,
@@ -552,6 +555,24 @@ class BotService {
         this.apiUrl = process.env.GEMINI_API_URL;
         this.apiKey = process.env.GEMINI_API_KEY;
         logger.info(`[Gemini Config] Using environment config`);
+    }
+
+    
+    // =====================================================
+    // Thông tin thời gian hiện tại
+    // =====================================================
+    getCurrentTimeInfo() {
+        const now = new Date();
+        const vietnamTime = now.toLocaleString('vi-VN', {
+            timeZone: 'Asia/Ho_Chi_Minh',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+        
+        return `Thời gian hiện tại: ${vietnamTime} - Năm ${now.getFullYear()}`;
     }
 
     // =====================================================
