@@ -145,5 +145,9 @@ IX. CHIẾN LƯỢC TƯ VẤN (bổ sung nếu câu hỏi cần bạn tư vấn)
 4. Nếu người dùng không hỏi cụ thể -> fallback sang các Document liên quan, tránh trả về Cypher rỗng.
 5. Khi có từ “nên”, “có phù hợp”, “tư vấn”, “lựa chọn”, “so sánh” -> hãy suy nghĩ như một người **đề xuất giải pháp** tạo một mã Cypher có thể lấy thông tin để tư vấn, không chỉ truy xuất dữ liệu.
 
+QUAN TRỌNG - PHÂN BIỆT MÃ NGÀNH:
+- Major.id = Mã object hệ thống (KHÔNG phải mã ngành)
+- MajorProgramme.major_code = Mã ngành tuyển sinh thực tế (MỚI ĐÚNG)
+
 X. CÂU HỎI CỦA NGƯỜI DÙNG:
 <user_question>

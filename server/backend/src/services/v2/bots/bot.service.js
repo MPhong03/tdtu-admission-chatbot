@@ -1,69 +1,406 @@
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const logger = require("../../../utils/logger.util");
 const neo4jRepository = require("../../../repositories/v2/common/neo4j.repository");
 const CommonRepo = require('../../../repositories/systemconfigs/common.repository');
-const CacheService = require("../../v2/cachings/cache.service");
 
 class BotService {
     constructor() {
-        // KHÔNG dùng Redis - chỉ in-memory cache
+        // API Configuration - GIỮ NGUYÊN
         this.apiUrl = process.env.GEMINI_API_URL;
         this.apiKey = process.env.GEMINI_API_KEY;
 
-        // TỐI ƯU 1: Rate Limiting & Request Queue
+        // CẢI TIẾN: Tăng performance với backward compatibility
         this.requestQueue = [];
         this.activeRequests = 0;
-        this.maxConcurrentRequests = 3; // Giới hạn concurrent requests
-        this.requestDelay = 1000; // 1s delay giữa các requests
+        this.maxConcurrentRequests = parseInt(process.env.MAX_CONCURRENT_REQUESTS) || 6; // Tăng từ 3
+        this.requestDelay = parseInt(process.env.REQUEST_DELAY) || 500; // Giảm từ 1000ms
         this.lastRequestTime = 0;
 
-        // TỐI ƯU 2: Enhanced In-Memory Caching Only
-        this.responseCache = new Map(); // In-memory cache
-        this.cacheTimeout = 3600000; // 1 hour
-        this.maxCacheSize = 1000; // Giới hạn số lượng items trong cache
-        this.cacheStats = { hits: 0, misses: 0, evictions: 0 };
+        // THÊM: Simple circuit breaker (có thể disable)
+        this.circuitBreaker = {
+            enabled: process.env.CIRCUIT_BREAKER_ENABLED !== 'false',
+            failures: 0,
+            threshold: parseInt(process.env.CIRCUIT_BREAKER_THRESHOLD) || 3,
+            timeout: parseInt(process.env.CIRCUIT_BREAKER_TIMEOUT) || 30000,
+            lastFailTime: 0,
+            state: 'CLOSED'
+        };
 
-        // Load all prompt templates
+        // CẢI TIẾN: Enhanced cache với data versioning
+        this.responseCache = new Map();
+        this.cacheTimeout = parseInt(process.env.CACHE_TIMEOUT) || 3600000; // 1 hour
+        this.maxCacheSize = parseInt(process.env.MAX_CACHE_SIZE) || 2000;
+        this.cacheStats = { hits: 0, misses: 0, evictions: 0 };
+        this.dataVersion = this.loadDataVersion();
+
+        // THÊM: Performance tracking
+        this.performanceStats = {
+            totalRequests: 0,
+            successfulRequests: 0,
+            failedRequests: 0,
+            avgResponseTime: 0,
+            responseTimeSum: 0,
+            lastResetTime: Date.now()
+        };
+
+        // GIỮ NGUYÊN: Load all prompt templates
         this.loadPromptTemplates();
 
-        // Agent configuration với tối ưu
+        // GIỮ NGUYÊN: Agent configuration
         this.agentConfig = {
-            maxRetries: 2, // Giảm từ 3 xuống 2
-            confidenceThreshold: 0.7,
-            enableClassification: true,
-            maxEnrichmentQueries: 1, // Giảm từ 2 xuống 1 để tiết kiệm API calls
+            maxRetries: parseInt(process.env.MAX_RETRIES) || 2,
+            confidenceThreshold: parseFloat(process.env.CONFIDENCE_THRESHOLD) || 0.7,
+            enableClassification: process.env.ENABLE_CLASSIFICATION !== 'false',
+            maxEnrichmentQueries: parseInt(process.env.MAX_ENRICHMENT_QUERIES) || 1,
             enableSmartSkipping: true
         };
 
-        // TỐI ƯU 3: Batch processing
-        this.batchProcessor = {
-            queue: [],
-            processing: false,
-            batchSize: 5,
-            batchTimeout: 2000
-        };
-
-        // Khởi động cache cleanup
+        // Start background tasks
         this.startCacheCleanup();
+        this.startPerformanceLogging();
     }
 
-    /**
-     * Load all prompt templates from files (giữ nguyên)
-     */
+    // =====================================================
+    // DATA VERSIONING - CẢI TIẾN QUAN TRỌNG
+    // =====================================================
+    loadDataVersion() {
+        try {
+            // Cố gắng load từ file hoặc database
+            const versionFile = path.join(__dirname, '../../../data/data_version.txt');
+            if (fs.existsSync(versionFile)) {
+                return fs.readFileSync(versionFile, 'utf8').trim();
+            }
+        } catch (error) {
+            logger.warn('[Cache] Could not load data version:', error.message);
+        }
+        return Date.now().toString(); // Fallback
+    }
+
+    updateDataVersion() {
+        try {
+            this.dataVersion = Date.now().toString();
+            const versionFile = path.join(__dirname, '../../../data/data_version.txt');
+            fs.writeFileSync(versionFile, this.dataVersion);
+
+            // Clear cache when data version changes
+            this.clearMemoryCache();
+            logger.info(`[Cache] Data version updated: ${this.dataVersion}`);
+        } catch (error) {
+            logger.error('[Cache] Failed to update data version:', error.message);
+        }
+    }
+
+    // =====================================================
+    // ENHANCED CACHE SYSTEM
+    // =====================================================
+    generateCacheKey(prompt, type = 'default') {
+        const combined = `${prompt}_${type}_v${this.dataVersion}`;
+        const hash = crypto.createHash('md5').update(combined, 'utf8').digest('hex');
+        return `gemini_${type}_${hash.substring(0, 16)}`;
+    }
+
+    async getCachedResponse(cacheKey) {
+        try {
+            if (this.responseCache.has(cacheKey)) {
+                const cached = this.responseCache.get(cacheKey);
+                if (Date.now() - cached.timestamp < this.cacheTimeout) {
+                    this.cacheStats.hits++;
+                    logger.info(`[Cache] Memory hit: ${cacheKey}`);
+
+                    // LRU: Move to end
+                    this.responseCache.delete(cacheKey);
+                    this.responseCache.set(cacheKey, cached);
+
+                    return cached.data;
+                } else {
+                    // Expired cache
+                    this.responseCache.delete(cacheKey);
+                }
+            }
+
+            this.cacheStats.misses++;
+            return null;
+        } catch (error) {
+            logger.warn(`[Cache] Error retrieving cache: ${error.message}`);
+            return null;
+        }
+    }
+
+    async setCachedResponse(cacheKey, data) {
+        try {
+            // Evict old entries if cache is full (LRU policy)
+            if (this.responseCache.size >= this.maxCacheSize) {
+                const firstKey = this.responseCache.keys().next().value;
+                this.responseCache.delete(firstKey);
+                this.cacheStats.evictions++;
+            }
+
+            // Add new entry
+            this.responseCache.set(cacheKey, {
+                data,
+                timestamp: Date.now()
+            });
+
+            logger.info(`[Cache] Stored in memory: ${cacheKey}`);
+        } catch (error) {
+            logger.warn(`[Cache] Error storing cache: ${error.message}`);
+        }
+    }
+
+    clearMemoryCache() {
+        this.responseCache.clear();
+        this.cacheStats = { hits: 0, misses: 0, evictions: 0 };
+        logger.info("[Cache] Memory cache cleared");
+    }
+
+    // =====================================================
+    // CIRCUIT BREAKER PATTERN
+    // =====================================================
+    shouldSkipGemini() {
+        if (!this.circuitBreaker.enabled) return false;
+
+        const now = Date.now();
+
+        switch (this.circuitBreaker.state) {
+            case 'OPEN':
+                if (now - this.circuitBreaker.lastFailTime > this.circuitBreaker.timeout) {
+                    this.circuitBreaker.state = 'HALF_OPEN';
+                    logger.info('[Circuit Breaker] OPEN -> HALF_OPEN');
+                    return false;
+                }
+                return true;
+
+            case 'HALF_OPEN':
+                return false; // Try one request
+
+            case 'CLOSED':
+            default:
+                return false;
+        }
+    }
+
+    handleGeminiFailure(error) {
+        if (!this.circuitBreaker.enabled) return;
+
+        this.circuitBreaker.failures++;
+        this.circuitBreaker.lastFailTime = Date.now();
+
+        if (this.circuitBreaker.failures >= this.circuitBreaker.threshold) {
+            this.circuitBreaker.state = 'OPEN';
+            logger.warn(`[Circuit Breaker] OPEN after ${this.circuitBreaker.failures} failures`);
+        }
+    }
+
+    resetCircuitBreaker() {
+        if (!this.circuitBreaker.enabled) return;
+
+        this.circuitBreaker.failures = 0;
+        this.circuitBreaker.state = 'CLOSED';
+        this.circuitBreaker.lastFailTime = 0;
+        logger.info('[Circuit Breaker] Reset to CLOSED');
+    }
+
+    // =====================================================
+    // ENHANCED REQUEST QUEUE
+    // =====================================================
+    async queueGeminiRequest(prompt, priority = 'normal') {
+        return new Promise((resolve, reject) => {
+            const request = {
+                prompt,
+                priority,
+                resolve,
+                reject,
+                timestamp: Date.now(),
+                retryCount: 0,
+                id: Math.random().toString(36).substr(2, 9)
+            };
+
+            // Priority queue
+            if (priority === 'high') {
+                this.requestQueue.unshift(request);
+            } else {
+                this.requestQueue.push(request);
+            }
+
+            this.processRequestQueue();
+
+            // Request timeout
+            setTimeout(() => {
+                const index = this.requestQueue.findIndex(r => r.id === request.id);
+                if (index !== -1) {
+                    this.requestQueue.splice(index, 1);
+                    reject(new Error('Request timeout'));
+                }
+            }, 60000); // 60 second timeout
+        });
+    }
+
+    async processRequestQueue() {
+        if (this.activeRequests >= this.maxConcurrentRequests ||
+            this.requestQueue.length === 0 ||
+            this.shouldSkipGemini()) {
+            return;
+        }
+
+        // Rate limiting
+        const now = Date.now();
+        const timeSinceLastRequest = now - this.lastRequestTime;
+        if (timeSinceLastRequest < this.requestDelay) {
+            setTimeout(() => this.processRequestQueue(), this.requestDelay - timeSinceLastRequest);
+            return;
+        }
+
+        const request = this.requestQueue.shift();
+        if (!request) return;
+
+        this.activeRequests++;
+        this.lastRequestTime = now;
+        this.performanceStats.totalRequests++;
+
+        try {
+            const startTime = Date.now();
+            const result = await this.callGeminiDirect(request.prompt);
+            const responseTime = Date.now() - startTime;
+
+            // Update performance stats
+            this.performanceStats.successfulRequests++;
+            this.performanceStats.responseTimeSum += responseTime;
+            this.performanceStats.avgResponseTime = Math.round(
+                this.performanceStats.responseTimeSum / this.performanceStats.successfulRequests
+            );
+
+            // Reset circuit breaker on success
+            if (this.circuitBreaker.state === 'HALF_OPEN') {
+                this.resetCircuitBreaker();
+            }
+
+            request.resolve(result);
+
+        } catch (error) {
+            this.performanceStats.failedRequests++;
+            this.handleGeminiFailure(error);
+
+            // Intelligent retry
+            if (this.shouldRetryRequest(request, error)) {
+                const retryDelay = this.calculateRetryDelay(request.retryCount);
+                setTimeout(() => {
+                    request.retryCount++;
+                    this.requestQueue.unshift(request); // High priority retry
+                }, retryDelay);
+            } else {
+                request.reject(error);
+            }
+
+        } finally {
+            this.activeRequests--;
+            setTimeout(() => this.processRequestQueue(), this.requestDelay);
+        }
+    }
+
+    shouldRetryRequest(request, error) {
+        if (request.retryCount >= this.agentConfig.maxRetries) {
+            return false;
+        }
+
+        // Retry on specific error conditions
+        const retryableErrors = ['ECONNRESET', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNREFUSED'];
+        const retryableStatusCodes = [429, 500, 502, 503, 504];
+
+        return retryableErrors.includes(error.code) ||
+            retryableStatusCodes.includes(error.response?.status) ||
+            error.message.includes('timeout');
+    }
+
+    calculateRetryDelay(retryCount) {
+        // Exponential backoff with jitter
+        const baseDelay = 1000;
+        const maxDelay = 10000;
+        const exponentialDelay = Math.min(baseDelay * Math.pow(2, retryCount), maxDelay);
+        const jitter = Math.random() * 1000;
+        return exponentialDelay + jitter;
+    }
+
+    // =====================================================
+    // ENHANCED GEMINI CALLS
+    // =====================================================
+    async callGemini(prompt, options = {}) {
+        const { cacheType = 'default', priority = 'normal', skipCache = false } = options;
+        const cacheKey = this.generateCacheKey(prompt, cacheType);
+
+        // Check cache first
+        if (!skipCache) {
+            const cached = await this.getCachedResponse(cacheKey);
+            if (cached) return cached;
+        }
+
+        // Circuit breaker check
+        if (this.shouldSkipGemini()) {
+            throw new Error('Service temporarily unavailable (circuit breaker open)');
+        }
+
+        try {
+            const result = await this.queueGeminiRequest(prompt, priority);
+
+            // Cache successful responses
+            if (result && !skipCache) {
+                await this.setCachedResponse(cacheKey, result);
+            }
+
+            return result;
+        } catch (error) {
+            logger.error(`[Gemini] Request failed: ${error.message}`);
+            throw error;
+        }
+    }
+
+    async callGeminiDirect(prompt) {
+        const response = await axios.post(
+            `${this.apiUrl}?key=${this.apiKey}`,
+            {
+                contents: [{ parts: [{ text: prompt }] }]
+            },
+            {
+                timeout: 30000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        let result = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        // Parse JSON if present
+        if (typeof result === "string") {
+            const jsonMatch = result.match(/```json([\s\S]*?)```/);
+            if (jsonMatch) {
+                result = jsonMatch[1].trim();
+            }
+            try {
+                result = JSON.parse(result);
+            } catch (e) {
+                // Not JSON, return as string
+            }
+        }
+
+        return result;
+    }
+
+    // =====================================================
+    // LOAD PROMPT TEMPLATES - GIỮ NGUYÊN LOGIC CŨ
+    // =====================================================
     loadPromptTemplates() {
         const configPath = path.join(__dirname, "../../../data/configs/");
 
         try {
-            // Existing prompts
             this.nodeEdgeDescription = fs.readFileSync(path.join(configPath, "data_structure.txt"), "utf-8");
             this.cypherPromptTemplate = fs.readFileSync(path.join(configPath, "cypher_prompt.txt"), "utf-8");
             this.answerPromptTemplate = fs.existsSync(path.join(configPath, "answer_prompt.txt"))
                 ? fs.readFileSync(path.join(configPath, "answer_prompt.txt"), "utf-8")
                 : this.getDefaultAnswerPrompt();
 
-            // New Agent prompts
             this.classificationPromptTemplate = fs.existsSync(path.join(configPath, "classification_prompt.txt"))
                 ? fs.readFileSync(path.join(configPath, "classification_prompt.txt"), "utf-8")
                 : this.getDefaultClassificationPrompt();
@@ -95,9 +432,9 @@ class BotService {
         }
     }
 
-    /**
-     * Default prompt methods (giữ nguyên tất cả)
-     */
+    // =====================================================
+    // DEFAULT PROMPTS - GIỮ NGUYÊN TẤT CẢ
+    // =====================================================
     getDefaultAnswerPrompt() {
         return `
         Bạn là trợ lý tuyển sinh. Dưới đây là ngữ cảnh dữ liệu liên quan, hãy trả lời ngắn gọn, rõ ràng, đúng thông tin nghiệp vụ dựa trên context này. Nếu context rỗng hãy báo không tìm thấy dữ liệu.
@@ -167,7 +504,6 @@ class BotService {
     }
 
     loadDefaultPrompts() {
-        // Fallback method - giữ nguyên
         this.nodeEdgeDescription = "Default node edge description";
         this.cypherPromptTemplate = "Default cypher prompt";
         this.answerPromptTemplate = this.getDefaultAnswerPrompt();
@@ -179,9 +515,9 @@ class BotService {
         this.socialPromptTemplate = this.getDefaultSocialPrompt();
     }
 
-    /**
-     * Load cấu hình Gemini từ DB (giữ nguyên)
-     */
+    // =====================================================
+    // LOAD GEMINI CONFIG - GIỮ NGUYÊN
+    // =====================================================
     async loadGeminiConfig() {
         try {
             const config = await CommonRepo.getValues(['gemini_api_url', 'gemini_api_key']);
@@ -189,7 +525,7 @@ class BotService {
             const dbApiKey = config.gemini_api_key?.trim();
 
             if (dbApiUrl && dbApiKey) {
-                logger.info(`[Gemini Config] Phát hiện cấu hình DB: URL=${dbApiUrl}, Key=${dbApiKey.slice(0, 5)}...`);
+                logger.info(`[Gemini Config] Found database config`);
 
                 try {
                     const res = await axios.post(
@@ -200,221 +536,27 @@ class BotService {
 
                     const firstCandidate = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
                     if (typeof firstCandidate === "string") {
-                        logger.info("[Gemini Config] Health check thành công, sử dụng cấu hình từ DB.");
+                        logger.info("[Gemini Config] Database config validated, applying");
                         this.apiUrl = dbApiUrl;
                         this.apiKey = dbApiKey;
                         return;
-                    } else {
-                        logger.warn("[Gemini Config] Health check trả về bất thường, fallback sang .env.");
                     }
                 } catch (err) {
-                    logger.error("[Gemini Config] Health check thất bại, fallback sang .env.", err?.response?.data || err?.message);
+                    logger.warn("[Gemini Config] Database config validation failed, using environment");
                 }
-            } else {
-                logger.warn("[Gemini Config] Không tìm thấy đủ cấu hình gemini_api_url & gemini_api_key trên DB, fallback .env.");
             }
         } catch (err) {
-            logger.error("[Gemini Config] Lỗi khi load config từ DB, fallback .env.", err);
+            logger.error("[Gemini Config] Error loading from database, using environment", err);
         }
 
         this.apiUrl = process.env.GEMINI_API_URL;
         this.apiKey = process.env.GEMINI_API_KEY;
-        logger.info(`[Gemini Config] Đang sử dụng cấu hình fallback từ .env: URL=${this.apiUrl}, Key=${this.apiKey?.slice(0, 5)}...`);
+        logger.info(`[Gemini Config] Using environment config`);
     }
 
-    /**
-     * TỐI ƯU: Smart Rate Limiting với Queue
-     */
-    async queueGeminiRequest(prompt, priority = 'normal') {
-        return new Promise((resolve, reject) => {
-            const request = {
-                prompt,
-                priority,
-                resolve,
-                reject,
-                timestamp: Date.now(),
-                retryCount: 0
-            };
-
-            // Priority queue
-            if (priority === 'high') {
-                this.requestQueue.unshift(request);
-            } else {
-                this.requestQueue.push(request);
-            }
-
-            this.processRequestQueue();
-        });
-    }
-
-    async processRequestQueue() {
-        if (this.activeRequests >= this.maxConcurrentRequests || this.requestQueue.length === 0) {
-            return;
-        }
-
-        // Rate limiting
-        const now = Date.now();
-        const timeSinceLastRequest = now - this.lastRequestTime;
-        if (timeSinceLastRequest < this.requestDelay) {
-            setTimeout(() => this.processRequestQueue(), this.requestDelay - timeSinceLastRequest);
-            return;
-        }
-
-        const request = this.requestQueue.shift();
-        this.activeRequests++;
-        this.lastRequestTime = now;
-
-        try {
-            const result = await this.callGeminiDirect(request.prompt);
-            request.resolve(result);
-        } catch (error) {
-            // Intelligent retry với exponential backoff
-            if (error.response?.status === 429) {
-                const retryDelay = Math.min(5000 * Math.pow(2, request.retryCount), 30000);
-                logger.warn(`[Rate Limit] Retrying after ${retryDelay}ms (attempt ${request.retryCount + 1})`);
-                
-                setTimeout(() => {
-                    request.retryCount++;
-                    if (request.retryCount <= 3) {
-                        this.requestQueue.unshift(request); // High priority retry
-                    } else {
-                        request.reject(new Error('Max retries exceeded'));
-                    }
-                }, retryDelay);
-            } else {
-                request.reject(error);
-            }
-        } finally {
-            this.activeRequests--;
-            setTimeout(() => this.processRequestQueue(), this.requestDelay);
-        }
-    }
-
-    /**
-     * TỐI ƯU: Enhanced In-Memory Caching Only (No Redis) - FIXED
-     */
-    generateCacheKey(prompt, type = 'default') {
-        const crypto = require('crypto');
-        // FIX: Đảm bảo prompt được hash chính xác, không cắt ngắn quá sớm
-        const cleanPrompt = prompt.replace(/\s+/g, ' ').trim();
-        const hash = crypto.createHash('md5').update(cleanPrompt, 'utf8').digest('hex');
-        return `gemini_${type}_${hash.substring(0, 16)}`; // Rút ngắn hash thay vì prompt
-    }
-
-    async getCachedResponse(cacheKey) {
-        try {
-            // Chỉ sử dụng in-memory cache
-            if (this.responseCache.has(cacheKey)) {
-                const cached = this.responseCache.get(cacheKey);
-                if (Date.now() - cached.timestamp < this.cacheTimeout) {
-                    this.cacheStats.hits++;
-                    // FIX: Sử dụng logger.info thay vì logger.debug
-                    logger.info(`[Cache] Memory hit: ${cacheKey}`);
-                    
-                    // LRU: Move to end (most recently used)
-                    this.responseCache.delete(cacheKey);
-                    this.responseCache.set(cacheKey, cached);
-                    
-                    return cached.data;
-                } else {
-                    // Expired cache
-                    this.responseCache.delete(cacheKey);
-                }
-            }
-
-            this.cacheStats.misses++;
-            return null;
-        } catch (error) {
-            logger.warn(`[Cache] Error retrieving cache: ${error.message}`);
-            return null;
-        }
-    }
-
-    async setCachedResponse(cacheKey, data, ttl = 3600) {
-        try {
-            // Evict old entries if cache is full (LRU policy)
-            if (this.responseCache.size >= this.maxCacheSize) {
-                const firstKey = this.responseCache.keys().next().value;
-                this.responseCache.delete(firstKey);
-                this.cacheStats.evictions++;
-                logger.info(`[Cache] Evicted old entry: ${firstKey}`);
-            }
-
-            // Add new entry
-            this.responseCache.set(cacheKey, {
-                data,
-                timestamp: Date.now()
-            });
-            
-            // FIX: Sử dụng logger.info thay vì logger.debug
-            logger.info(`[Cache] Stored in memory: ${cacheKey}`);
-        } catch (error) {
-            logger.warn(`[Cache] Error storing cache: ${error.message}`);
-        }
-    }
-
-    /**
-     * TỐI ƯU: Enhanced Gemini call với caching và queue
-     */
-    async callGemini(prompt, options = {}) {
-        const { cacheType = 'default', priority = 'normal', skipCache = false, ttl = 3600 } = options;
-        const cacheKey = this.generateCacheKey(prompt, cacheType);
-
-        // Check cache first
-        if (!skipCache) {
-            const cached = await this.getCachedResponse(cacheKey);
-            if (cached) return cached;
-        }
-
-        // Queue request
-        try {
-            const result = await this.queueGeminiRequest(prompt, priority);
-            
-            // Cache successful responses
-            if (result && !skipCache) {
-                await this.setCachedResponse(cacheKey, result, ttl);
-            }
-
-            return result;
-        } catch (error) {
-            logger.error(`[Gemini] Request failed: ${error.message}`);
-            throw error;
-        }
-    }
-
-    /**
-     * Direct Gemini call (không qua queue - cho internal use)
-     */
-    async callGeminiDirect(prompt) {
-        const response = await axios.post(
-            `${this.apiUrl}?key=${this.apiKey}`,
-            {
-                contents: [{ parts: [{ text: prompt }] }]
-            },
-            { timeout: 30000 }
-        );
-
-        let result = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-        // Parse JSON nếu có
-        if (typeof result === "string") {
-            const jsonMatch = result.match(/```json([\s\S]*?)```/);
-            if (jsonMatch) {
-                result = jsonMatch[1];
-            }
-            try {
-                result = JSON.parse(result);
-            } catch (e) {
-                // Không phải JSON, trả về string
-            }
-        }
-
-        return result;
-    }
-
-    /**
-     * TỐI ƯU: Classification với caching nhưng KHÔNG hardcode patterns
-     */
+    // =====================================================
+    // CLASSIFICATION - CẢI TIẾN VỚI CACHING
+    // =====================================================
     async classifyQuestion(question, chatHistory = []) {
         if (!this.agentConfig.enableClassification) {
             return {
@@ -426,17 +568,14 @@ class BotService {
         }
 
         try {
-            // FIX: Tạo cache key chính xác cho từng câu hỏi
             const classificationPrompt = this.nodeEdgeDescription + '\n\n' +
                 this.classificationPromptTemplate
                     .replace("<user_question>", question)
-                    .replace("<chat_history>", JSON.stringify(chatHistory.slice(-2))); // Giảm context
+                    .replace("<chat_history>", JSON.stringify(chatHistory.slice(-2)));
 
-            // FIX: Sử dụng câu hỏi gốc để tạo cache key, không phải toàn bộ prompt
-            const result = await this.callGemini(classificationPrompt, { 
-                cacheType: `classification_${question.substring(0, 50)}`, // Unique cache per question
-                priority: 'high',
-                ttl: 1800 // 30 phút cache
+            const result = await this.callGemini(classificationPrompt, {
+                cacheType: 'classification',
+                priority: 'high'
             });
 
             // Enhanced validation
@@ -450,7 +589,7 @@ class BotService {
                     result.reasoning.length > 10;
 
                 if (isValid) {
-                    logger.info(`[Classification] ${result.category} (confidence: ${result.confidence}): ${result.reasoning}`);
+                    logger.info(`[Classification] ${result.category} (confidence: ${result.confidence})`);
                     return result;
                 }
             }
@@ -474,21 +613,20 @@ class BotService {
         }
     }
 
-    /**
-     * Complex admission analysis (giữ nguyên logic, thêm caching)
-     */
+    // =====================================================
+    // COMPLEX ADMISSION ANALYSIS
+    // =====================================================
     async analyzeComplexQuestion(question, chatHistory, classification) {
         const analysisPrompt = this.nodeEdgeDescription + '\n\n' +
             this.analysisPromptTemplate
                 .replace("<user_question>", question)
                 .replace("<classification_info>", JSON.stringify(classification))
-                .replace("<chat_history>", JSON.stringify(chatHistory.slice(-1))); // Giảm context
+                .replace("<chat_history>", JSON.stringify(chatHistory.slice(-1)));
 
         try {
             return await this.callGemini(analysisPrompt, {
                 cacheType: 'analysis',
-                priority: 'high',
-                ttl: 1800
+                priority: 'high'
             });
         } catch (error) {
             logger.error("[Agent] Complex question analysis failed", error);
@@ -501,15 +639,15 @@ class BotService {
         }
     }
 
-    /**
-     * TỐI ƯU: Smart enrichment với giới hạn
-     */
+    // =====================================================
+    // ENRICHMENT PLANNING
+    // =====================================================
     async planEnrichmentQuery(question, mainContext, analysis, step = 1) {
         if (!analysis.strategy?.needsEnrichment || step > this.agentConfig.maxEnrichmentQueries) {
             return null;
         }
 
-        // TỐI ƯU: Skip enrichment nếu đã có đủ context
+        // Skip enrichment if sufficient context
         if (mainContext.length >= 10) {
             logger.info("[Agent] Skipping enrichment - sufficient context");
             return null;
@@ -527,8 +665,7 @@ class BotService {
 
         try {
             const result = await this.callGemini(enrichmentPrompt, {
-                cacheType: 'enrichment',
-                ttl: 900 // 15 phút
+                cacheType: 'enrichment'
             });
 
             if (result?.shouldEnrich && result?.cypher) {
@@ -542,13 +679,12 @@ class BotService {
         }
     }
 
-    /**
-     * Generate enhanced answer cho complex questions (tối ưu context)
-     */
+    // =====================================================
+    // COMPLEX ANSWER GENERATION
+    // =====================================================
     async generateComplexAnswer(question, allContext, analysis, agentSteps, chatHistory) {
-        // TỐI ƯU: Giới hạn context size và history
-        const limitedHistory = chatHistory.slice(-2); // Chỉ 2 turns gần nhất
-        const limitedContext = allContext.slice(0, 20); // Tối đa 20 nodes
+        const limitedHistory = chatHistory.slice(-2);
+        const limitedContext = allContext.slice(0, 20);
 
         const historyText = limitedHistory.length
             ? limitedHistory.map((item, index) =>
@@ -572,8 +708,7 @@ class BotService {
 
         try {
             return await this.callGemini(enhancedPrompt, {
-                cacheType: 'complex_answer',
-                ttl: 1800
+                cacheType: 'complex_answer'
             });
         } catch (error) {
             logger.error("[Agent] Complex answer generation failed", error);
@@ -587,161 +722,66 @@ class BotService {
         }
     }
 
-    /**
-     * MAIN METHOD: Generate answer với optimizations
-     */
+    // =====================================================
+    // MAIN GENERATE ANSWER METHOD
+    // =====================================================
     async generateAnswer(question, questionEmbedding, chatHistory = []) {
         const startTime = Date.now();
-        logger.info(`=== Bắt đầu xử lý tối ưu: "${question}" ===`);
+        const requestId = Math.random().toString(36).substr(2, 9);
+
+        logger.info(`[${requestId}] Processing: "${question.substring(0, 80)}..."`);
 
         try {
-            // PHASE 1: Classification với caching
+            // Load Gemini config if needed
+            await this.loadGeminiConfig();
+
+            // Phase 1: Classification
             const classification = await this.classifyQuestion(question, chatHistory);
-            logger.info(`[Classification] Category: ${classification.category}, Method: ${classification.processingMethod}`);
+            logger.info(`[${requestId}] Classification: ${classification.category} (${classification.confidence})`);
+
+            let result;
 
             switch (classification.category) {
                 case 'inappropriate':
-                    return await this.handleInappropriateQuestion(question, classification);
+                    result = await this.handleInappropriateQuestion(question, classification);
+                    break;
 
                 case 'off_topic':
-                    return await this.handleOffTopicQuestion(question, classification, chatHistory);
+                    result = await this.handleOffTopicQuestion(question, classification, chatHistory);
+                    break;
 
                 case 'simple_admission':
-                    return await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
+                    result = await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
+                    break;
 
                 case 'complex_admission':
-                    return await this.handleComplexAdmissionOptimized(question, questionEmbedding, chatHistory, classification);
+                    result = await this.handleComplexAdmissionOptimized(question, questionEmbedding, chatHistory, classification);
+                    break;
 
                 default:
-                    logger.warn(`[Classification] Unknown category: ${classification.category}, fallback to simple`);
-                    return await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
+                    logger.warn(`[${requestId}] Unknown category: ${classification.category}, fallback to simple`);
+                    result = await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
             }
+
+            // Add metadata
+            result.requestId = requestId;
+            result.classification = classification;
+            result.processingTime = (Date.now() - startTime) / 1000;
+
+            return result;
+
         } catch (error) {
-            logger.error("[System] Critical error, emergency fallback", error);
-            return this.emergencyFallback(question);
+            logger.error(`[${requestId}] Critical error:`, error);
+            return this.emergencyFallback(question, requestId);
         } finally {
             const totalTime = (Date.now() - startTime) / 1000;
-            logger.info(`=== Hoàn thành trong ${totalTime}s, Cache stats: ${this.cacheStats.hits}/${this.cacheStats.hits + this.cacheStats.misses} hits ===`);
+            logger.info(`[${requestId}] Completed in ${totalTime}s`);
         }
     }
 
-    /**
-     * TỐI ƯU: Complex admission handler
-     */
-    async handleComplexAdmissionOptimized(question, questionEmbedding, chatHistory, classification) {
-        logger.info("[Complex] Processing with optimized Agent intelligence");
-
-        let agentSteps = [];
-        let allContext = [];
-        let cypher = "";
-
-        try {
-            // Step 1: Deep analysis với caching
-            const analysis = await this.analyzeComplexQuestion(question, chatHistory, classification);
-            agentSteps.push({
-                step: "analysis",
-                description: "Phân tích sâu câu hỏi phức tạp",
-                result: analysis
-            });
-
-            // Step 2: Main query (reuse existing logic)
-            const cypherResult = await this.generateCypher(question, questionEmbedding);
-            cypher = cypherResult?.cypher || "";
-            const is_social = cypherResult?.is_social || false;
-
-            if (is_social) {
-                const socialAnswer = await this.handleSocialQuestion(question, chatHistory);
-                return {
-                    answer: socialAnswer,
-                    prompt: "",
-                    cypher: "",
-                    contextNodes: [],
-                    isError: false,
-                    is_social: true,
-                    category: 'complex_admission',
-                    processingMethod: 'agent_complex'
-                };
-            }
-
-            if (cypher) {
-                const mainContext = await this.getContextFromCypher(cypher);
-                allContext.push(...mainContext);
-                agentSteps.push({
-                    step: "main_query",
-                    description: "Truy vấn dữ liệu chính",
-                    resultCount: mainContext.length,
-                    cypher: cypher
-                });
-
-                // Step 3: TỐI ƯU Smart enrichment (chỉ 1 bước thay vì 2)
-                if (analysis.strategy?.needsEnrichment && mainContext.length > 0 && mainContext.length < 10) {
-                    const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, 1);
-                    if (enrichment) {
-                        try {
-                            const enrichmentContext = await this.getContextFromCypher(enrichment.cypher);
-                            if (enrichmentContext.length > 0) {
-                                allContext.push(...enrichmentContext);
-                                agentSteps.push({
-                                    step: `enrichment_1`,
-                                    description: enrichment.purpose,
-                                    resultCount: enrichmentContext.length,
-                                    cypher: enrichment.cypher,
-                                    infoType: enrichment.infoType
-                                });
-                            } else {
-                                logger.info(`[Agent] Enrichment returned no results, proceeding with main context`);
-                            }
-                        } catch (enrichError) {
-                            logger.warn(`[Agent] Enrichment failed`, enrichError);
-                        }
-                    }
-                } else {
-                    logger.info("[Agent] Skipping enrichment - sufficient context or disabled");
-                }
-
-                // Step 4: Enhanced answer generation
-                const answer = await this.generateComplexAnswer(question, allContext, analysis, agentSteps, chatHistory);
-
-                const totalTime = (Date.now() - Date.now()) / 1000;
-                logger.info(`[Complex] Agent completed with ${agentSteps.length} steps`);
-
-                return {
-                    answer: answer || "Xin lỗi, tôi không thể trả lời câu hỏi phức tạp này.",
-                    prompt: "",
-                    cypher: cypher,
-                    contextNodes: allContext,
-                    isError: false,
-                    is_social: false,
-                    category: 'complex_admission',
-                    processingMethod: 'agent_complex',
-                    agentSteps: agentSteps,
-                    analysis: analysis,
-                    processingTime: totalTime
-                };
-            } else {
-                logger.warn("[Complex] No valid cypher, fallback response");
-                const fallbackAnswer = await this.handleSocialQuestion(question, chatHistory);
-
-                return {
-                    answer: fallbackAnswer,
-                    prompt: "",
-                    cypher: "",
-                    contextNodes: [],
-                    isError: false,
-                    is_social: false,
-                    category: 'complex_admission',
-                    processingMethod: 'agent_complex'
-                };
-            }
-        } catch (error) {
-            logger.error("[Complex] Agent processing failed, fallback to simple", error);
-            return await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
-        }
-    }
-
-    /**
-     * Handler methods (giữ nguyên tất cả)
-     */
+    // =====================================================
+    // HANDLER METHODS
+    // =====================================================
     async handleInappropriateQuestion(question, classification) {
         const warningMessage = `
 **Xin lỗi, tôi không thể trả lời câu hỏi này vì nội dung không phù hợp.**
@@ -773,6 +813,7 @@ class BotService {
             isError: false,
             is_social: false,
             category: 'inappropriate',
+            processingMethod: 'rule_based',
             processingTime: 0.1
         };
     }
@@ -783,10 +824,8 @@ class BotService {
 
         try {
             const answer = await this.callGemini(offTopicPrompt, {
-                cacheType: 'off_topic',
-                ttl: 1800
+                cacheType: 'off_topic'
             });
-            const totalTime = (Date.now() - Date.now()) / 1000;
 
             return {
                 answer: answer || `Cảm ơn bạn đã hỏi! Tuy nhiên câu hỏi này không liên quan đến tuyển sinh TDTU. Tôi chuyên hỗ trợ thông tin về các ngành học, học phí, và tư vấn tuyển sinh tại TDTU. Bạn có muốn tìm hiểu về ngành nào không ạ?`,
@@ -796,9 +835,10 @@ class BotService {
                 isError: false,
                 is_social: false,
                 category: 'off_topic',
-                processingTime: totalTime
+                processingMethod: 'llm_social'
             };
         } catch (error) {
+            logger.error("[OffTopic] Handler failed:", error);
             return {
                 answer: "Tôi chuyên hỗ trợ thông tin tuyển sinh TDTU. Bạn có câu hỏi nào về học phí, ngành học, hay thông tin tuyển sinh không ạ?",
                 prompt: "",
@@ -806,28 +846,151 @@ class BotService {
                 contextNodes: [],
                 isError: false,
                 is_social: false,
-                category: 'off_topic'
+                category: 'off_topic',
+                processingMethod: 'fallback'
             };
         }
     }
 
     async handleSimpleAdmission(question, questionEmbedding, chatHistory, classification) {
         logger.info("[Simple] Processing with traditional RAG");
-        const result = await this.generateAnswerTraditional(question, questionEmbedding, chatHistory);
 
-        // Add classification metadata
-        result.category = 'simple_admission';
-        result.processingMethod = 'rag_simple';
-
-        return result;
+        try {
+            const result = await this.generateAnswerTraditional(question, questionEmbedding, chatHistory);
+            result.category = 'simple_admission';
+            result.processingMethod = 'rag_simple';
+            return result;
+        } catch (error) {
+            logger.error("[Simple] Traditional RAG failed:", error);
+            return this.emergencyFallback(question);
+        }
     }
 
-    /**
-     * Traditional RAG mode với optimizations
-     */
+    async handleComplexAdmissionOptimized(question, questionEmbedding, chatHistory, classification) {
+        logger.info("[Complex] Processing with optimized Agent intelligence");
+
+        let agentSteps = [];
+        let allContext = [];
+        let cypher = "";
+
+        try {
+            // Step 1: Deep analysis
+            const analysis = await this.analyzeComplexQuestion(question, chatHistory, classification);
+            agentSteps.push({
+                step: "analysis",
+                description: "Phân tích sâu câu hỏi phức tạp",
+                result: analysis
+            });
+
+            // Step 2: Main query
+            const cypherResult = await this.generateCypher(question, questionEmbedding);
+            cypher = cypherResult?.cypher || "";
+            const is_social = cypherResult?.is_social || false;
+
+            if (is_social) {
+                const socialAnswer = await this.handleSocialQuestion(question, chatHistory);
+                return {
+                    answer: socialAnswer,
+                    prompt: "",
+                    cypher: "",
+                    contextNodes: [],
+                    isError: false,
+                    is_social: true,
+                    category: 'complex_admission',
+                    processingMethod: 'agent_complex'
+                };
+            }
+
+            if (cypher) {
+                const mainContext = await this.getContextFromCypher(cypher);
+                allContext.push(...mainContext);
+                agentSteps.push({
+                    step: "main_query",
+                    description: "Truy vấn dữ liệu chính",
+                    resultCount: mainContext.length,
+                    cypher: cypher
+                });
+
+                // Step 3: Smart enrichment (optional)
+                if (analysis.strategy?.needsEnrichment && mainContext.length > 0 && mainContext.length < 10) {
+                    const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, 1);
+                    if (enrichment) {
+                        try {
+                            const enrichmentContext = await this.getContextFromCypher(enrichment.cypher);
+                            if (enrichmentContext.length > 0) {
+                                allContext.push(...enrichmentContext);
+                                agentSteps.push({
+                                    step: `enrichment_1`,
+                                    description: enrichment.purpose,
+                                    resultCount: enrichmentContext.length,
+                                    cypher: enrichment.cypher,
+                                    infoType: enrichment.infoType
+                                });
+                            }
+                        } catch (enrichError) {
+                            logger.warn(`[Agent] Enrichment failed`, enrichError);
+                        }
+                    }
+                }
+
+                // Step 4: Enhanced answer generation
+                const answer = await this.generateComplexAnswer(question, allContext, analysis, agentSteps, chatHistory);
+
+                logger.info(`[Complex] Agent completed with ${agentSteps.length} steps`);
+
+                return {
+                    answer: answer || "Xin lỗi, tôi không thể trả lời câu hỏi phức tạp này.",
+                    prompt: "",
+                    cypher: cypher,
+                    contextNodes: allContext,
+                    isError: false,
+                    is_social: false,
+                    category: 'complex_admission',
+                    processingMethod: 'agent_complex',
+                    agentSteps: agentSteps,
+                    analysis: analysis
+                };
+            } else {
+                logger.warn("[Complex] No valid cypher, fallback response");
+                const fallbackAnswer = await this.handleSocialQuestion(question, chatHistory);
+
+                return {
+                    answer: fallbackAnswer,
+                    prompt: "",
+                    cypher: "",
+                    contextNodes: [],
+                    isError: false,
+                    is_social: false,
+                    category: 'complex_admission',
+                    processingMethod: 'agent_complex'
+                };
+            }
+        } catch (error) {
+            logger.error("[Complex] Agent processing failed, fallback to simple", error);
+            return await this.handleSimpleAdmission(question, questionEmbedding, chatHistory, classification);
+        }
+    }
+
+    async handleSocialQuestion(question, chatHistory) {
+        const socialPrompt = this.socialPromptTemplate
+            .replace("<user_question>", question);
+
+        try {
+            const answer = await this.callGemini(socialPrompt, {
+                cacheType: 'social'
+            });
+            return answer || "Chào bạn! Tôi sẵn sàng hỗ trợ thông tin tuyển sinh TDTU, bạn muốn hỏi gì nào?";
+        } catch (error) {
+            return "Chào bạn! Tôi sẵn sàng hỗ trợ thông tin tuyển sinh TDTU, bạn muốn hỏi gì nào?";
+        }
+    }
+
+    // =====================================================
+    // TRADITIONAL RAG MODE
+    // =====================================================
     async generateAnswerTraditional(question, questionEmbedding, chatHistory = []) {
         let retries = 0;
-        const maxRetries = this.agentConfig.maxRetries; // Sử dụng config
+        const maxRetries = this.agentConfig.maxRetries;
         let lastError = null;
         let cypherResult = null;
         let contextNodes = [];
@@ -839,7 +1002,7 @@ class BotService {
 
         const startTime = Date.now();
 
-        // 1. Sinh cypher với caching
+        // 1. Generate cypher
         while (retries < maxRetries) {
             try {
                 cypherResult = await this.generateCypher(question, questionEmbedding);
@@ -883,11 +1046,11 @@ class BotService {
             };
         }
 
-        // 2. Truy vấn context nodes
+        // 2. Get context nodes
         contextNodes = await this.getContextFromCypher(cypher);
 
-        // 3. Sinh answer với caching
-        const limitedHistory = chatHistory.slice(-2); // TỐI ƯU: Giới hạn history
+        // 3. Generate answer
+        const limitedHistory = chatHistory.slice(-2);
         const historyText = limitedHistory.length
             ? limitedHistory.map((item, index) =>
                 `Lần ${index + 1}:\n- Người dùng: ${item.question}\n- Bot: ${item.answer.substring(0, 150)}...`).join('\n\n')
@@ -895,15 +1058,14 @@ class BotService {
 
         prompt = this.answerPromptTemplate
             .replace("<user_question>", question)
-            .replace("<context_json>", JSON.stringify(contextNodes.slice(0, 15), null, 2)) // TỐI ƯU: Giới hạn context
+            .replace("<context_json>", JSON.stringify(contextNodes.slice(0, 15), null, 2))
             .replace("<chat_history>", historyText);
 
         retries = 0;
         while (retries < maxRetries) {
             try {
                 answer = await this.callGemini(prompt, {
-                    cacheType: 'simple_answer',
-                    ttl: 1800
+                    cacheType: 'simple_answer'
                 });
                 if (answer) {
                     const totalTime = (Date.now() - startTime) / 1000;
@@ -917,7 +1079,7 @@ class BotService {
                         processingTime: totalTime
                     };
                 }
-                lastError = new Error("Gemini trả về rỗng.");
+                lastError = new Error("Gemini returned empty response");
                 retries++;
             } catch (err) {
                 lastError = err;
@@ -935,65 +1097,10 @@ class BotService {
         };
     }
 
-    async handleSocialQuestion(question, chatHistory) {
-        const socialPrompt = this.socialPromptTemplate
-            .replace("<user_question>", question);
-
-        try {
-            const answer = await this.callGemini(socialPrompt, {
-                cacheType: 'social',
-                ttl: 3600
-            });
-            return answer || "Chào bạn! Tôi sẵn sàng hỗ trợ thông tin tuyển sinh TDTU, bạn muốn hỏi gì nào?";
-        } catch (error) {
-            return "Chào bạn! Tôi sẵn sàng hỗ trợ thông tin tuyển sinh TDTU, bạn muốn hỏi gì nào?";
-        }
-    }
-
-    emergencyFallback(question) {
-        const emergencyMessage = `
-**Xin lỗi, hệ thống đang gặp sự cố kỹ thuật.**
-
-Để được hỗ trợ tốt nhất, bạn vui lòng liên hệ trực tiếp:
-
----
-
-**Hotline:** [1900 2024 (phím 2)](tel:19002024)  
-**Email:** [tuyensinh@tdtu.edu.vn](mailto:tuyensinh@tdtu.edu.vn)  
-**Fanpage:** [facebook.com/tonducthanguniversity](https://www.facebook.com/tonducthanguniversity)  
-**Địa chỉ:** 19 Nguyễn Hữu Thọ, Tân Phong, Quận 7, TP.HCM
-
----
-
-**Cảm ơn bạn đã thông cảm!**
-`.trim();
-
-        return {
-            answer: emergencyMessage,
-            prompt: "",
-            cypher: "",
-            contextNodes: [],
-            isError: true,
-            is_social: false,
-            category: 'emergency_fallback',
-            processingTime: 0.1
-        };
-    }
-
-    /**
-     * TỐI ƯU: Generate Cypher với caching - FIXED
-     */
+    // =====================================================
+    // CYPHER GENERATION
+    // =====================================================
     async generateCypher(question, questionEmbedding) {
-        // FIX: Cache key dựa trên question, không phải template
-        const cacheKey = this.generateCacheKey(`cypher_question_${question}`, 'cypher');
-        
-        // Check cache first
-        const cached = await this.getCachedResponse(cacheKey);
-        if (cached) {
-            logger.info("[Cypher] Cache hit");
-            return cached;
-        }
-
         const prompt = [
             this.nodeEdgeDescription,
             this.cypherPromptTemplate.replace("<user_question>", question)
@@ -1005,13 +1112,16 @@ class BotService {
 
         while (retries < maxRetries) {
             try {
-                const res = await this.queueGeminiRequest(prompt, 'high');
+                const res = await this.callGemini(prompt, {
+                    cacheType: 'cypher',
+                    priority: 'high'
+                });
 
                 let result = res;
                 if (typeof result === "string") {
                     const jsonMatch = result.match(/```json([\s\S]*?)```/);
                     if (jsonMatch) {
-                        result = jsonMatch[1];
+                        result = jsonMatch[1].trim();
                     }
                     try {
                         result = JSON.parse(result);
@@ -1022,6 +1132,7 @@ class BotService {
                     }
                 }
 
+                // Validate result structure
                 if (
                     result &&
                     typeof result === "object" &&
@@ -1029,11 +1140,10 @@ class BotService {
                     typeof result.cypher === "string" &&
                     typeof result.is_social === "boolean"
                 ) {
-                    // Cache successful result
-                    await this.setCachedResponse(cacheKey, result, 1800); // 30 min
                     return result;
                 }
 
+                // Handle legacy format without is_social
                 if (
                     result &&
                     typeof result === "object" &&
@@ -1042,11 +1152,10 @@ class BotService {
                     result.is_social === undefined
                 ) {
                     result.is_social = false;
-                    await this.setCachedResponse(cacheKey, result, 1800);
                     return result;
                 }
 
-                lastError = new Error("Gemini trả về sai định dạng, không có labels/cypher/is_social.");
+                lastError = new Error("Invalid response format from Gemini");
                 retries++;
             } catch (err) {
                 lastError = err;
@@ -1054,92 +1163,113 @@ class BotService {
             }
         }
 
-        throw lastError || new Error("Gemini không trả về kết quả hợp lệ sau nhiều lần thử.");
+        throw lastError || new Error("Failed to generate valid cypher after retries");
     }
 
     async getContextFromCypher(cypher, params = {}, options = {}) {
         try {
             return await neo4jRepository.execute(cypher, params, { raw: false, ...options });
         } catch (err) {
-            logger.error("Lỗi truy vấn:", err);
+            logger.error("Database query error:", err);
             return [];
         }
     }
 
-    /**
-     * TỐI ƯU: Batch processing helpers (dành cho future scaling)
-     */
-    async addToBatch(requestData) {
-        return new Promise((resolve, reject) => {
-            this.batchProcessor.queue.push({
-                ...requestData,
-                resolve,
-                reject,
-                timestamp: Date.now()
-            });
+    // =====================================================
+    // EMERGENCY FALLBACK
+    // =====================================================
+    emergencyFallback(question, requestId = 'unknown') {
+        const circuitBreakerInfo = this.circuitBreaker.state === 'OPEN' ?
+            ' Dịch vụ tạm thời không khả dụng.' : '';
 
-            // Auto-process if batch is full
-            if (this.batchProcessor.queue.length >= this.batchProcessor.batchSize) {
-                this.processBatch();
-            } else {
-                // Process after timeout
-                setTimeout(() => {
-                    if (this.batchProcessor.queue.length > 0 && !this.batchProcessor.processing) {
-                        this.processBatch();
-                    }
-                }, this.batchProcessor.batchTimeout);
-            }
-        });
+        const emergencyMessage = `
+**Xin lỗi, hệ thống đang gặp sự cố kỹ thuật.${circuitBreakerInfo}**
+
+Để được hỗ trợ tốt nhất, bạn vui lòng liên hệ trực tiếp:
+
+---
+
+**Hotline:** [1900 2024 (phím 2)](tel:19002024)  
+**Email:** [tuyensinh@tdtu.edu.vn](mailto:tuyensinh@tdtu.edu.vn)  
+**Fanpage:** [facebook.com/tonducthanguniversity](https://www.facebook.com/tonducthanguniversity)  
+
+---
+
+**Cảm ơn bạn đã thông cảm!**  
+*ID: ${requestId}*
+`.trim();
+
+        return {
+            answer: emergencyMessage,
+            prompt: "",
+            cypher: "",
+            contextNodes: [],
+            isError: true,
+            is_social: false,
+            category: 'emergency_fallback',
+            processingTime: 0.1,
+            requestId
+        };
     }
 
-    async processBatch() {
-        if (this.batchProcessor.processing || this.batchProcessor.queue.length === 0) {
-            return;
-        }
+    // =====================================================
+    // MONITORING & STATS
+    // =====================================================
+    async healthCheck() {
+        const queueHealth = this.requestQueue.length < 20 ? 'healthy' : 'degraded';
+        const circuitBreakerHealth = this.circuitBreaker.state === 'OPEN' ? 'degraded' : 'healthy';
+        const overallHealth = (queueHealth === 'healthy' && circuitBreakerHealth === 'healthy') ? 'healthy' : 'degraded';
 
-        this.batchProcessor.processing = true;
-        const batch = this.batchProcessor.queue.splice(0, this.batchProcessor.batchSize);
-        
-        logger.info(`[Batch] Processing ${batch.length} requests`);
+        return {
+            status: overallHealth,
+            timestamp: new Date().toISOString(),
+            services: {
+                gemini: {
+                    circuitBreakerState: this.circuitBreaker.state,
+                    failures: this.circuitBreaker.failures,
+                    available: this.circuitBreaker.state !== 'OPEN'
+                },
+                cache: {
+                    size: this.responseCache.size,
+                    maxSize: this.maxCacheSize,
+                    hitRate: this.getCacheHitRate(),
+                    dataVersion: this.dataVersion
+                },
+                database: await this.checkDatabaseHealth()
+            },
+            performance: {
+                queue: {
+                    pending: this.requestQueue.length,
+                    active: this.activeRequests,
+                    maxConcurrent: this.maxConcurrentRequests
+                },
+                stats: this.performanceStats,
+                avgResponseTime: this.performanceStats.avgResponseTime
+            }
+        };
+    }
 
+    async checkDatabaseHealth() {
         try {
-            // Process batch với limited concurrency
-            const results = await Promise.allSettled(
-                batch.map(item => this.processSingleBatchItem(item))
-            );
-
-            // Handle results
-            results.forEach((result, index) => {
-                const { resolve, reject } = batch[index];
-                if (result.status === 'fulfilled') {
-                    resolve(result.value);
-                } else {
-                    reject(result.reason);
-                }
-            });
+            await neo4jRepository.execute('RETURN 1 as health', {});
+            return { status: 'healthy', available: true };
         } catch (error) {
-            logger.error("[Batch] Batch processing error:", error);
-            batch.forEach(item => item.reject(error));
-        } finally {
-            this.batchProcessor.processing = false;
-            
-            // Process next batch if queue has items
-            if (this.batchProcessor.queue.length > 0) {
-                setTimeout(() => this.processBatch(), 100);
-            }
+            return {
+                status: 'unhealthy',
+                available: false,
+                error: error.message
+            };
         }
     }
 
-    async processSingleBatchItem(item) {
-        // Process individual batch item
-        return await this.generateAnswer(item.question, item.questionEmbedding, item.chatHistory);
+    getCacheHitRate() {
+        const total = this.cacheStats.hits + this.cacheStats.misses;
+        if (total === 0) return "0%";
+        return `${((this.cacheStats.hits / total) * 100).toFixed(2)}%`;
     }
 
-    /**
-     * TỐI ƯU: Cache statistics và monitoring (No Redis)
-     */
     getCacheStats() {
-        const hitRate = this.cacheStats.hits + this.cacheStats.misses > 0 
+        const hitRate = this.cacheStats.hits + this.cacheStats.misses > 0
             ? (this.cacheStats.hits / (this.cacheStats.hits + this.cacheStats.misses) * 100).toFixed(2)
             : 0;
 
@@ -1150,44 +1280,102 @@ class BotService {
             maxCacheSize: this.maxCacheSize,
             queueLength: this.requestQueue.length,
             activeRequests: this.activeRequests,
-            cacheType: 'memory-only'
+            circuitBreakerState: this.circuitBreaker.state,
+            dataVersion: this.dataVersion
         };
     }
 
-    /**
-     * TỐI ƯU: Clear cache methods (No Redis)
-     */
-    clearMemoryCache() {
-        this.responseCache.clear();
-        this.cacheStats = { hits: 0, misses: 0, evictions: 0 };
-        logger.info("[Cache] Memory cache cleared");
+    getPerformanceStats() {
+        const errorRate = this.performanceStats.totalRequests > 0
+            ? ((this.performanceStats.failedRequests / this.performanceStats.totalRequests) * 100).toFixed(2)
+            : 0;
+
+        const successRate = this.performanceStats.totalRequests > 0
+            ? ((this.performanceStats.successfulRequests / this.performanceStats.totalRequests) * 100).toFixed(2)
+            : 0;
+
+        return {
+            ...this.performanceStats,
+            errorRate: `${errorRate}%`,
+            successRate: `${successRate}%`,
+            uptime: Math.round((Date.now() - this.performanceStats.lastResetTime) / 1000)
+        };
     }
 
-    async clearAllCache() {
-        this.clearMemoryCache();
-        logger.info("[Cache] All cache cleared (memory-only mode)");
-    }
-
-    /**
-     * TỐI ƯU: Periodic cache cleanup để tránh memory leak
-     */
+    // =====================================================
+    // BACKGROUND TASKS
+    // =====================================================
     startCacheCleanup() {
         // Cleanup expired entries every 30 minutes
         setInterval(() => {
             const now = Date.now();
             let cleaned = 0;
-            
+
             for (const [key, value] of this.responseCache.entries()) {
                 if (now - value.timestamp > this.cacheTimeout) {
                     this.responseCache.delete(key);
                     cleaned++;
                 }
             }
-            
+
             if (cleaned > 0) {
                 logger.info(`[Cache] Cleaned ${cleaned} expired entries`);
             }
         }, 30 * 60 * 1000); // 30 minutes
+    }
+
+    startPerformanceLogging() {
+        // Log performance stats every 10 minutes
+        setInterval(() => {
+            const stats = this.getPerformanceStats();
+            const cacheStats = this.getCacheStats();
+
+            logger.info('[Performance] Stats:', {
+                requests: stats,
+                cache: cacheStats,
+                queue: {
+                    pending: this.requestQueue.length,
+                    active: this.activeRequests
+                },
+                circuitBreaker: this.circuitBreaker.state
+            });
+        }, 10 * 60 * 1000); // 10 minutes
+    }
+
+    // =====================================================
+    // UTILITY METHODS
+    // =====================================================
+    resetPerformanceStats() {
+        this.performanceStats = {
+            totalRequests: 0,
+            successfulRequests: 0,
+            failedRequests: 0,
+            avgResponseTime: 0,
+            responseTimeSum: 0,
+            lastResetTime: Date.now()
+        };
+        logger.info('[Performance] Stats reset');
+    }
+
+    // Method để trigger data version update manually
+    async triggerDataVersionUpdate() {
+        this.updateDataVersion();
+        logger.info('[Cache] Data version manually updated, cache cleared');
+    }
+
+    // Graceful shutdown
+    async shutdown() {
+        logger.info('[BotService] Starting graceful shutdown...');
+
+        // Wait for active requests to complete (max 30 seconds)
+        const maxWaitTime = 30000;
+        const startTime = Date.now();
+
+        while (this.activeRequests > 0 && (Date.now() - startTime) < maxWaitTime) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        logger.info('[BotService] Graceful shutdown completed');
     }
 }
 

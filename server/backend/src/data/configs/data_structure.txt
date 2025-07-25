@@ -75,3 +75,20 @@ II. Mô tả mối edges
 (Tuition)-[:OF_PROGRAMME]->(Programme) = Tài liệu học phí này thuộc chương trình đào tạo nào
 (Tuition)-[:OF_YEAR]->(Year) = Tài liệu học phí này thuộc năm nào
 (Scholarship)-[:OF_YEAR]->(Year) = Tài liệu học bổng này thuộc năm nào
+
+=== QUAN TRỌNG: PHÂN BIỆT ID VÀ MÃ NGÀNH ===
+
+1. Major.id: 
+   - LÀ MÃ OBJECT TRONG HỆ THỐNG (technical ID)
+   - VÍ DỤ: "QUAN_TRI_KINH_DOANH_CHUYEN_NGANH_QUAN_TRI_NHA_HANG_KHACH_SAN"
+   - KHÔNG PHẢI MÃ NGÀNH TUYỂN SINH
+
+2. MajorProgramme.major_code:
+   - LÀ MÃ NGÀNH TUYỂN SINH CHÍNH THỨC
+   - VÍ DỤ: "7340101", "7480201", "D480101"
+   - ĐÂY MỚI LÀ MÃ NGÀNH SINH VIÊN CẦN BIẾT
+
+=== QUY TẮC QUAN TRỌNG ===
+- KHI ĐƯỢC HỎI VỀ "MÃ NGÀNH": LUÔN TÌM major_code TRONG MajorProgramme
+- KHÔNG BAO GIỜ TRA VỀ Major.id làm mã ngành
+- MỖI NGÀNH CÓ THỂ CÓ NHIỀU MÃ NGÀNH KHÁC NHAU THEO CHƯƠNG TRÌNH
