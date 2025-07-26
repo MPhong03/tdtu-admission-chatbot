@@ -18,7 +18,7 @@ class CommonService {
         const result = await CommonRepo.setValueByKey(key, value);
 
         if (['gemini_api_url', 'gemini_api_key'].includes(key)) {
-            await BotService.loadGeminiConfig();
+            await BotService.initialize();
         }
 
         return result;

@@ -32,10 +32,10 @@ I. MÔ HÌNH DỮ LIỆU (GRAPH SCHEMA)
 II. HƯỚNG DẪN TẠO CYPHER
 
 1. Tuyệt đối KHÔNG đưa từ viết tắt vào Cypher, chỉ dùng từ khóa đã chuẩn hóa.
-2. Khi keyword là cụm từ dài → tách và OR từng phần.
+2. Khi keyword là cụm từ dài -> tách và OR từng phần.
 3. Cypher phải dùng toán tử so sánh:
    apoc.text.clean(toLower(...)) CONTAINS apoc.text.clean(toLower('<keyword>'))
-   hoặc nhiều `OR` nếu có nhiều keyword.
+   hoặc nhiều `OR` nếu có nhiều keyword. Truy vấn các trường thông tin trong node bạn cho là có chứa thông tin.
 4. Mặc định dùng năm hiện tại nếu câu hỏi không đề cập năm.
 6. Loại trùng lặp: Dùng DISTINCT, WITH DISTINCT hoặc COLLECT kết hợp LIMIT.
 7. Câu xã giao (chào hỏi, hỏi về AI...) -> không sinh truy vấn, trả về:
@@ -46,17 +46,22 @@ II. HƯỚNG DẪN TẠO CYPHER
 8. Phân loại câu hỏi theo từ khóa:
    - “học phí”, “chi phí” -> truy vấn Tuition
    - “học bổng” - truy vấn Scholarship
-   - “giới thiệu”, “ngành gì” → truy vấn Major và MajorProgramme (Ví dụ hỏi "thông tin ngành khoa học máy tính hệ tiêu chuẩn" thì truy vấn Major + Programme + MajorProgramme)
+   - “giới thiệu”, “ngành gì” -> truy vấn Major và MajorProgramme (Ví dụ hỏi "thông tin ngành khoa học máy tính hệ tiêu chuẩn" thì truy vấn Major + Programme + MajorProgramme)
+9. Lưu ý quan trọng với học phí:
+   - Không cố parse số từ t.content bằng split, filter, hay regex.
+   - Không dùng ORDER BY dựa trên giá trị ước lượng học phí.
+   - Chỉ cần truy vấn tài liệu học phí (Tuition) kèm tên hệ đào tạo và năm để người dùng đọc so sánh.
+   - Dùng ORDER BY p.name để sắp xếp dễ nhìn.
 
 III. TIỀN XỬ LÝ TỪ KHÓA (BẮT BUỘC TRƯỚC KHI TẠO CYPHER)
 
 1. **Chuẩn hóa từ viết tắt**:
    - Không đưa từ viết tắt như "cntt", "kt", "ktpm", "maketing"... vào Cypher.
    - Phải chuyển thành cụm từ đầy đủ trước, ví dụ:
-     - "cntt" → "công nghệ thông tin"
-     - "kt" → "kế toán"
-     - "ktpm" → "kỹ thuật phần mềm"
-     - "maketing" → "marketing"
+     - "cntt" -> "công nghệ thông tin"
+     - "kt" -> "kế toán"
+     - "ktpm" -> "kỹ thuật phần mềm"
+     - "maketing" -> "marketing"
 
 IV. TEMPLATE TRUY VẤN VÍ DỤ
 
@@ -117,7 +122,7 @@ VI. CÁC TRƯỜNG HỢP ĐẶC BIỆT
 - "maketing" -> "marketing"
 2. Nếu các node được truy vấn cần đến Year, nhưng câu hỏi không đề cập đến năm nào, thì sử dụng năm hiện tại (VD: AND y.name = '2023')
 3. Nếu người dùng hỏi bằng một cụm từ dài (từ 3 từ trở lên), hãy tự động tách keyword thành các phần con có nghĩa, bỏ qua stopword và dùng OR để truy vấn.
-3.1. Ví dụ: "văn phòng hỗ trợ sinh viên" → ["văn phòng", "hỗ trợ", "sinh viên"]
+3.1. Ví dụ: "văn phòng hỗ trợ sinh viên" -> ["văn phòng", "hỗ trợ", "sinh viên"]
 Truy vấn:
 WHERE apoc.text.clean(toLower(d.text)) CONTAINS apoc.text.clean(toLower('văn phòng'))
    OR apoc.text.clean(toLower(d.text)) CONTAINS apoc.text.clean(toLower('hỗ trợ'))

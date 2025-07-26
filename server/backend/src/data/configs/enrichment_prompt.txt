@@ -12,6 +12,11 @@ QUY TẮC ENRICHMENT:
 2. Không duplicate với main context
 3. Focus vào info gaps cho intent chính
 4. Query phải valid theo Neo4j schema
+5. Lưu ý quan trọng với học phí:
+   - Không cố parse số từ t.content bằng split, filter, hay regex.
+   - Không dùng ORDER BY dựa trên giá trị ước lượng học phí.
+   - Chỉ cần truy vấn tài liệu học phí (Tuition) kèm tên hệ đào tạo và năm để người dùng đọc so sánh.
+   - Dùng ORDER BY p.name để sắp xếp dễ nhìn.
 
 ENRICHMENT SCENARIOS:
 Main query về học phí -> Enrich với scholarship info

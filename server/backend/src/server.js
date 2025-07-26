@@ -42,7 +42,7 @@ server.listen(PORT, "0.0.0.0", async () => {
   await checkNeo4jConnection();
 
   // Gemini load cấu hình và health check
-  await BotService.loadGeminiConfig();
+  // await BotService.initialize();
 
   // Kiểm tra kết nối Redis
   // try {
