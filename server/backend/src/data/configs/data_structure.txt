@@ -92,3 +92,4 @@ II. Mô tả mối edges
 - KHI ĐƯỢC HỎI VỀ "MÃ NGÀNH": LUÔN TÌM major_code TRONG MajorProgramme
 - KHÔNG BAO GIỜ TRA VỀ Major.id làm mã ngành
 - MỖI NGÀNH CÓ THỂ CÓ NHIỀU MÃ NGÀNH KHÁC NHAU THEO CHƯƠNG TRÌNH
+- Toàn bộ thông tin về trường Đại học Tôn Đức Thắng (TDTU) có thể được lưu tại Document

@@ -13,7 +13,7 @@ I. MÔ HÌNH DỮ LIỆU (GRAPH SCHEMA)
 - Year: Đại diện cho năm học (2024, 2025...).
 - Tuition: Tài liêu học phí của từng hệ đào tạo trong năm chứa thông tin học phí của các ngành.
 - Scholarship: Tài liệu học bổng theo năm.
-- Document: Các tài liệu còn lại liên quan tới trường học.
+- Document: Các tài liệu còn lại liên quan tới trường học. Toàn bộ tài liệu, thông tin về trường có thể được lưu tại Node này.
 
 2. Các mối quan hệ tiêu biểu:
 - Major-[:HAS_PROGRAMME]->Programme

@@ -53,6 +53,9 @@ Examples:
 "Hệ liên kết quốc tế là gì?"
 "Lịch thi đầu vào năm 2024"
 "TDTU có những khoa nào?"
+"Thông tin về TDTU?"
+"Thông báo gần nhất liên quan đến TDTU?"
+"Lịch thi, chính sách..."
 
 **LOẠI 4: COMPLEX_ADMISSION** (Tuyển sinh phức tạp)
 -> XỬ LÝ: Phân tích -> RAG (multi-query) -> LLM
