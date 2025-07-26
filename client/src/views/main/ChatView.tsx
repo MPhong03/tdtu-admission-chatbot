@@ -1,4 +1,4 @@
-// ChatView.tsx - Fixed typewriter effect
+// ChatView.tsx - Fixed typewriter effect and initial question re-sending
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { Spin, Tooltip } from "antd";
@@ -15,6 +15,7 @@ import toast from "react-hot-toast";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 
 const TYPEWRITER_INTERVAL = 10;
+const INITIAL_QUESTION_KEY = 'initialQuestionState';
 
 export interface FeedbackData {
   _id: string;
@@ -79,6 +80,36 @@ const ChatView: React.FC<ChatViewProps> = ({
     startTime: number;
     intervalId?: NodeJS.Timeout;
   } | null>(null);
+
+  // Helper functions for initial question state management
+  const getInitialQuestionState = useCallback(() => {
+    try {
+      const stored = sessionStorage.getItem(INITIAL_QUESTION_KEY);
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const setInitialQuestionState = useCallback((chatId: string, question: string) => {
+    try {
+      sessionStorage.setItem(INITIAL_QUESTION_KEY, JSON.stringify({
+        chatId,
+        question,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      console.error('Failed to store initial question state:', error);
+    }
+  }, []);
+
+  const clearInitialQuestionState = useCallback(() => {
+    try {
+      sessionStorage.removeItem(INITIAL_QUESTION_KEY);
+    } catch (error) {
+      console.error('Failed to clear initial question state:', error);
+    }
+  }, []);
 
   // Set breadcrumb title for ChatView
   useEffect(() => {
@@ -234,23 +265,52 @@ const ChatView: React.FC<ChatViewProps> = ({
     }
   }, [initialChatId, chatIdFromParams, currentChatId]);
 
-  // Xử lý initial question từ HomeView
+  // Xử lý initial question từ HomeView - Fixed to prevent re-sending on reload
   useEffect(() => {
+    const initialQuestion = locationState?.initialQuestion;
+    const fromHome = locationState?.fromHome;
+    
     if (
-      locationState?.initialQuestion &&
-      locationState?.fromHome &&
+      initialQuestion &&
+      fromHome &&
       currentChatId &&
       !hasProcessedInitialQuestion.current
     ) {
-      console.log("[ChatView] Processing initial question:", locationState.initialQuestion);
+      // Check if we've already processed this question for this chat
+      const storedState = getInitialQuestionState();
+      if (
+        storedState &&
+        storedState.chatId === currentChatId &&
+        storedState.question === initialQuestion &&
+        Date.now() - storedState.timestamp < 60000 // Within last minute
+      ) {
+        console.log("[ChatView] Initial question recently processed, skipping");
+        hasProcessedInitialQuestion.current = true;
+        return;
+      }
+
+      console.log("[ChatView] Processing initial question:", initialQuestion);
       hasProcessedInitialQuestion.current = true;
+      
+      // Store the state
+      setInitialQuestionState(currentChatId, initialQuestion);
+      
+      // Clear location state to prevent re-processing
+      window.history.replaceState({}, '', window.location.pathname);
 
       // Delay để đảm bảo socket đã connect và component đã render
       setTimeout(() => {
-        handleSend(locationState.initialQuestion || "");
+        handleSend(initialQuestion);
       }, 1000);
     }
-  }, [currentChatId, locationState]);
+  }, [currentChatId, locationState, getInitialQuestionState, setInitialQuestionState]);
+
+  // Clean up initial question state on unmount
+  useEffect(() => {
+    return () => {
+      clearInitialQuestionState();
+    };
+  }, [clearInitialQuestionState]);
 
   // Scroll xuống đáy khi currentTypingAnswer thay đổi
   useEffect(() => {
