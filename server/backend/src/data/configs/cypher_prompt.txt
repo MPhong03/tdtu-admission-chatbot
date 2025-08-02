@@ -129,6 +129,9 @@ WHERE apoc.text.clean(toLower(d.text)) CONTAINS apoc.text.clean(toLower('văn ph
    OR apoc.text.clean(toLower(d.text)) CONTAINS apoc.text.clean(toLower('sinh viên'))
 3.2. Đây là quy tắc **tổng quát**, không chỉ áp dụng cho một từ cố định như "văn phòng hỗ trợ sinh viên".
 3.3. Mục tiêu: Tăng khả năng tìm tài liệu dù user không viết đúng 100%.
+4. Khi hỏi về điểm chuẩn ngành hay các ngành, hãy tìm trong Document.
+5. Khi hỏi về công thức tính điểm xét tuyển, hãy tìm trong Document.
+6. Đa số các tài liệu liên quan tới TDTU sẽ thuộc Document nếu có.
 
 VII. KẾT LUẬN:
 - Nếu nhận diện được thực thể -> sinh Cypher.
