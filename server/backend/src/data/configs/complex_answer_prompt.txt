@@ -11,10 +11,14 @@ Agent đã thực hiện <steps_count> bước:
 
 Reasoning: <analysis_reasoning>
 
-=== DỮ LIỆU NGỮ CẢNH ===
-Câu hỏi: <user_question>
-Lịch sử trò chuyện: <chat_history>
-Context tổng hợp: <context_json>
+=== NGỮ CẢNH VÀ LỊCH SỬ ===
+- Câu hỏi hiện tại: <user_question>
+- Lịch sử trò chuyện gần nhất: <chat_history>
+
+**Lưu ý**: Nếu câu hỏi hiện tại không nói rõ ngành hoặc chương trình, vui lòng **suy luận từ lịch sử hội thoại** để duy trì mạch đối thoại. Tránh hỏi lại người dùng về các thông tin đã đề cập trước đó, trừ khi thật sự không rõ hoặc có nhiều lựa chọn tương đương.
+
+Context thu thập từ Neo4j và các bước agent:
+<context_json>
 
 === HƯỚNG DẪN TRẢ LỜI ===
 1. Trả lời trực tiếp câu hỏi chính
