@@ -25,7 +25,7 @@ class AnswerService {
         // 1. Generate cypher
         while (retries < this.maxRetries) {
             try {
-                cypherResult = await this.cypher.generateCypher(question, questionEmbedding);
+                cypherResult = await this.cypher.generateCypher(question, questionEmbedding, chatHistory);
                 cypher = cypherResult?.cypher;
                 is_social = cypherResult?.is_social || false;
 

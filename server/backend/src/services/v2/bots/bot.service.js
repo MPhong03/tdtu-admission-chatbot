@@ -213,8 +213,8 @@ class BotService {
         return await this.answer.generateSimpleAnswer(question, questionEmbedding, chatHistory);
     }
 
-    async generateCypher(question, questionEmbedding) {
-        return await this.cypher.generateCypher(question, questionEmbedding);
+    async generateCypher(question, questionEmbedding, chatHistory = []) {
+        return await this.cypher.generateCypher(question, questionEmbedding, chatHistory);
     }
 
     async getContextFromCypher(cypher, params = {}, options = {}) {

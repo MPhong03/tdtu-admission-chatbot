@@ -9,9 +9,10 @@ class CypherService {
         this.maxRetries = parseInt(process.env.MAX_RETRIES) || 2;
     }
 
-    async generateCypher(question, questionEmbedding) {
+    async generateCypher(question, questionEmbedding, chatHistory = []) {
         const prompt = this.prompts.buildPrompt('cypher', {
-            user_question: question
+            user_question: question,
+            chat_history: JSON.stringify(chatHistory.slice(-2)),
         });
 
         let retries = 0;

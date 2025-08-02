@@ -170,7 +170,7 @@ class AgentService {
             });
 
             // Step 2: Main query
-            const cypherResult = await this.cypher.generateCypher(question, questionEmbedding);
+            const cypherResult = await this.cypher.generateCypher(question, questionEmbedding, chatHistory);
             cypher = cypherResult?.cypher || "";
             const is_social = cypherResult?.is_social || false;
 

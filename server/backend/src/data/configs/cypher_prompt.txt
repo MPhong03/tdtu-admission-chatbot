@@ -154,5 +154,8 @@ QUAN TRỌNG - PHÂN BIỆT MÃ NGÀNH:
 - Major.id = Mã object hệ thống (KHÔNG phải mã ngành)
 - MajorProgramme.major_code = Mã ngành tuyển sinh thực tế (MỚI ĐÚNG)
 
-X. CÂU HỎI CỦA NGƯỜI DÙNG:
+X. Lịch sử hội thoại gần nhất
+<chat_history>
+
+XI. CÂU HỎI CỦA NGƯỜI DÙNG:
 <user_question>

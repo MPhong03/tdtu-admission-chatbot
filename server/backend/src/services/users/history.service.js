@@ -38,7 +38,7 @@ class HistoryService {
                 visitorId: visitorId,
                 chatId: chat._id,
                 question,
-                answer,
+                answer: typeof answer === 'object' && answer?.data ? answer.data : answer,
                 status: isError ? "error" : "success",
                 cypher: cypher || "",
                 contextNodes: contextNodes ? JSON.stringify(contextNodes) : ""
