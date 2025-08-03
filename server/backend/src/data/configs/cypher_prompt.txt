@@ -90,6 +90,7 @@ Nếu là câu xã giao:
 - Nếu câu hỏi mang tính tư vấn ("nên học gì?", "tư vấn giúp") -> truy vấn Major, Programme hoặc MajorProgramme kèm gợi ý.
 - Nếu không chắc truy vấn được node nào -> fallback tìm trong Document.
 - Nếu trong lịch sử user nói rõ ngành/hệ, nhưng câu hỏi follow-up không lặp lại -> suy luận từ <chat_history> và dùng làm điều kiện.
+- Bạn có thể dựa vào lịch sử trò chuyện của người dùng để có cái nhìn rộng hơn về ngữ cảnh để trả lời câu hỏi.
 
 === QUAN TRỌNG ===
 - MajorProgramme.major_code là mã tuyển sinh CHUẨN, KHÔNG dùng Major.id.

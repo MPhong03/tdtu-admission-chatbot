@@ -6,7 +6,7 @@ class AgentService {
         this.prompts = promptService;
         this.cache = cacheService;
         this.cypher = cypherService;
-        
+
         this.config = {
             maxEnrichmentQueries: parseInt(process.env.MAX_ENRICHMENT_QUERIES) || 1,
             enableSmartSkipping: true
@@ -15,6 +15,15 @@ class AgentService {
 
     async analyzeComplexQuestion(question, chatHistory, classification) {
         try {
+            const inferredEntities = this.extractEntityFromChatHistory(chatHistory);
+            if (inferredEntities) {
+                classification.entities = {
+                    ...classification.entities,
+                    majors: classification.entities.majors?.length > 0 ? classification.entities.majors : inferredEntities.majors,
+                    programmes: classification.entities.programmes?.length > 0 ? classification.entities.programmes : inferredEntities.programmes
+                };
+            }
+
             const prompt = this.prompts.buildPrompt('analysis', {
                 user_question: question,
                 classification_info: JSON.stringify(classification),
@@ -122,14 +131,19 @@ class AgentService {
             let result = await this.cache.get(cacheKey);
 
             if (!result) {
-                result = await this.gemini.queueRequest(prompt);
-                if (result) {
-                    await this.cache.set(cacheKey, result);
+                try {
+                    result = await this.gemini.queueRequest(prompt);
+                    if (result) {
+                        await this.cache.set(cacheKey, result);
+                    }
+                } catch (err) {
+                    logger.warn("[Agent] Gemini failed during generateComplexAnswer:", err.message);
+                    result = null;
                 }
             }
 
-            return result;
-
+            if (result) return result;
+            return await this.generateSimpleFallback(question, allContext, chatHistory);
         } catch (error) {
             logger.error("[Agent] Complex answer generation failed", error);
             // Fallback to simple template
@@ -278,6 +292,16 @@ class AgentService {
         } catch (error) {
             return "Chào bạn! Tôi sẵn sàng hỗ trợ thông tin tuyển sinh TDTU, bạn muốn hỏi gì nào?";
         }
+    }
+
+    extractEntityFromChatHistory(chatHistory) {
+        const recent = chatHistory.slice(-3).reverse();
+        for (const item of recent) {
+            if (item.analysis?.entities?.majors?.length > 0 || item.analysis?.entities?.programmes?.length > 0) {
+                return item.analysis.entities;
+            }
+        }
+        return null;
     }
 }
 

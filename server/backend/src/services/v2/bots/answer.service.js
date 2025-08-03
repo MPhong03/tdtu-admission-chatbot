@@ -115,14 +115,7 @@ class AnswerService {
             }
         }
 
-        return {
-            answer: "Xin lỗi, tôi không thể trả lời do lỗi hệ thống.",
-            prompt,
-            cypher,
-            contextNodes,
-            isError: true,
-            is_social: false
-        };
+        return this.generateEmergencyFallback(question, `simple-${Date.now().toString(36)}`);
     }
 
     async generateSocialResponse(question, chatHistory) {

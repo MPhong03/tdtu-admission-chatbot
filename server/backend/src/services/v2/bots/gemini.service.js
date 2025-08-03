@@ -7,7 +7,7 @@ class GeminiService {
     constructor() {
         this.apiUrl = process.env.GEMINI_API_URL;
         this.apiKey = process.env.GEMINI_API_KEY;
-        
+
         // Request management
         this.requestQueue = [];
         this.activeRequests = 0;
@@ -89,6 +89,7 @@ class GeminiService {
 
         this.circuitBreaker.failures++;
         this.circuitBreaker.lastFailTime = Date.now();
+        this.circuitBreaker.reason = error?.message || 'Unknown Gemini error';
 
         if (this.circuitBreaker.failures >= this.circuitBreaker.threshold) {
             this.circuitBreaker.state = 'OPEN';
@@ -252,7 +253,7 @@ class GeminiService {
             hour: '2-digit',
             minute: '2-digit'
         });
-        
+
         return `Thời gian hiện tại: ${vietnamTime} - Năm ${now.getFullYear()}`;
     }
 
