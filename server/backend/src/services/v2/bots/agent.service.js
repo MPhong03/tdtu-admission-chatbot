@@ -174,17 +174,27 @@ class AgentService {
         let allContext = [];
         let cypher = "";
         const maxEnrichmentSteps = parseInt(process.env.MAX_ENRICHMENT_STEPS) || 3;
+        const minConfidence = 0.8;
+        const maxContextSize = 50;
 
         try {
-            // Step 1: Deep analysis
-            const analysis = await this.analyzeComplexQuestion(question, chatHistory, classification);
+            // ===== Step 1: Deep analysis =====
+            let analysis = await this.analyzeComplexQuestion(question, chatHistory, classification);
+            if (typeof analysis === 'string') {
+                try {
+                    analysis = JSON.parse(analysis);
+                } catch (e) {
+                    logger.error('[Agent] Failed to parse analysis JSON:', e.message);
+                    analysis = {};
+                }
+            }
             agentSteps.push({
                 step: "analysis",
                 description: "Phân tích sâu câu hỏi phức tạp",
                 result: analysis
             });
 
-            // Step 2: Main query
+            // ===== Step 2: Main query =====
             const cypherResult = await this.cypher.generateCypher(question, questionEmbedding, chatHistory);
             cypher = cypherResult?.cypher || "";
             const is_social = cypherResult?.is_social || false;
@@ -203,118 +213,9 @@ class AgentService {
                 };
             }
 
-            if (cypher) {
-                const mainContext = await this.cypher.executeQuery(cypher);
-                allContext.push(...mainContext);
-                agentSteps.push({
-                    step: "main_query",
-                    description: "Truy vấn dữ liệu chính",
-                    resultCount: mainContext.length,
-                    cypher: cypher
-                });
-
-                // Step 3: Multi-step enrichment (refactored)
-                let enrichmentStep = 1;
-                let contextScore = 0;
-                let contextScoreReason = '';
-                const minConfidence = 0.8;
-                // Đánh giá context sau main query
-                const contextScorePrompt = this.prompts.buildPrompt('contextScore', {
-                    user_question: question,
-                    context_json: JSON.stringify(allContext, null, 2)
-                });
-                let contextScoreResp = await this.gemini.queueRequest(contextScorePrompt);
-                try {
-                    const parsed = JSON.parse(contextScoreResp);
-                    contextScore = parsed.score;
-                    contextScoreReason = parsed.reasoning;
-                } catch (e) {
-                    contextScore = 0;
-                    contextScoreReason = 'Không parse được kết quả chấm điểm context';
-                }
-                agentSteps.push({
-                    step: 'context_score_main',
-                    description: 'Chấm điểm context sau truy vấn chính',
-                    contextScore,
-                    contextScoreReason
-                });
-                // Nếu điểm chưa đủ tự tin thì mới enrichment
-                while (
-                    analysis.strategy?.needsEnrichment &&
-                    allContext.length > 0 &&
-                    allContext.length < 10 &&
-                    enrichmentStep <= maxEnrichmentSteps &&
-                    contextScore < minConfidence
-                ) {
-                    const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, enrichmentStep);
-                    if (enrichment && enrichment.shouldEnrich && enrichment.cypher) {
-                        try {
-                            const enrichmentContext = await this.cypher.executeQuery(enrichment.cypher);
-                            if (enrichmentContext.length > 0) {
-                                allContext.push(...enrichmentContext);
-                                // Chấm điểm lại context sau enrichment
-                                const contextScorePrompt = this.prompts.buildPrompt('contextScore', {
-                                    user_question: question,
-                                    context_json: JSON.stringify(allContext, null, 2)
-                                });
-                                let contextScoreResp = await this.gemini.queueRequest(contextScorePrompt);
-                                try {
-                                    const parsed = JSON.parse(contextScoreResp);
-                                    contextScore = parsed.score;
-                                    contextScoreReason = parsed.reasoning;
-                                } catch (e) {
-                                    contextScore = 0;
-                                    contextScoreReason = 'Không parse được kết quả chấm điểm context';
-                                }
-                                agentSteps.push({
-                                    step: `enrichment_${enrichmentStep}`,
-                                    description: enrichment.purpose,
-                                    resultCount: enrichmentContext.length,
-                                    cypher: enrichment.cypher,
-                                    infoType: enrichment.infoType,
-                                    contextScore,
-                                    contextScoreReason
-                                });
-                            }
-                        } catch (enrichError) {
-                            logger.warn(`[Agent] Enrichment failed`, enrichError);
-                        }
-                    } else {
-                        break;
-                    }
-                    if (allContext.length >= 10) {
-                        break;
-                    }
-                    enrichmentStep++;
-                }
-
-                // Step 4: Enhanced answer generation
-                const answer = await this.generateComplexAnswer(question, allContext, analysis, agentSteps, chatHistory);
-
-                logger.info(`[Complex] Agent completed with ${agentSteps.length} steps`);
-
-                return {
-                    answer: answer || "Xin lỗi, tôi không thể trả lời câu hỏi phức tạp này.",
-                    prompt: "",
-                    cypher: cypher,
-                    contextNodes: allContext,
-                    isError: false,
-                    is_social: false,
-                    category: 'complex_admission',
-                    processingMethod: 'agent_complex',
-                    agentSteps: agentSteps,
-                    analysis: analysis,
-                    // enrichment detail bổ sung
-                    enrichmentSteps: agentSteps.filter(s => s.step && s.step.startsWith('enrichment_')).length,
-                    enrichmentDetails: agentSteps,
-                    contextScore: (agentSteps.filter(s => s.contextScore !== undefined).slice(-1)[0] || {}).contextScore || 0,
-                    contextScoreHistory: agentSteps.filter(s => s.contextScore !== undefined).map(s => s.contextScore),
-                    questionType: analysis.category || 'complex_admission'
-                };
-            } else {
+            if (!cypher) {
                 logger.warn("[Complex] No valid cypher, fallback response");
                 const fallbackAnswer = await this.generateSocialAnswer(question, chatHistory);
-
                 return {
                     answer: fallbackAnswer,
                     prompt: "",
@@ -326,6 +227,117 @@ class AgentService {
                     processingMethod: 'agent_complex'
                 };
             }
+
+            // ===== Step 3: Main context & scoring =====
+            const mainContext = await this.cypher.executeQuery(cypher);
+            allContext.push(...mainContext);
+            agentSteps.push({
+                step: "main_query",
+                description: "Truy vấn dữ liệu chính",
+                resultCount: mainContext.length,
+                cypher: cypher
+            });
+
+            // Đánh giá context sau main query
+            let enrichmentStep = 1;
+            let contextScore = 0;
+            let contextScoreReason = '';
+            const scoreContext = async () => {
+                const contextScorePrompt = this.prompts.buildPrompt('contextScore', {
+                    user_question: question,
+                    context_json: JSON.stringify(allContext, null, 2)
+                });
+                let contextScoreResp = await this.gemini.queueRequest(contextScorePrompt);
+                logger.info(`[Agent] Context score before enrichment ${enrichmentStep}: ${JSON.stringify(contextScoreResp)}`);
+                logger.info(`[Agent] Type of contextScoreResp: ${typeof contextScoreResp}`);
+                try {
+                    let parsed;
+                    if (typeof contextScoreResp === 'string') {
+                        parsed = JSON.parse(contextScoreResp);
+                    } else {
+                        parsed = contextScoreResp;
+                    }
+                    contextScore = parsed.score;
+                    contextScoreReason = parsed.reasoning;
+                } catch (e) {
+                    contextScore = 0;
+                    contextScoreReason = e.message;
+                }
+                agentSteps.push({
+                    step: enrichmentStep === 1 ? 'context_score_main' : `context_score_enrichment_${enrichmentStep-1}`,
+                    description: enrichmentStep === 1 ? 'Chấm điểm context sau truy vấn chính' : `Chấm điểm context sau enrichment ${enrichmentStep-1}`,
+                    contextScore,
+                    contextScoreReason
+                });
+            };
+            await scoreContext();
+
+            // ===== Step 4: Multi-step enrichment =====
+            while (
+                enrichmentStep <= maxEnrichmentSteps &&
+                contextScore < minConfidence &&
+                allContext.length <= maxContextSize
+            ) {
+                const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, enrichmentStep);
+                logger.info(`[Agent] Enrichment ${enrichmentStep}: ${JSON.stringify(enrichment)}`);
+                if (enrichment && enrichment.shouldEnrich && enrichment.cypher) {
+                    try {
+                        logger.info("[Complex] Enrichment Cypher:", enrichment.cypher);
+                        const enrichmentContext = await this.cypher.executeQuery(enrichment.cypher);
+                        if (enrichmentContext.length > 0) {
+                            allContext.push(...enrichmentContext);
+                            agentSteps.push({
+                                step: `enrichment_${enrichmentStep}`,
+                                description: enrichment.purpose,
+                                resultCount: enrichmentContext.length,
+                                cypher: enrichment.cypher,
+                                infoType: enrichment.infoType
+                            });
+                            enrichmentStep++;
+                            await scoreContext();
+                        } else {
+                            break;
+                        }
+                    } catch (enrichError) {
+                        logger.warn(`[Agent] Enrichment failed`, enrichError);
+                        break;
+                    }
+                } else {
+                    break;
+                }
+                if (allContext.length >= maxContextSize) {
+                    break;
+                }
+            }
+
+            // ===== Step 5: Generate final answer =====
+            const answer = await this.generateComplexAnswer(question, allContext, analysis, agentSteps, chatHistory);
+            logger.info(`[Complex] Agent completed with ${agentSteps.length} steps`);
+
+            // ===== Chuẩn hóa enrichment info trả về =====
+            const enrichmentSteps = agentSteps.filter(s => s.step && s.step.startsWith('enrichment_')).length;
+            const enrichmentDetails = agentSteps;
+            const contextScoreHistory = agentSteps.filter(s => s.contextScore !== undefined).map(s => s.contextScore);
+            const contextScoreFinal = contextScoreHistory.length > 0 ? contextScoreHistory[contextScoreHistory.length - 1] : 0;
+            const questionType = analysis.category || 'complex_admission';
+
+            return {
+                answer: answer || "Xin lỗi, tôi không thể trả lời câu hỏi phức tạp này.",
+                prompt: "",
+                cypher: cypher,
+                contextNodes: allContext,
+                isError: false,
+                is_social: false,
+                category: 'complex_admission',
+                processingMethod: 'agent_complex',
+                agentSteps: agentSteps,
+                analysis: analysis,
+                enrichmentSteps,
+                enrichmentDetails,
+                contextScore: contextScoreFinal,
+                contextScoreHistory,
+                questionType
+            };
         } catch (error) {
             logger.error("[Complex] Agent processing failed", error);
             throw error; // Let parent handle fallback
