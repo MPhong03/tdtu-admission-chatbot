@@ -173,6 +173,7 @@ class AgentService {
         let agentSteps = [];
         let allContext = [];
         let cypher = "";
+        const maxEnrichmentSteps = parseInt(process.env.MAX_ENRICHMENT_STEPS) || 3;
 
         try {
             // Step 1: Deep analysis
@@ -212,16 +213,22 @@ class AgentService {
                     cypher: cypher
                 });
 
-                // Step 3: Smart enrichment (optional)
-                if (analysis.strategy?.needsEnrichment && mainContext.length > 0 && mainContext.length < 10) {
-                    const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, 1);
-                    if (enrichment) {
+                // Step 3: Multi-step enrichment
+                let enrichmentStep = 1;
+                while (
+                    analysis.strategy?.needsEnrichment &&
+                    allContext.length > 0 &&
+                    allContext.length < 10 &&
+                    enrichmentStep <= maxEnrichmentSteps
+                ) {
+                    const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, enrichmentStep);
+                    if (enrichment && enrichment.shouldEnrich && enrichment.cypher) {
                         try {
                             const enrichmentContext = await this.cypher.executeQuery(enrichment.cypher);
                             if (enrichmentContext.length > 0) {
                                 allContext.push(...enrichmentContext);
                                 agentSteps.push({
-                                    step: `enrichment_1`,
+                                    step: `enrichment_${enrichmentStep}`,
                                     description: enrichment.purpose,
                                     resultCount: enrichmentContext.length,
                                     cypher: enrichment.cypher,
@@ -232,6 +239,7 @@ class AgentService {
                             logger.warn(`[Agent] Enrichment failed`, enrichError);
                         }
                     }
+                    enrichmentStep++;
                 }
 
                 // Step 4: Enhanced answer generation
