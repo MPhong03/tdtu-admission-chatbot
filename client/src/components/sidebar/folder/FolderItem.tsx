@@ -106,11 +106,15 @@ const FolderItem = ({
 
       setLoading(true);
       try {
-        // TODO: Gọi API tạo đoạn chat nếu cần
-        message.success("Tạo đoạn chat thành công");
-        setModalVisible(false);
-        fetchChats();
-        reload?.();
+        const res = await chatApi.createChat(projectName.trim(), id);
+        if (res.Code === 1) {
+          message.success("Tạo đoạn chat thành công");
+          setModalVisible(false);
+          fetchChats();
+          reload?.();
+        } else {
+          message.error(res.Message || "Tạo đoạn chat thất bại");
+        }
       } catch {
         message.error("Tạo đoạn chat thất bại");
       } finally {
