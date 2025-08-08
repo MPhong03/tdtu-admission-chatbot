@@ -12,7 +12,7 @@ const FeedbackRepo = new BaseRepository(Feedback);
 const NotificationRepo = new BaseRepository(Notification);
 
 class HistoryService {
-    async saveChat({ userId, visitorId, chatId, question, answer, cypher, contextNodes, isError }) {
+    async saveChat({ userId, visitorId, chatId, question, answer, cypher, contextNodes, isError, questionType, enrichmentSteps, enrichmentDetails, contextScore, contextScoreHistory }) {
         try {
             let chat;
 
@@ -41,7 +41,12 @@ class HistoryService {
                 answer: typeof answer === 'object' && answer?.data ? answer.data : answer,
                 status: isError ? "error" : "success",
                 cypher: cypher || "",
-                contextNodes: contextNodes ? JSON.stringify(contextNodes) : ""
+                contextNodes: contextNodes ? JSON.stringify(contextNodes) : "",
+                questionType: questionType || 'simple_admission',
+                enrichmentSteps: enrichmentSteps || 0,
+                enrichmentDetails: enrichmentDetails ? JSON.stringify(enrichmentDetails) : '',
+                contextScore: contextScore || 0,
+                contextScoreHistory: contextScoreHistory || []
             });
 
             return HttpResponse.success("Lưu tin nhắn thành công", { chatId: chat._id, history });
