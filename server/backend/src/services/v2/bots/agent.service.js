@@ -303,7 +303,13 @@ class AgentService {
                     category: 'complex_admission',
                     processingMethod: 'agent_complex',
                     agentSteps: agentSteps,
-                    analysis: analysis
+                    analysis: analysis,
+                    // enrichment detail bổ sung
+                    enrichmentSteps: agentSteps.filter(s => s.step && s.step.startsWith('enrichment_')).length,
+                    enrichmentDetails: agentSteps,
+                    contextScore: (agentSteps.filter(s => s.contextScore !== undefined).slice(-1)[0] || {}).contextScore || 0,
+                    contextScoreHistory: agentSteps.filter(s => s.contextScore !== undefined).map(s => s.contextScore),
+                    questionType: analysis.category || 'complex_admission'
                 };
             } else {
                 logger.warn("[Complex] No valid cypher, fallback response");
