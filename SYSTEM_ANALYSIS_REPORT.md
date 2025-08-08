@@ -97,28 +97,75 @@ User Question → Classification → Route to Handler → Generate Response
      └─────────────────────── Final Response ────────────┘
 ```
 
-#### 2.2.3 API Endpoints chính
-**V1 APIs** (Legacy):
-- `/auth/*` - Authentication & Authorization
-- `/chatbot/*` - Chatbot interactions
-- `/chats/*` - Chat management
-- `/folders/*` - Chat folder organization
-- `/histories/*` - Chat history
-- `/statistics/*` - Usage statistics
-- `/users/*` - User management
-- `/feedbacks/*` - User feedback
-- `/notifications/*` - System notifications
+#### 2.2.3 API Endpoints chi tiết
 
-**V2 APIs** (Current):
-- `/v2/majors/*` - Major management
-- `/v2/programmes/*` - Programme management
-- `/v2/years/*` - Academic year data
-- `/v2/tuitions/*` - Tuition information
-- `/v2/scholarships/*` - Scholarship data
-- `/v2/documents/*` - Document management
-- `/v2/bots/*` - Bot analysis tools
-- `/v2/import/*` - Data import utilities
-- `/v2/excels/*` - Excel export functionality
+**Authentication APIs**:
+- `POST /auth/register` - Đăng ký tài khoản mới
+- `POST /auth/login` - Đăng nhập với email/password  
+- `POST /auth/change-password` - Đổi mật khẩu (authenticated)
+
+**Chatbot Core APIs**:
+- `POST /chatbot/chat` - Chat với bot và auto-save history
+- `GET /chatbot/history/:chatId` - Lấy lịch sử chat phân trang
+- `POST /chatbot/llm/embedding` - Generate embeddings
+- `POST /chatbot/llm/embeddings` - Batch similarity comparison
+
+**Chat & Conversation Management**:
+- `POST /chats` - Tạo chat mới với folder support
+- `GET /chats/:id` - Chi tiết cuộc hội thoại
+- `PUT /chats/:id` - Cập nhật chat
+- `PATCH /chats/:id/rename` - Đổi tên chat
+- `PATCH /chats/:id/move` - Di chuyển chat vào folder
+- `DELETE /chats/:id` - Xóa chat
+- `GET /chats` - Phân trang chats với filter
+
+**Folder Management**:
+- `POST /folders` - Tạo folder organize chats
+- `GET /folders/:id` - Chi tiết folder
+- `PUT /folders/:id` - Cập nhật folder
+- `PATCH /folders/:id/rename` - Đổi tên folder
+- `DELETE /folders/:id` - Xóa folder
+- `GET /folders` - Phân trang folders
+
+**Data Management (V2 Admin APIs)**:
+- **Majors**: `CRUD /v2/majors/*` - Quản lý ngành học
+- **Programmes**: `CRUD /v2/programmes/*` - Quản lý chương trình đào tạo
+- **Years**: `CRUD /v2/years/*` - Quản lý năm học  
+- **Tuitions**: `CRUD /v2/tuitions/*` - Quản lý học phí
+- **Scholarships**: `CRUD /v2/scholarships/*` - Quản lý học bổng
+- **Documents**: `CRUD /v2/documents/*` - Quản lý tài liệu
+
+**Import/Export APIs**:
+- `POST /v2/import/majors-programmes-years` - Import data từ crawling
+- `POST /v2/import/tuitions` - Import thông tin học phí
+- `POST /v2/import/scholarships` - Import học bổng
+- `POST /v2/import/documents` - Import tài liệu
+- `/v2/excels/*` - Export Excel functionality
+
+**Feedback & Rating**:
+- `POST /feedbacks` - Gửi feedback cho bot response
+- `GET /feedbacks` - Phân trang feedback của user
+- `CRUD /feedbacks/:id` - Quản lý feedback cá nhân
+- `GET /admin/all-feedbacks` - Admin view all feedbacks
+- `CRUD /feedbacks/:id/admin-replies/*` - Admin reply system
+
+**Analytics & Statistics**:
+- `GET /statistics/summary` - Tổng quan hệ thống
+- `GET /statistics/qa-by-day` - Thống kê Q&A theo ngày
+- `GET /statistics/qa-by-status` - Thống kê theo status
+- `GET /statistics/word-frequency` - Word frequency analysis
+
+**System Management**:
+- `GET /users` - User management (admin)
+- `GET /histories` - System interaction history
+- `POST /histories/:id/reply` - Admin reply to user questions
+- `GET /notifications` - User notifications
+- `POST /notifications/:id/read` - Mark as read
+- `GET /systemconfigs` - System configuration management
+
+**Bot Analysis Tools (Admin)**:
+- `POST /v2/bots/analyze` - Generate và analyze Cypher queries
+- `POST /v2/bots/context` - Context retrieval testing
 
 ### 2.3 Thành phần Client Frontend (`/client`)
 **Mục đích**: Giao diện người dùng chính cho chatbot
@@ -133,12 +180,16 @@ User Question → Classification → Route to Handler → Generate Response
 - **Real-time**: Socket.io Client
 - **Animation**: Framer Motion, Lottie React
 
-**Cấu trúc trang**:
-- `/auth` - Authentication page
-- `/register` - User registration
-- `/home` - Main chatbot interface
-- `/folder/:id` - Chat folder view
-- `/chat/:id` - Individual chat view
+**Cấu trúc trang và tính năng**:
+- `/auth` - Trang đăng nhập với form validation
+- `/register` - Đăng ký tài khoản mới
+- `/home` - Main chatbot interface với chat suggestions
+- `/folder/:id` - Chat folder view với organization features
+- `/chat/:id` - Individual chat view với full conversation history
+- **Real-time Features**: Socket.io cho instant messaging
+- **Responsive Design**: Mobile-first với TailwindCSS
+- **State Management**: Recoil cho global state
+- **Animation**: Framer Motion cho smooth transitions
 
 ### 2.4 Thành phần Dashboard Frontend (`/server/frontend`)
 **Mục đích**: Giao diện quản trị hệ thống
@@ -152,12 +203,14 @@ User Question → Classification → Route to Handler → Generate Response
 - **Text Editor**: TinyMCE
 - **Visualization**: Visx (D3-based)
 
-**Chức năng**:
-- Dashboard analytics
-- User management
-- Content management
-- System monitoring
-- Data visualization
+**Chức năng chi tiết**:
+- **Dashboard Analytics**: Real-time metrics, user engagement, Q&A statistics
+- **User Management**: Admin panel cho user accounts, roles, permissions
+- **Content Management**: CRUD cho majors, programmes, documents, tuitions
+- **System Monitoring**: Health checks, performance metrics, error tracking
+- **Data Visualization**: Charts với ApexCharts, word clouds với Visx
+- **Import/Export Tools**: Excel upload/download, data migration utilities
+- **Feedback Management**: Admin responses, user satisfaction tracking
 
 ### 2.5 Neo4j Knowledge Graph
 **Schema chính**:
@@ -206,58 +259,172 @@ User Question → Classification → Route to Handler → Generate Response
 - Context retrieval từ Neo4j graph
 - Relationship-aware information retrieval
 
-### 3.2 Chức năng Data Pipeline
+✅ **Tương tác Chatbot Real-time**
+- API `/chatbot/chat` - Chat với bot và auto-save history
+- API `/chatbot/history/:chatId` - Lấy lịch sử chat phân trang
+- Embedding generation cho semantic search
+- Context retrieval dựa trên câu hỏi
+
+### 3.2 Chức năng Authentication & User Management
+✅ **Hệ thống đăng nhập/đăng ký**
+- API `/auth/register` - Đăng ký tài khoản mới
+- API `/auth/login` - Đăng nhập với email/password
+- API `/auth/change-password` - Đổi mật khẩu (yêu cầu authentication)
+- JWT token-based authentication
+- Role-based access control (Admin/User)
+
+✅ **Quản lý người dùng**
+- API `/users` - Phân trang danh sách user
+- User profile management
+- Optional authentication cho guest users
+
+### 3.3 Chức năng Chat & Conversation Management
+✅ **Quản lý cuộc hội thoại**
+- API `POST /chats` - Tạo chat mới với folder support
+- API `GET /chats/:id` - Lấy thông tin chi tiết chat
+- API `PUT /chats/:id` - Cập nhật thông tin chat
+- API `PATCH /chats/:id/rename` - Đổi tên cuộc hội thoại
+- API `PATCH /chats/:id/move` - Di chuyển chat vào folder khác
+- API `DELETE /chats/:id` - Xóa cuộc hội thoại
+- API `GET /chats` - Phân trang chats với filter theo folder
+
+✅ **Quản lý thư mục (Folders)**
+- API `POST /folders` - Tạo folder mới để organize chats
+- API `GET /folders/:id` - Lấy thông tin folder
+- API `PUT /folders/:id` - Cập nhật folder
+- API `PATCH /folders/:id/rename` - Đổi tên folder
+- API `DELETE /folders/:id` - Xóa folder
+- API `GET /folders` - Phân trang folders của user
+
+### 3.4 Chức năng Data Management (Admin)
+✅ **Quản lý Ngành học (Majors)**
+- API `POST /v2/majors` - Tạo ngành học mới
+- API `GET /v2/majors` - Phân trang danh sách ngành học
+- API `GET /v2/majors/:id` - Chi tiết ngành học
+- API `PUT /v2/majors/:id` - Cập nhật thông tin ngành
+- API `DELETE /v2/majors/:id` - Xóa ngành học
+
+✅ **Quản lý Chương trình đào tạo (Programmes)**
+- API `POST /v2/programmes` - Tạo chương trình mới
+- API `GET /v2/programmes` - Phân trang chương trình
+- API `GET /v2/programmes/:id` - Chi tiết chương trình
+- API `PUT /v2/programmes/:id` - Cập nhật chương trình
+- API `DELETE /v2/programmes/:id` - Xóa chương trình
+
+✅ **Quản lý Năm học (Years)**
+- API `POST /v2/years` - Tạo năm học mới
+- API `GET /v2/years` - Phân trang năm học
+- API `GET /v2/years/:id` - Chi tiết năm học
+- API `PUT /v2/years/:id` - Cập nhật năm học
+- API `DELETE /v2/years/:id` - Xóa năm học
+
+✅ **Quản lý Học phí (Tuitions)**
+- API `POST /v2/tuitions` - Tạo thông tin học phí
+- API `GET /v2/tuitions` - Phân trang học phí theo chương trình/năm
+- API `GET /v2/tuitions/:id` - Chi tiết học phí
+- API `PUT /v2/tuitions/:id` - Cập nhật học phí
+- API `DELETE /v2/tuitions/:id` - Xóa thông tin học phí
+
+✅ **Quản lý Học bổng (Scholarships)**
+- API `POST /v2/scholarships` - Tạo thông tin học bổng
+- API `GET /v2/scholarships` - Phân trang học bổng theo năm
+- API `GET /v2/scholarships/:id` - Chi tiết học bổng
+- API `PUT /v2/scholarships/:id` - Cập nhật học bổng
+- API `DELETE /v2/scholarships/:id` - Xóa học bổng
+
+✅ **Quản lý Tài liệu (Documents)**
+- API `POST /v2/documents` - Upload/tạo tài liệu tuyển sinh
+- API `GET /v2/documents` - Phân trang tài liệu theo năm/loại
+- API `GET /v2/documents/:id` - Chi tiết tài liệu
+- API `PUT /v2/documents/:id` - Cập nhật tài liệu
+- API `DELETE /v2/documents/:id` - Xóa tài liệu
+
+### 3.5 Chức năng Import/Export Data
+✅ **Data Import tự động**
+- API `POST /v2/import/majors-programmes-years` - Import majors & programmes
+- API `POST /v2/import/tuitions` - Import thông tin học phí
+- API `POST /v2/import/scholarships` - Import học bổng
+- API `POST /v2/import/documents` - Import tài liệu tuyển sinh
+- Batch processing cho large datasets
+- Data validation và error handling
+
+✅ **Excel Export**
+- API `/v2/excels/*` - Export data ra Excel formats
+- Template generation cho data imports
+- Automated report generation
+
+### 3.6 Chức năng Feedback & Rating
+✅ **Hệ thống phản hồi người dùng**
+- API `POST /feedbacks` - Gửi feedback cho câu trả lời chatbot
+- API `GET /feedbacks` - Phân trang feedback của user
+- API `GET /feedbacks/:id` - Chi tiết feedback
+- API `PUT /feedbacks/:id` - Cập nhật feedback (owner only)
+- API `DELETE /feedbacks/:id` - Xóa feedback (owner only)
+
+✅ **Admin Feedback Management**
+- API `GET /admin/all-feedbacks` - Quản lý tất cả feedback
+- API `POST /feedbacks/:id/admin-replies` - Admin reply to feedback
+- API `PUT /feedbacks/:id/admin-replies/:replyId` - Cập nhật admin reply
+- API `DELETE /feedbacks/:id/admin-replies/:replyId` - Xóa admin reply
+
+### 3.7 Chức năng Analytics & Statistics
+✅ **Thống kê tổng quan**
+- API `GET /statistics/summary` - Tổng quan users, interactions, Q&A status
+- API `GET /statistics/qa-by-day` - Thống kê câu hỏi theo ngày
+- API `GET /statistics/qa-by-status` - Thống kê theo trạng thái câu hỏi
+- API `GET /statistics/word-frequency` - Phân tích tần suất từ khóa
+
+✅ **Performance Monitoring**
+- Response time tracking
+- Error rate monitoring
+- User engagement metrics
+- System health checks
+
+### 3.8 Chức năng Communication & Notifications
+✅ **Hệ thống thông báo**
+- API `GET /notifications` - Phân trang thông báo cho user
+- API `POST /notifications/:id/read` - Đánh dấu đã đọc
+- Real-time notifications với Socket.io
+- System announcements
+
+✅ **History & Tracking**
+- API `GET /histories` - Lịch sử tương tác phân trang
+- API `POST /histories/:id/reply` - Admin phản hồi câu hỏi user
+- Conversation tracking và analytics
+
+### 3.9 Chức năng System Configuration
+✅ **Cấu hình hệ thống**
+- API `GET /systemconfigs` - Lấy cấu hình hệ thống
+- API `GET /systemconfigs?key=<key>` - Cấu hình theo key
+- Dynamic system settings
+- Environment configuration management
+
+### 3.10 Chức năng AI & Bot Analysis Tools
+✅ **Bot Analysis (Admin)**
+- API `POST /v2/bots/analyze` - Phân tích và generate Cypher
+- API `POST /v2/bots/context` - Generate Cypher và query context
+- Performance analytics cho AI components
+- Debugging tools cho bot reasoning
+
+✅ **AI/ML Integration**
+- Google Gemini API integration với request queuing
+- Embedding generation và similarity search
+- Error handling và retry logic với fallback
+- Rate limiting và cost optimization
+- Redis caching cho AI responses
+
+### 3.11 Chức năng Data Pipeline
 ✅ **Web Scraping tự động**
 - Crawl dữ liệu từ website admission.tdtu.edu.vn
 - Xử lý HTML và trích xuất structured data
 - Chuẩn hóa và cleaning dữ liệu
+- Auto-update khi có thông tin mới
 
-✅ **Data Import vào Neo4j**
+✅ **Neo4j Graph Database**
 - Tự động tạo nodes và relationships
-- Index optimization cho performance
+- Index optimization cho performance  
 - Data versioning và cache invalidation
-
-### 3.3 Chức năng User Interface
-✅ **Chat Interface**
-- Real-time messaging với Socket.io
-- Chat history management
-- Folder organization cho conversations
-- Responsive design
-
-✅ **Authentication & Authorization**
-- JWT-based authentication
-- User registration và login
-- Role-based access control (Admin/User)
-
-### 3.4 Chức năng Administration
-✅ **Dashboard Analytics**
-- Usage statistics
-- Performance monitoring
-- User activity tracking
-
-✅ **Content Management**
-- Document management
-- Major/Programme management
-- Tuition và Scholarship management
-- Excel export functionality
-
-✅ **System Management**
-- Health checks
-- Cache management
-- Data import/export utilities
-
-### 3.5 Chức năng AI/ML
-✅ **Google Gemini Integration**
-- Request queuing với priority
-- Error handling và retry logic
-- Performance monitoring
-- Rate limiting
-
-✅ **Caching System**
-- Redis-based caching (optional)
-- In-memory fallback
-- Cache invalidation strategies
-- Performance optimization
+- Cypher query optimization
 
 ## 4. ĐÁNH GIÁ DỰ ÁN KLTN
 
