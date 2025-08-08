@@ -6,10 +6,12 @@ import Chatbot from "@/assets/images/chatbot.jpg";
 import { saveVisitorId, getVisitorId } from "@/utils/auth";
 import toast from "react-hot-toast";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
+import { useChat } from "@/contexts/ChatContext";
 
 const HomeView = () => {
   const [loading, setLoading] = useState(false);
   const { setTitle } = useBreadcrumb();
+  const { notifyNewChat } = useChat();
   const navigate = useNavigate();
 
   // Set breadcrumb title for HomeView
@@ -40,7 +42,10 @@ const HomeView = () => {
 
       if (createChatData.Data.visitorId) saveVisitorId(createChatData.Data.visitorId);
 
-      // Bước 2: Navigate đến trang chat với question trong state
+      // Bước 2: Notify ChatContext để update Sidebar
+      notifyNewChat(createChatData.Data);
+
+      // Bước 3: Navigate đến trang chat với question trong state
       navigate(`/chat/${newChatId}`, {
         state: { 
           initialQuestion: question,
