@@ -215,12 +215,36 @@ class AgentService {
 
                 // Step 3: Multi-step enrichment (refactored)
                 let enrichmentStep = 1;
-                let contextEnough = false;
+                let contextScore = 0;
+                let contextScoreReason = '';
+                const minConfidence = 0.8;
+                // Đánh giá context sau main query
+                const contextScorePrompt = this.prompts.buildPrompt('contextScore', {
+                    user_question: question,
+                    context_json: JSON.stringify(allContext, null, 2)
+                });
+                let contextScoreResp = await this.gemini.queueRequest(contextScorePrompt);
+                try {
+                    const parsed = JSON.parse(contextScoreResp);
+                    contextScore = parsed.score;
+                    contextScoreReason = parsed.reasoning;
+                } catch (e) {
+                    contextScore = 0;
+                    contextScoreReason = 'Không parse được kết quả chấm điểm context';
+                }
+                agentSteps.push({
+                    step: 'context_score_main',
+                    description: 'Chấm điểm context sau truy vấn chính',
+                    contextScore,
+                    contextScoreReason
+                });
+                // Nếu điểm chưa đủ tự tin thì mới enrichment
                 while (
                     analysis.strategy?.needsEnrichment &&
                     allContext.length > 0 &&
                     allContext.length < 10 &&
-                    enrichmentStep <= maxEnrichmentSteps
+                    enrichmentStep <= maxEnrichmentSteps &&
+                    contextScore < minConfidence
                 ) {
                     const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, enrichmentStep);
                     if (enrichment && enrichment.shouldEnrich && enrichment.cypher) {
@@ -228,25 +252,37 @@ class AgentService {
                             const enrichmentContext = await this.cypher.executeQuery(enrichment.cypher);
                             if (enrichmentContext.length > 0) {
                                 allContext.push(...enrichmentContext);
+                                // Chấm điểm lại context sau enrichment
+                                const contextScorePrompt = this.prompts.buildPrompt('contextScore', {
+                                    user_question: question,
+                                    context_json: JSON.stringify(allContext, null, 2)
+                                });
+                                let contextScoreResp = await this.gemini.queueRequest(contextScorePrompt);
+                                try {
+                                    const parsed = JSON.parse(contextScoreResp);
+                                    contextScore = parsed.score;
+                                    contextScoreReason = parsed.reasoning;
+                                } catch (e) {
+                                    contextScore = 0;
+                                    contextScoreReason = 'Không parse được kết quả chấm điểm context';
+                                }
                                 agentSteps.push({
                                     step: `enrichment_${enrichmentStep}`,
                                     description: enrichment.purpose,
                                     resultCount: enrichmentContext.length,
                                     cypher: enrichment.cypher,
-                                    infoType: enrichment.infoType
+                                    infoType: enrichment.infoType,
+                                    contextScore,
+                                    contextScoreReason
                                 });
                             }
                         } catch (enrichError) {
                             logger.warn(`[Agent] Enrichment failed`, enrichError);
                         }
                     } else {
-                        // Không cần enrichment nữa
-                        contextEnough = true;
                         break;
                     }
-                    // Đánh giá lại context: nếu đã đủ thì dừng
                     if (allContext.length >= 10) {
-                        contextEnough = true;
                         break;
                     }
                     enrichmentStep++;

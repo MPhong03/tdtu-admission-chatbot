@@ -21,7 +21,8 @@ class PromptService {
                 enrichment: this.loadOrDefault(configPath, "enrichment_prompt.txt", this.getDefaultEnrichmentPrompt()),
                 complexAnswer: this.loadOrDefault(configPath, "complex_answer_prompt.txt", this.getDefaultComplexAnswerPrompt()),
                 offTopic: this.loadOrDefault(configPath, "off_topic_prompt.txt", this.getDefaultOffTopicPrompt()),
-                social: this.loadOrDefault(configPath, "social_prompt.txt", this.getDefaultSocialPrompt())
+                social: this.loadOrDefault(configPath, "social_prompt.txt", this.getDefaultSocialPrompt()),
+                contextScore: this.loadOrDefault(configPath, "context_scoring_prompt.txt", this.getDefaultContextScorePrompt())
             };
 
             logger.info("[Prompts] Successfully loaded all templates");
@@ -48,7 +49,8 @@ class PromptService {
             enrichment: this.getDefaultEnrichmentPrompt(),
             complexAnswer: this.getDefaultComplexAnswerPrompt(),
             offTopic: this.getDefaultOffTopicPrompt(),
-            social: this.getDefaultSocialPrompt()
+            social: this.getDefaultSocialPrompt(),
+            contextScore: this.getDefaultContextScorePrompt()
         };
     }
 
@@ -139,6 +141,16 @@ class PromptService {
         Trả lời xã giao thân thiện: "<user_question>"
         
         Giới thiệu vai trò trợ lý tuyển sinh TDTU.
+        `.trim();
+    }
+
+    getDefaultContextScorePrompt() {
+        return `
+        Đánh giá mức độ đầy đủ và phù hợp của ngữ cảnh (context) dưới đây để trả lời câu hỏi tuyển sinh:
+        Câu hỏi: <user_question>
+        Ngữ cảnh: <context_json>
+        Hãy trả về một số điểm confidence từ 0 đến 1 (1 là rất tự tin, 0 là không đủ thông tin), kèm reasoning ngắn gọn.
+        Đáp án dạng JSON: { "score": <float>, "reasoning": <string> }
         `.trim();
     }
 }
