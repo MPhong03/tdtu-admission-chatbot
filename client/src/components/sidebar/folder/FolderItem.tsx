@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from "react";
-import { FolderOpenOutlined } from "@ant-design/icons";
+import { FolderOpenOutlined, ExclamationCircleOutlined } from "@ant-design/icons";
 import { Tooltip, Modal, Input, message, Spin } from "antd";
 import { useNavigate } from "react-router-dom";
 import ChatItem from "../chat/ChatItem";
@@ -32,7 +32,7 @@ const FolderItem = ({
   const renderIcon = icon ?? <FolderOpenOutlined />;
 
   const [modalVisible, setModalVisible] = useState(false);
-  const [modalType, setModalType] = useState<"rename" | "addProject">("rename");
+  const [modalType, setModalType] = useState<"rename" | "addProject" | "delete">("rename");
   const [renameValue, setRenameValue] = useState(name);
   const [projectName, setProjectName] = useState("");
   const [loading, setLoading] = useState(false);
@@ -74,6 +74,11 @@ const FolderItem = ({
     setModalVisible(true);
   };
 
+  const openDeleteModal = () => {
+    setModalType("delete");
+    setModalVisible(true);
+  };
+
   const handleModalOk = async () => {
     if (modalType === "rename") {
       if (!renameValue.trim()) {
@@ -106,41 +111,119 @@ const FolderItem = ({
 
       setLoading(true);
       try {
-        // TODO: Gọi API tạo đoạn chat nếu cần
-        message.success("Tạo đoạn chat thành công");
-        setModalVisible(false);
-        fetchChats();
-        reload?.();
+        const res = await chatApi.createChat(projectName.trim(), id);
+        if (res.Code === 1) {
+          message.success("Tạo đoạn chat thành công");
+          setModalVisible(false);
+          fetchChats();
+          reload?.();
+        } else {
+          message.error(res.Message || "Tạo đoạn chat thất bại");
+        }
       } catch {
         message.error("Tạo đoạn chat thất bại");
       } finally {
         setLoading(false);
       }
     }
+
+    if (modalType === "delete") {
+      setLoading(true);
+      try {
+        const res = await folderApi.deleteFolder(id);
+        if (res.Code === 1) {
+          message.success("Xoá thư mục thành công");
+          setModalVisible(false);
+          reload?.();
+        } else {
+          message.error(res.Message || "Xoá thư mục thất bại");
+        }
+      } catch {
+        message.error("Lỗi khi xoá thư mục");
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
-  const handleDeleteFolder = () => {
-    Modal.confirm({
-      title: `Xoá thư mục "${name}"?`,
-      content: "Tất cả dữ liệu bên trong sẽ bị xoá vĩnh viễn.",
-      okText: "Xoá",
-      okType: "danger",
-      cancelText: "Hủy",
-      onOk: async () => {
-        try {
-          const res = await folderApi.deleteFolder(id);
-          if (res.Code === 1) {
-            message.success("Xoá thư mục thành công");
-            reload?.();
-          } else {
-            message.error(res.Message || "Xoá thư mục thất bại");
-          }
-        } catch {
-          message.error("Lỗi khi xoá thư mục");
-        }
-      },
-    });
+  const handleModalCancel = () => {
+    setModalVisible(false);
   };
+
+  // Render modal content based on type
+  const renderModalContent = () => {
+    switch (modalType) {
+      case "rename":
+        return (
+          <Input
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            maxLength={50}
+            autoFocus
+            onPressEnter={handleModalOk}
+            placeholder="Nhập tên thư mục mới"
+          />
+        );
+      case "addProject":
+        return (
+          <Input
+            value={projectName}
+            onChange={(e) => setProjectName(e.target.value)}
+            maxLength={50}
+            autoFocus
+            onPressEnter={handleModalOk}
+            placeholder="Nhập tên đoạn chat mới"
+          />
+        );
+      case "delete":
+        return (
+          <div className="flex items-start gap-3">
+            <ExclamationCircleOutlined
+              className="text-red-500 text-xl mt-1 flex-shrink-0"
+            />
+            <div className="flex flex-col gap-2">
+              <p className="text-gray-700 mb-2">
+                Bạn có chắc chắn muốn xoá thư mục <strong>"{name}"</strong>?
+              </p>
+            </div>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  // Get modal config based on type
+  const getModalConfig = () => {
+    switch (modalType) {
+      case "rename":
+        return {
+          title: "Đổi tên thư mục",
+          okText: "Lưu",
+          okType: "primary" as const,
+        };
+      case "addProject":
+        return {
+          title: "Tạo đoạn chat trong thư mục",
+          okText: "Tạo",
+          okType: "primary" as const,
+        };
+      case "delete":
+        return {
+          title: "Xác nhận xoá thư mục",
+          okText: "Xoá thư mục",
+          okType: "danger" as const,
+        };
+      default:
+        return {
+          title: "",
+          okText: "OK",
+          okType: "primary" as const,
+        };
+    }
+  };
+
+  const modalConfig = getModalConfig();
 
   return (
     <>
@@ -166,7 +249,7 @@ const FolderItem = ({
 
           <ItemDropdownMenu
             onRename={openRenameModal}
-            onDelete={handleDeleteFolder}
+            onDelete={openDeleteModal}
             onAddProject={openAddProjectModal}
             addProject
           />
@@ -195,34 +278,20 @@ const FolderItem = ({
       </div>
 
       <Modal
-        title={
-          modalType === "rename"
-            ? "Đổi tên thư mục"
-            : "Tạo đoạn chat trong thư mục"
-        }
+        title={modalConfig.title}
         open={modalVisible}
         onOk={handleModalOk}
-        onCancel={() => setModalVisible(false)}
-        okText={modalType === "rename" ? "Lưu" : "Tạo"}
+        onCancel={handleModalCancel}
+        okText={modalConfig.okText}
         cancelText="Hủy"
         confirmLoading={loading}
+        okType={modalConfig.okType}
+        width={modalType === "delete" ? 480 : 400}
+        centered
+        maskClosable={false}
+        keyboard={modalType !== "delete"} // Ngăn ESC đóng modal delete
       >
-        <Input
-          value={modalType === "rename" ? renameValue : projectName}
-          onChange={(e) =>
-            modalType === "rename"
-              ? setRenameValue(e.target.value)
-              : setProjectName(e.target.value)
-          }
-          maxLength={50}
-          autoFocus
-          onPressEnter={handleModalOk}
-          placeholder={
-            modalType === "rename"
-              ? "Nhập tên thư mục mới"
-              : "Nhập tên đoạn chat mới"
-          }
-        />
+        {renderModalContent()}
       </Modal>
     </>
   );

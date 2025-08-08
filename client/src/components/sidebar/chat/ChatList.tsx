@@ -3,6 +3,7 @@ import { Button, Spin } from "antd";
 import ChatItem from "./ChatItem";
 import { chatApi } from "@/api/chat.api";
 import { ChatData } from "@/interfaces/ChatData";
+import { useChat } from "@/contexts/ChatContext";
 
 interface ChatListProps {
   folderId?: string;
@@ -20,6 +21,7 @@ const ChatList = forwardRef<ChatListRef, ChatListProps>(
     const [page, setPage] = useState(1);
     const [loading, setLoading] = useState(false);
     const [hasMore, setHasMore] = useState(true);
+    const { setChatListRef } = useChat();
 
     const loadChats = async (pageToLoad: number, append = false) => {
       setLoading(true);
@@ -42,9 +44,17 @@ const ChatList = forwardRef<ChatListRef, ChatListProps>(
       }
     };
 
-    useImperativeHandle(ref, () => ({
+    const chatListMethods = {
       reload: () => loadChats(1, false),
-    }));
+    };
+
+    useImperativeHandle(ref, () => chatListMethods);
+
+    // Register với ChatContext để có thể refresh từ bên ngoài
+    useEffect(() => {
+      setChatListRef(chatListMethods);
+      return () => setChatListRef(null);
+    }, [setChatListRef]);
 
     useEffect(() => {
       loadChats(1, false);

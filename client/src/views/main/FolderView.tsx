@@ -9,6 +9,7 @@ import axiosClient from "@/api/axiosClient";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 import { saveVisitorId, getVisitorId } from "@/utils/auth";
 import toast from "react-hot-toast";
+import { useChat } from "@/contexts/ChatContext";
 
 const { Title, Paragraph } = Typography;
 
@@ -31,6 +32,7 @@ const FolderView = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [chatCreationLoading, setChatCreationLoading] = useState(false);
+  const { notifyNewChat } = useChat();
 
   const { setTitle } = useBreadcrumb();
 
@@ -94,13 +96,19 @@ const FolderView = () => {
 
       if (createChatData.Data.visitorId) saveVisitorId(createChatData.Data.visitorId);
 
-      // Bước 2: Navigate đến trang chat với question trong state
+      // Bước 2: Notify ChatContext để update Sidebar
+      notifyNewChat(createChatData.Data);
+
+      // Bước 3: Update local chats list in FolderView
+      setChats(prev => [createChatData.Data, ...prev]);
+
+      // Bước 4: Navigate đến trang chat với question trong state
       navigate(`/chat/${newChatId}`, {
         state: { 
           initialQuestion: question,
           chatName: createChatData.Data.name || "Cuộc trò chuyện mới",
           fromHome: true,
-          // folderId: folderId
+          folderId: folderId
         }
       });
       
