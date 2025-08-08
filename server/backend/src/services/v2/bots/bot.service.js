@@ -81,6 +81,12 @@ class BotService {
 
                 case 'complex_admission':
                     result = await this.handleComplexAdmission(question, questionEmbedding, chatHistory, classification);
+                    // Log enrichment info
+                    logger.info(`[${requestId}] enrichmentSteps: ${result.enrichmentSteps}`);
+                    logger.info(`[${requestId}] contextScore: ${result.contextScore}`);
+                    logger.info(`[${requestId}] contextScoreHistory: ${JSON.stringify(result.contextScoreHistory)}`);
+                    logger.info(`[${requestId}] questionType: ${result.questionType}`);
+                    logger.info(`[${requestId}] enrichmentDetails: ${JSON.stringify(result.enrichmentDetails)}`);
                     break;
 
                 default:
