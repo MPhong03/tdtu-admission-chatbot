@@ -2,9 +2,10 @@
 
 ## 🎯 TỔNG QUAN DEMO
 
-**Thời gian**: 8-10 phút  
-**Mục tiêu**: Chứng minh khả năng hoạt động của hệ thống với các tình huống thực tế  
-**Thiết bị**: Laptop + projector, kết nối internet ổn định  
+**Thời gian**: 10-12 phút  
+**Mục tiêu**: Chứng minh khả năng hoạt động toàn diện của hệ thống enterprise-grade  
+**Thiết bị**: Laptop + projector, kết nối internet ổn định, backup video demo  
+**Focus**: Thể hiện 50+ tính năng từ basic đến advanced  
 
 ## 🎬 KỊCH BẢN CHI TIẾT
 
@@ -187,58 +188,91 @@ Bạn muốn biết thêm về điều kiện xét học bổng không?"
 
 ---
 
-### PHẦN 5: DEMO REAL-TIME & FEATURES (1.5 phút)
+### PHẦN 5: DEMO ADVANCED FEATURES (2 phút)
 
-#### 5.1 Demo tính năng thực tế
+#### 5.1 Demo Chat Management Features (1 phút)
 
-**[Thực hiện nhanh các tính năng]**:
+**[Thực hiện các tính năng quản lý chat]**:
 
-1. **Chat History**: 
+1. **Chat History & Search**: 
    - Click vào sidebar, hiển thị các cuộc hội thoại trước
-   - 📢 "Hệ thống lưu trữ lịch sử chat để người dùng có thể tham khảo lại"
+   - Search trong chat history
+   - 📢 "Hệ thống lưu trữ và tìm kiếm lịch sử chat hiệu quả"
 
 2. **Folder Organization**:
-   - Tạo folder mới "Tư vấn ngành học"
-   - 📢 "Sinh viên có thể tổ chức các cuộc hội thoại theo chủ đề"
+   - Tạo folder mới "Tư vấn ngành học" 
+   - Di chuyển chat vào folder
+   - Rename folder và chat
+   - 📢 "Sinh viên có thể organize conversations theo chủ đề"
 
-3. **Responsive Design**:
-   - Thu nhỏ browser để demo mobile view
-   - 📢 "Giao diện responsive, hoạt động tốt trên mọi thiết bị"
-
-4. **Real-time Features**:
+3. **Real-time Features**:
    - Hiển thị typing indicator khi chatbot đang xử lý
-   - 📢 "Real-time messaging với Socket.io cho trải nghiệm mượt mà"
+   - Socket.io connection status
+   - 📢 "Real-time messaging với notification system"
+
+#### 5.2 Demo Feedback System (1 phút)
+
+**[Demo tính năng feedback]**:
+
+1. **User Feedback**:
+   - Rate một câu trả lời của chatbot (thumbs up/down)
+   - Viết detailed feedback
+   - 📢 "Hệ thống feedback giúp improve chatbot quality"
+
+2. **Responsive Design**:
+   - Thu nhỏ browser để demo mobile view
+   - Test trên tablet view
+   - 📢 "Mobile-first design, accessible trên mọi device"
 
 ---
 
-### PHẦN 6: DEMO DASHBOARD ADMIN (1 phút)
+### PHẦN 6: DEMO DASHBOARD ADMIN (2 phút)
 
 **[Chuyển tab sang dashboard admin]**
 
 📢 **Thuyết minh**:
-> "Cuối cùng, em sẽ demo nhanh dashboard admin để quản lý hệ thống."
+> "Cuối cùng, em sẽ demo dashboard admin - đây là hệ thống quản trị hoàn chỉnh cho việc vận hành chatbot."
 
 **[Truy cập `http://localhost:3001/dashboard`]**
 
-**Hiển thị các tính năng**:
+#### 6.1 Demo Analytics Dashboard (45 giây)
 
-1. **Analytics Dashboard**:
-   - Biểu đồ số lượng câu hỏi theo ngày
-   - Top câu hỏi thường gặp
-   - User engagement metrics
+**[Navigate to Analytics section]**
+- **Real-time Metrics**: Hiển thị số user online, total conversations
+- **Usage Statistics**: Biểu đồ số câu hỏi theo ngày với ApexCharts
+- **Q&A Analysis**: Thống kê theo classification (simple/complex/off-topic)
+- **Word Cloud**: Top keywords người dùng quan tâm nhất
 
-2. **Content Management**:
-   - Danh sách ngành học trong hệ thống
-   - Quản lý tài liệu tuyển sinh
-   - Cập nhật thông tin học phí
+📢 **Giải thích**:
+> "Dashboard cung cấp insights real-time về việc sử dụng hệ thống. Admin có thể track engagement và identify trending topics."
 
-3. **System Monitoring**:
-   - Health check status
-   - Response time metrics
-   - Error rate monitoring
+#### 6.2 Demo Content Management (45 giây)
+
+**[Navigate to Content Management]**
+1. **Majors Management**: 
+   - Hiển thị danh sách ngành học có phân trang
+   - Demo tạo/edit một ngành học mới
+   
+2. **Documents Management**:
+   - Upload tài liệu tuyển sinh mới
+   - Preview và edit existing documents
+
+3. **Tuition Management**:
+   - Cập nhật học phí theo chương trình/năm
+   - Import từ Excel file
+
+📢 **Giải thích**:
+> "Admin có thể quản lý toàn bộ content mà chatbot sử dụng. Mọi thay đổi sẽ được sync ngay vào Neo4j và chatbot có thể trả lời với thông tin mới."
+
+#### 6.3 Demo System Monitoring (30 giây)
+
+**[Navigate to System section]**
+- **Health Checks**: Neo4j connection, Gemini API status
+- **Performance Metrics**: Response times, error rates
+- **User Feedback**: Recent feedback và admin responses
 
 📢 **Kết thúc**:
-> "Dashboard giúp admin theo dõi hiệu suất và quản lý nội dung một cách hiệu quả."
+> "Hệ thống monitoring giúp admin đảm bảo chatbot hoạt động stable và continuously improve based on user feedback."
 
 ---
 
@@ -314,13 +348,13 @@ Bạn muốn biết thêm về điều kiện xét học bổng không?"
 
 ## 🎬 TỔNG KẾT DEMO
 
-**Thời gian thực tế**: 8-10 phút  
+**Thời gian thực tế**: 10-12 phút  
 **Key messages đã truyền tải**:
-- ✅ Classification system thông minh
-- ✅ RAG với Knowledge Graph  
-- ✅ AI Agent cho câu hỏi phức tạp
-- ✅ Real-time features và UX tốt
-- ✅ Admin dashboard đầy đủ
-- ✅ Production-ready system
+- ✅ **AI Layer**: Classification system + RAG + AI Agent
+- ✅ **User Experience**: Real-time chat + folder management + feedback
+- ✅ **Admin Features**: Content management + analytics + monitoring
+- ✅ **Enterprise Features**: Authentication + import/export + notifications
+- ✅ **Technical Excellence**: Performance + scalability + error handling
+- ✅ **Production Ready**: 50+ APIs + monitoring + security
 
-**Impact**: Demo thuyết phục được tính khả thi và giá trị thực tiễn của hệ thống cho TDTU và có thể mở rộng cho các trường khác.
+**Impact**: Demo comprehensive thể hiện đây là một **enterprise-grade system** có thể deploy ngay cho TDTU và scale cho các trường đại học khác, không chỉ là prototype mà là production-ready solution.
