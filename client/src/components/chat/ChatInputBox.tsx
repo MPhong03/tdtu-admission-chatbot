@@ -12,6 +12,8 @@ interface ChatInputBoxProps {
   mode?: 'home' | 'chat'; // Phân biệt context sử dụng
   loading?: boolean; // External loading state
   maxLength?: number; // Giới hạn ký tự
+  rateLimitInfo?: any; // Thông tin về rate limit
+  onUpgradeClick?: () => void; // Callback khi click đăng ký
 }
 
 const ChatInputBox = ({
@@ -21,7 +23,9 @@ const ChatInputBox = ({
   placeholder,
   mode = 'chat',
   loading = false,
-  maxLength = 500
+  maxLength = 500,
+  rateLimitInfo,
+  onUpgradeClick
 }: ChatInputBoxProps) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const [input, setInput] = useState<string>("");
@@ -69,7 +73,10 @@ const ChatInputBox = ({
     resizeTextarea();
   }, [input]);
 
-  const canSend = input.trim() && !isDisabled && !isSending && !loading;
+  // Kiểm tra rate limit
+  const isRateLimited = rateLimitInfo && rateLimitInfo.isLimited;
+  
+  const canSend = input.trim() && !isDisabled && !isSending && !loading && !isRateLimited;
   const isProcessing = isSending || loading;
   const currentLength = input.length;
   const remainingChars = maxLength - currentLength;
@@ -77,6 +84,10 @@ const ChatInputBox = ({
   // Dynamic placeholder based on mode and state
   const getPlaceholder = () => {
     if (placeholder) return placeholder;
+
+    if (isRateLimited) {
+      return "Bạn đã hết lượt chat. Vui lòng đăng ký tài khoản để tiếp tục.";
+    }
 
     if (mode === 'home') {
       return loading ? "Đang tạo cuộc trò chuyện..." : "Hỏi về tuyển sinh, chương trình đào tạo, thủ tục nhập học...";
@@ -119,8 +130,8 @@ const ChatInputBox = ({
             <div className="flex gap-2">
               <button
                 type="button"
-                disabled={isDisabled || isBotTyping || loading}
-                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 ${isDisabled || isBotTyping || loading
+                disabled={isDisabled || isBotTyping || loading || isRateLimited}
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 ${isDisabled || isBotTyping || loading || isRateLimited
                   ? "text-gray-400 cursor-not-allowed"
                   : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
                   }`}
@@ -131,8 +142,8 @@ const ChatInputBox = ({
 
               <button
                 type="button"
-                disabled={isDisabled || isBotTyping || loading}
-                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 ${isDisabled || isBotTyping || loading
+                disabled={isDisabled || isBotTyping || loading || isRateLimited}
+                className={`w-9 h-9 flex items-center justify-center rounded-full transition-all duration-200 ${isDisabled || isBotTyping || loading || isRateLimited
                   ? "text-gray-400 cursor-not-allowed"
                   : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
                   }`}
@@ -151,7 +162,13 @@ const ChatInputBox = ({
               ? "bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transform hover:scale-105"
               : "bg-gray-200 text-gray-400 cursor-not-allowed"
               }`}
-            title={canSend ? (mode === 'home' ? "Bắt đầu tư vấn" : "Gửi câu hỏi") : "Nhập nội dung để gửi"}
+            title={
+              isRateLimited 
+                ? "Bạn đã hết lượt chat. Vui lòng đăng ký tài khoản."
+                : canSend 
+                  ? (mode === 'home' ? "Bắt đầu tư vấn" : "Gửi câu hỏi") 
+                  : "Nhập nội dung để gửi"
+            }
           >
             {isProcessing ? (
               <RiLoader4Line size={18} className="animate-spin" />
@@ -173,6 +190,29 @@ const ChatInputBox = ({
       {remainingChars === 0 && (
         <div className="absolute -bottom-6 left-0 text-xs text-red-600 font-medium">
           Đã đạt giới hạn {maxLength} ký tự. Vui lòng rút gọn câu hỏi.
+        </div>
+      )}
+
+      {/* Rate limit message */}
+      {isRateLimited && (
+        <div className="mt-3 p-3 bg-red-50 rounded-lg border border-red-200">
+          <div className="flex items-start gap-2">
+            <div className="text-red-600 mt-0.5">⚠️</div>
+            <div className="text-sm text-red-800">
+              <div className="font-medium mb-1">Bạn đã hết lượt chat</div>
+              <p className="mb-2">
+                Bạn đã đạt giới hạn {rateLimitInfo.limit} câu hỏi. Giới hạn sẽ được reset vào {rateLimitInfo.resetTime}.
+              </p>
+              {onUpgradeClick && (
+                <button
+                  onClick={onUpgradeClick}
+                  className="text-sm bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md transition-colors"
+                >
+                  Đăng ký tài khoản ngay
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
