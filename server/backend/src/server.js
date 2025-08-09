@@ -7,8 +7,15 @@ const CacheService = require("./services/v2/cachings/cache.service");
 const LLMService = require("./services/chatbots/llm.service");
 const BotService = require("./services/v2/bots/bot.service");
 const logger = require("./utils/logger.util");
-const cache = new CacheService(process.env.REDIS_URL || 'redis://localhost:6379');
 const PORT = process.env.PORT || 5000;
+const cache = new CacheService(
+  process.env.REDIS_URL || 'redis://localhost:6379',
+  {
+    ttlSeconds: parseInt(process.env.CACHE_TTL) || 7 * 24 * 60 * 60,
+    maxMemoryItems: parseInt(process.env.MAX_CACHE_SIZE) || 2000,
+    enableFallback: process.env.ENABLE_FALLBACK !== 'false'
+  }
+);
 
 server.listen(PORT, "0.0.0.0", async () => {
   logger.info("Server started", { port: PORT, env: process.env.NODE_ENV });
@@ -40,6 +47,7 @@ server.listen(PORT, "0.0.0.0", async () => {
   }
 
   await checkNeo4jConnection();
+  await cache.clearAllCaches();
 
   // Gemini load cấu hình và health check
   // await BotService.initialize();

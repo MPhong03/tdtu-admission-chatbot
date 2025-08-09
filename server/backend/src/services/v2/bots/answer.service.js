@@ -12,6 +12,113 @@ class AnswerService {
     async generateSimpleAnswer(question, questionEmbedding, chatHistory = []) {
         let retries = 0;
         let lastError = null;
+        let cypherData = null;
+        let contextNodes = [];
+        let cypher = "";
+        let prompt = "";
+        let answer = "";
+        let isError = false;
+        let is_social = false;
+
+        const startTime = Date.now();
+
+        // 1. Generate and execute Cypher with validation
+        try {
+            cypherData = await this.cypher.generateAndExecuteCypher(question, questionEmbedding, chatHistory);
+            
+            cypher = cypherData.cypher;
+            contextNodes = cypherData.contextNodes;
+            is_social = cypherData.is_social;
+
+            // Log validation results
+            if (cypherData.wasValidated && cypherData.validationInfo) {
+                const vInfo = cypherData.validationInfo;
+                logger.info(`[Answer] Cypher validation: corrected=${vInfo.wasCorrected}, optimized=${vInfo.wasOptimized}, retries=${vInfo.syntaxRetries + vInfo.contextRetries}`);
+            }
+
+            if (is_social) {
+                const socialAnswer = await this.generateSocialResponse(question, chatHistory);
+                const totalTime = (Date.now() - startTime) / 1000;
+                return {
+                    answer: socialAnswer,
+                    prompt: "",
+                    cypher: "",
+                    contextNodes: [],
+                    isError: false,
+                    is_social: true,
+                    processingTime: totalTime
+                };
+            }
+
+        } catch (error) {
+            logger.error("[Answer] Cypher generation with validation failed:", error);
+            const fallbackAnswer = await this.generateSocialResponse(question, chatHistory);
+            return {
+                answer: fallbackAnswer,
+                prompt: "",
+                cypher: "",
+                contextNodes: [],
+                isError: false,
+                is_social: false,
+                validationError: error.message
+            };
+        }
+
+        // 2. Generate answer using validated context
+        const limitedHistory = chatHistory.slice(-2);
+        const historyText = limitedHistory.length
+            ? limitedHistory.map((item, index) =>
+                `Lần ${index + 1}:\n- Người dùng: ${item.question}\n- Bot: ${item.answer.substring(0, 150)}...`).join('\n\n')
+            : "Không có lịch sử hội thoại.";
+
+        prompt = this.prompts.buildPrompt('answer', {
+            user_question: question,
+            context_json: JSON.stringify(contextNodes.slice(0, 15), null, 2),
+            chat_history: historyText
+        });
+
+        retries = 0;
+        while (retries < this.maxRetries) {
+            try {
+                const cacheKey = this.cache.generateCacheKey(prompt, 'simple_answer');
+                answer = await this.cache.get(cacheKey);
+
+                if (!answer) {
+                    answer = await this.gemini.queueRequest(prompt);
+                    if (answer) {
+                        await this.cache.set(cacheKey, answer);
+                    }
+                }
+
+                if (answer) {
+                    const totalTime = (Date.now() - startTime) / 1000;
+                    return {
+                        answer,
+                        prompt,
+                        cypher,
+                        contextNodes,
+                        isError: false,
+                        is_social: false,
+                        processingTime: totalTime,
+                        // Include validation info from cypherData
+                        validationInfo: cypherData.validationInfo || null
+                    };
+                }
+                lastError = new Error("Gemini returned empty response");
+                retries++;
+            } catch (err) {
+                lastError = err;
+                retries++;
+            }
+        }
+
+        return this.generateEmergencyFallback(question, `simple-${Date.now().toString(36)}`);
+    }
+
+    // ===== LEGACY METHOD (for backward compatibility) =====
+    async generateSimpleAnswerLegacy(question, questionEmbedding, chatHistory = []) {
+        let retries = 0;
+        let lastError = null;
         let cypherResult = null;
         let contextNodes = [];
         let cypher = "";
@@ -22,7 +129,7 @@ class AnswerService {
 
         const startTime = Date.now();
 
-        // 1. Generate cypher
+        // 1. Generate cypher (old way)
         while (retries < this.maxRetries) {
             try {
                 cypherResult = await this.cypher.generateCypher(question, questionEmbedding, chatHistory);
@@ -66,7 +173,7 @@ class AnswerService {
             };
         }
 
-        // 2. Get context nodes
+        // 2. Get context nodes (old way)
         contextNodes = await this.cypher.executeQuery(cypher);
 
         // 3. Generate answer
@@ -104,7 +211,8 @@ class AnswerService {
                         contextNodes,
                         isError: false,
                         is_social: false,
-                        processingTime: totalTime
+                        processingTime: totalTime,
+                        legacy: true
                     };
                 }
                 lastError = new Error("Gemini returned empty response");

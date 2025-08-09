@@ -6,34 +6,6 @@ const EntityRecognizer = require('../services/regconizers/entity.regconizer');
 const BotService = require("../services/v2/bots/bot.service");
 
 class ChatbotController {
-    // async retrieveEntities(req, res) {
-    //     try {
-    //         const { question } = req.body;
-    //         if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
-
-    //         const entities = await EntityRecognizer.recognizeEntities_V2(question);
-
-    //         return res.json(HttpResponse.success("Nhận kết quả: ", entities));
-    //     } catch (err) {
-    //         console.error(err);
-    //         return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
-    //     }
-    // }
-
-    // async retrieveContext(req, res) {
-    //     try {
-    //         const { question } = req.body;
-    //         if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
-
-    //         const context = await RetrieverService.retrieveContext(question);
-
-    //         return res.json(HttpResponse.success("Nhận kết quả: ", context));
-    //     } catch (err) {
-    //         console.error(err);
-    //         return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
-    //     }
-    // }
-
     async chatWithBot(req, res) {
         try {
             const { question, chatId } = req.body;
@@ -52,10 +24,35 @@ class ChatbotController {
 
             console.log("Chat history:", chatHistory);
 
-            // 1. Gọi AI để lấy câu trả lời
-            const { answer, prompt, contextNodes, isError, cypher } = await BotService.generateAnswer(question, questionEmbedding, chatHistory);
+            // 1. Gọi AI để lấy câu trả lời với enhanced tracking
+            const result = await BotService.generateAnswer(question, questionEmbedding, chatHistory);
 
-            // 2. Lưu vào lịch sử chat
+            // Extract all the enhanced tracking data
+            const {
+                answer,
+                prompt,
+                contextNodes,
+                isError,
+                cypher,
+                // === ENHANCED TRACKING DATA ===
+                questionType,
+                classificationConfidence,
+                classificationReasoning,
+                enrichmentSteps,
+                enrichmentDetails,
+                enrichmentQueries,
+                enrichmentResults,
+                contextScore,
+                contextScoreHistory,
+                contextScoreReasons,
+                agentSteps,
+                processingMethod,
+                processingTime,
+                category,
+                classification
+            } = result;
+
+            // 2. Lưu vào lịch sử chat với enhanced data
             const saveResult = await HistoryService.saveChat({
                 userId,
                 visitorId: req.isVisitor ? req.visitorId : null,
@@ -64,14 +61,28 @@ class ChatbotController {
                 answer,
                 cypher,
                 contextNodes,
-                isError
+                isError,
+                // === ENHANCED TRACKING FIELDS ===
+                questionType: questionType || category || 'simple_admission',
+                classificationConfidence: classificationConfidence || classification?.confidence || 0,
+                classificationReasoning: classificationReasoning || classification?.reasoning || '',
+                enrichmentSteps: enrichmentSteps || 0,
+                enrichmentDetails: enrichmentDetails || '',
+                enrichmentQueries: enrichmentQueries || [],
+                enrichmentResults: enrichmentResults || [],
+                contextScore: contextScore || 0,
+                contextScoreHistory: contextScoreHistory || [],
+                contextScoreReasons: contextScoreReasons || [],
+                agentSteps: agentSteps || [],
+                processingMethod: processingMethod || 'rag_simple',
+                processingTime: processingTime || 0
             });
 
             if (saveResult.Code !== 1) {
                 console.warn("Lưu lịch sử thất bại:", saveResult.Message);
             }
 
-            // 3. Trả về cho frontend
+            // 3. Trả về cho frontend với enhanced tracking info
             return res.json(
                 HttpResponse.success("Nhận kết quả", {
                     answer,
@@ -79,7 +90,16 @@ class ChatbotController {
                     contextNodes,
                     chatId: saveResult?.Data?.chatId || chatId,
                     visitorId: req.isVisitor ? req.visitorId : null,
-                    historyId: saveResult?.Data?.history?._id || null
+                    historyId: saveResult?.Data?.history?._id || null,
+                    // === TRACKING INFO FOR CLIENT ===
+                    trackingInfo: {
+                        questionType: questionType || category || 'simple_admission',
+                        processingMethod: processingMethod || 'rag_simple',
+                        enrichmentSteps: enrichmentSteps || 0,
+                        contextScore: contextScore || 0,
+                        processingTime: processingTime || 0,
+                        classificationConfidence: classificationConfidence || classification?.confidence || 0
+                    }
                 })
             );
         } catch (err) {
@@ -87,20 +107,6 @@ class ChatbotController {
             return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
         }
     }
-
-    // async testChat(req, res) {
-    //     try {
-    //         const { question } = req.body;
-    //         if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
-
-    //         const { answer, isError } = await LLMService.generateAnswer(question);
-
-    //         return res.json(HttpResponse.success("Nhận kết quả: ", answer));
-    //     } catch (err) {
-    //         console.error(err);
-    //         return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
-    //     }
-    // }
 
     async getHistory(req, res) {
         try {
@@ -124,6 +130,95 @@ class ChatbotController {
         }
     }
 
+    async getHistoryDetail(req, res) {
+        try {
+            const { historyId } = req.params;
+            const isAdmin = req.user?.role === 'admin'; // Assume role-based access
+
+            const result = await HistoryService.getHistoryById(historyId, isAdmin);
+            return res.json(result);
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi lấy chi tiết lịch sử", -1, err.message));
+        }
+    }
+
+    async getAnalytics(req, res) {
+        try {
+            const { timeRange = '7d' } = req.query;
+
+            // Check admin permission
+            if (req.user?.role !== 'admin') {
+                return res.json(HttpResponse.error("Không có quyền truy cập", -403));
+            }
+
+            const result = await HistoryService.getAnalytics(timeRange);
+            return res.json(result);
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi lấy thống kê", -1, err.message));
+        }
+    }
+
+    async getAdminHistory(req, res) {
+        try {
+            const {
+                page = 1,
+                size = 10,
+                questionType,
+                status,
+                processingMethod
+            } = req.query;
+
+            // Check admin permission
+            if (req.user?.role !== 'admin') {
+                return res.json(HttpResponse.error("Không có quyền truy cập", -403));
+            }
+
+            const result = await HistoryService.getAllChat({
+                page: parseInt(page),
+                size: parseInt(size),
+                questionType,
+                status,
+                processingMethod
+            });
+
+            return res.json(result);
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi lấy lịch sử admin", -1, err.message));
+        }
+    }
+
+    async updateVerification(req, res) {
+        try {
+            const { historyId } = req.params;
+            const { score, reason, isIncorrect } = req.body;
+
+            // Check admin permission
+            if (req.user?.role !== 'admin') {
+                return res.json(HttpResponse.error("Không có quyền truy cập", -403));
+            }
+
+            const result = await HistoryService.updateVerificationStatus(historyId, {
+                score,
+                reason,
+                isIncorrect
+            });
+
+            if (result) {
+                return res.json(HttpResponse.success("Cập nhật verification thành công", result));
+            } else {
+                return res.json(HttpResponse.error("Cập nhật verification thất bại", -1));
+            }
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi cập nhật verification", -1, err.message));
+        }
+    }
+
+    // === EXISTING METHODS ===
+
     async getEmbedding(req, res) {
         try {
             const { text } = req.body;
@@ -143,6 +238,37 @@ class ChatbotController {
         } catch (err) {
             console.error(err);
             return res.json(HttpResponse.error("Lỗi: ", -1, err.message));
+        }
+    }
+
+    // === DEBUGGING/TESTING ENDPOINTS (FOR DEVELOPMENT) ===
+
+    async testEnrichment(req, res) {
+        try {
+            const { question } = req.body;
+
+            if (!question) {
+                return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
+            }
+
+            // Only for development/testing
+            if (process.env.NODE_ENV === 'production') {
+                return res.json(HttpResponse.error("Endpoint không khả dụng trong production", -403));
+            }
+
+            const result = await BotService.generateAnswer(question, null, []);
+
+            return res.json(HttpResponse.success("Test enrichment", {
+                questionType: result.questionType,
+                enrichmentSteps: result.enrichmentSteps,
+                contextScore: result.contextScore,
+                contextScoreHistory: result.contextScoreHistory,
+                agentSteps: result.agentSteps,
+                processingTime: result.processingTime
+            }));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi test enrichment", -1, err.message));
         }
     }
 }

@@ -39,6 +39,13 @@ Relationships:
 4. Nếu keyword là cụm dài (≥3 từ) -> tách nhỏ và OR từng phần.
 5. Luôn DISTINCT, LIMIT để loại trùng.
 6. KHÔNG dùng toán tử số (regex, split, parse...) để xử lý giá trị học phí.
+7. Không dùng lại alias đã khai báo ở WITH/MATCH trước đó.
+8. WHERE chỉ nên dùng sau MATCH, không dùng sau OPTIONAL MATCH nếu node có thể null.
+9. Tránh lồng nhiều WITH không cần thiết.
+10. Chỉ sử dụng các hàm có trong schema thực tế (ví dụ: apoc.text.clean).
+11. Nếu truy vấn phức tạp, hãy chia nhỏ thành nhiều phần, mỗi phần một MATCH/OPTIONAL MATCH rõ ràng.
+12. Đảm bảo câu truy vấn không bị lỗi cú pháp, không bị trùng alias, và có thể chạy được trên Neo4j.
+13. Nếu có nhiều điều kiện, hãy nhóm chúng hợp lý và kiểm tra lại logic.
 
 ==== V. CÁC TÌNH HUỐNG TIÊU BIỂU ====
 1. Học phí:
@@ -69,6 +76,18 @@ WHERE apoc.text.clean(toLower(m.name)) CONTAINS apoc.text.clean(toLower('<major_
    AND y.name = '<year>'
 RETURN p, m, mp, y LIMIT 20
 
+4b. Khi keyword chứa nhiều thông tin (ví dụ: “điểm chuẩn ngành ngôn ngữ anh”), hãy:
+- Tách keyword thành các phần chính: loại thông tin (“điểm chuẩn”), tên đối tượng (“ngôn ngữ anh”).
+- Ưu tiên tạo điều kiện WHERE với từng phần, kết hợp AND hoặc OR hợp lý:
+- Từ khóa chính (loại thông tin) thường dùng AND với tên đối tượng.
+- Các từ đồng nghĩa hoặc biến thể của cùng ý nghĩa dùng OR.
+- Không lặp lại nguyên câu dài nhiều lần. Chỉ giữ các cụm cần thiết để tránh query rườm rà và không khớp dữ liệu.
+- Ví dụ: “điểm chuẩn ngành ngôn ngữ anh” ->
+WHERE apoc.text.clean(toLower(d.text)) CONTAINS apoc.text.clean(toLower('điểm chuẩn'))
+   AND (
+      apoc.text.clean(toLower(d.text)) CONTAINS apoc.text.clean(toLower('ngôn ngữ anh'))
+   )
+
 ==== VI. FORMAT KẾT QUẢ ====
 Nếu có Cypher:
 {
@@ -95,3 +114,10 @@ Nếu là câu xã giao:
 === QUAN TRỌNG ===
 - MajorProgramme.major_code là mã tuyển sinh CHUẨN, KHÔNG dùng Major.id.
 - Hãy suy nghĩ như người hiểu rõ cấu trúc graph và logic tư vấn tuyển sinh.
+- Khi truy vấn học phí dạng text, KHÔNG cố gắng chuyển đổi hoặc parse số trong Cypher.
+- KHÔNG dùng toInteger, apoc.number.parseInt, hoặc các hàm chuyển đổi kiểu số trong Cypher.
+- KHÔNG dùng các hàm đặc biệt có thể không hỗ trợ cho Neo4j hiện tại như size()...
+
+=== THÔNG TIN BỔ SUNG ===
+- Document chứa tài liệu về ĐIỂM CHUẨN CÁC NGÀNH
+- Document chứa tài liểu về THÔNG TIN TRƯỜNG HỌC

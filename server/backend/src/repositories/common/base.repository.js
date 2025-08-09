@@ -86,7 +86,7 @@ class BaseRepository {
      */
     async paginate(filter = {}, page = 1, size = 10, populate = [], sort = { createdAt: -1 }, excludeFields = []) {
         const skip = (page - 1) * size;
-        let query = this.model.find(filter).sort(sort).skip(skip).limit(size);
+        let query = this.model.find(filter).sort(sort).allowDiskUse(true).skip(skip).limit(size);
 
         if (populate.length > 0) {
             populate.forEach(p => {

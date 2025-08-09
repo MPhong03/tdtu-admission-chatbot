@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { 
-    CopyOutlined, 
-    CheckOutlined, 
-    CommentOutlined, 
-    EditOutlined, 
-    RobotOutlined, 
+import {
+    CopyOutlined,
+    CheckOutlined,
+    CommentOutlined,
+    EditOutlined,
+    RobotOutlined,
     UserOutlined,
     MessageOutlined,
     HeartOutlined,
@@ -17,6 +17,8 @@ import { Button, Input, message, Popover, Rate, Tooltip, Divider, Tag, Avatar, T
 import ReactMarkdown from "react-markdown";
 import { DotIcon } from "lucide-react";
 import { DotDuration } from "antd/es/carousel/style";
+import remarkGfm from 'remark-gfm';
+import './markdown.css';
 
 // Thêm CSS animation cho fade in effect
 const fadeInStyle = `
@@ -117,7 +119,11 @@ const AdminReply: React.FC<{ adminAnswer: string; adminAnswerAt: string }> = ({
                 <div className="flex-1">
                     <div className="bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl">
                         <div className="markdown-body prose prose-sm max-w-none text-gray-800">
-                            <ReactMarkdown>{adminAnswer}</ReactMarkdown>
+                            <ReactMarkdown components={{
+                                table: ({ node, ...props }) => (
+                                    <table className="markdown-table" {...props} />
+                                ),
+                            }} remarkPlugins={[remarkGfm]}>{adminAnswer}</ReactMarkdown>
                         </div>
                     </div>
 
@@ -158,7 +164,7 @@ const AdminFeedbackReplies: React.FC<{ adminReplies: AdminReply[] }> = ({ adminR
         const now = new Date();
         const date = new Date(dateString);
         const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-        
+
         if (diffInMinutes < 1) return "Vừa xong";
         if (diffInMinutes < 60) return `${diffInMinutes} phút trước`;
         if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} giờ trước`;
@@ -202,10 +208,10 @@ const AdminFeedbackReplies: React.FC<{ adminReplies: AdminReply[] }> = ({ adminR
                                 Phản hồi từ nhân viên
                             </span>
                         </div>
-                        
+
                         {remainingReplies.length > 0 && (
-                            <Button 
-                                type="text" 
+                            <Button
+                                type="text"
                                 size="small"
                                 onClick={() => setExpandedReplies(!expandedReplies)}
                                 className="text-blue-600 hover:text-blue-800"
@@ -215,56 +221,56 @@ const AdminFeedbackReplies: React.FC<{ adminReplies: AdminReply[] }> = ({ adminR
                         )}
                     </div>
 
-            {/* Timeline của replies */}
-            <Timeline
-                mode="left"
-                className="mt-3"
-                items={[
-                    // Reply đầu tiên - luôn hiển thị
-                    {
-                        // dot: <EyeFilled />,
-                        children: (
-                            <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <p className="text-gray-800 mb-2 leading-relaxed">
-                                            {firstReply.message}
-                                        </p>
-                                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                                            <TeamOutlined />
-                                            <span>TDTU</span>
-                                            <span>•</span>
-                                            <span>{formatRelativeTime(firstReply.createdAt)}</span>
+                    {/* Timeline của replies */}
+                    <Timeline
+                        mode="left"
+                        className="mt-3"
+                        items={[
+                            // Reply đầu tiên - luôn hiển thị
+                            {
+                                // dot: <EyeFilled />,
+                                children: (
+                                    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <p className="text-gray-800 mb-2 leading-relaxed">
+                                                    {firstReply.message}
+                                                </p>
+                                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                    <TeamOutlined />
+                                                    <span>TDTU</span>
+                                                    <span>•</span>
+                                                    <span>{formatRelativeTime(firstReply.createdAt)}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-                        ),
-                    },
-                    
-                    // Các reply còn lại - hiển thị khi expand
-                    ...(expandedReplies ? remainingReplies.map((reply, index) => ({
-                        // dot: <EyeFilled className="bg-blue-50 p-0" />,
-                        children: (
-                            <div key={reply.id} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <p className="text-gray-800 mb-2 leading-relaxed">
-                                            {reply.message}
-                                        </p>
-                                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                                            <TeamOutlined />
-                                            <span>TDTU</span>
-                                            <span>•</span>
-                                            <span>{formatRelativeTime(reply.createdAt)}</span>
+                                ),
+                            },
+
+                            // Các reply còn lại - hiển thị khi expand
+                            ...(expandedReplies ? remainingReplies.map((reply, index) => ({
+                                // dot: <EyeFilled className="bg-blue-50 p-0" />,
+                                children: (
+                                    <div key={reply.id} className="bg-white rounded-lg p-3 shadow-sm border border-gray-100">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <p className="text-gray-800 mb-2 leading-relaxed">
+                                                    {reply.message}
+                                                </p>
+                                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                    <TeamOutlined />
+                                                    <span>TDTU</span>
+                                                    <span>•</span>
+                                                    <span>{formatRelativeTime(reply.createdAt)}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-                        ),
-                    })) : [])
-                ]}
-            />
+                                ),
+                            })) : [])
+                        ]}
+                    />
 
                     {/* Quick stats */}
                     {adminReplies.length > 1 && (
@@ -375,9 +381,8 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
             <div className="flex items-start gap-3">
                 <div className="flex-1">
                     {/* Answer bubble */}
-                    <div className={`bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl transition-all duration-200 ${
-                        isTyping ? 'border-2 border-blue-200 bg-blue-50' : ''
-                    }`}>
+                    <div className={`bg-gray-100 rounded-2xl rounded-tl-sm px-4 py-3 max-w-4xl transition-all duration-200 ${isTyping ? 'border-2 border-blue-200 bg-blue-50' : ''
+                        }`}>
                         {/* Typing indicator khi đang gõ */}
                         {isTyping && (
                             <div className="flex items-center gap-2 mb-2 text-blue-600">
@@ -400,11 +405,14 @@ const AnswerItem: React.FC<AnswerItemProps> = ({
                         )}
 
                         {/* Content */}
-                        <div className={`markdown-body prose prose-sm max-w-none ${
-                            isTyping ? 'text-gray-700' : 'text-gray-900'
-                        }`}>
+                        <div className={`markdown-body prose prose-sm max-w-none ${isTyping ? 'text-gray-700' : 'text-gray-900'
+                            }`}>
                             {content ? (
-                                <ReactMarkdown>{content}</ReactMarkdown>
+                                <ReactMarkdown components={{
+                                    table: ({ node, ...props }) => (
+                                        <table className="markdown-table" {...props} />
+                                    ),
+                                }} remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
                             ) : isTyping ? (
                                 <span className="text-gray-500 italic">Đang soạn câu trả lời...</span>
                             ) : (

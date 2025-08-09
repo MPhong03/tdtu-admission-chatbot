@@ -14,7 +14,7 @@ class CacheService {
             circuitBreakerThreshold: options.circuitBreakerThreshold || 5,
             circuitBreakerTimeout: options.circuitBreakerTimeout || 30000,
             dataVersionKey: options.dataVersionKey || 'data:version',
-            
+
             // NEW: Gemini-specific cache optimization
             geminiCacheTtl: options.geminiCacheTtl || 24 * 60 * 60, // 24 hours for Gemini responses
             enableSmartCaching: options.enableSmartCaching !== false,
@@ -38,7 +38,7 @@ class CacheService {
         this.memoryCache = new Map(); // General cache
         this.geminiCache = new Map(); // Dedicated Gemini response cache
         this.promptCache = new Map(); // Template/prompt cache (longer TTL)
-        
+
         this.cacheStats = {
             redisHits: 0,
             memoryHits: 0,
@@ -72,7 +72,7 @@ class CacheService {
     // ===================================================
     async initializeRedis() {
         try {
-            this.client = createClient({ 
+            this.client = createClient({
                 url: this.redisUrl,
                 socket: {
                     reconnectStrategy: (retries) => {
@@ -108,7 +108,7 @@ class CacheService {
             await this.client.connect();
             await this.createIndexIfNotExists();
             await this.loadDataVersion();
-            
+
         } catch (error) {
             logger.error('[Cache] Failed to initialize Redis, using memory fallback:', error.message);
             this.isRedisAvailable = false;
@@ -119,7 +119,7 @@ class CacheService {
     // Circuit breaker pattern (keeping existing logic)
     shouldSkipRedis() {
         const now = Date.now();
-        
+
         switch (this.circuitBreaker.state) {
             case 'OPEN':
                 if (now - this.circuitBreaker.lastFailTime > this.options.circuitBreakerTimeout) {
@@ -128,10 +128,10 @@ class CacheService {
                     return false;
                 }
                 return true;
-                
+
             case 'HALF_OPEN':
                 return false; // Try one request
-                
+
             case 'CLOSED':
             default:
                 return false;
@@ -178,7 +178,7 @@ class CacheService {
                 await this.client.set(this.options.dataVersionKey, newVersion);
                 this.currentDataVersion = newVersion;
                 logger.info(`[Cache] Data version updated: ${newVersion}`);
-                
+
                 // Clear all memory caches when data version changes
                 this.memoryCache.clear();
                 this.geminiCache.clear();
@@ -196,13 +196,13 @@ class CacheService {
     generateCacheKey(content, type = 'default', options = {}) {
         const version = this.currentDataVersion || '1';
         const { includeTimestamp = false, normalize = true } = options;
-        
+
         // Normalize content for better cache hits
         let normalizedContent = normalize ? this.normalizeContent(content) : content;
-        
+
         // Optional timestamp for time-sensitive queries
         const timeComponent = includeTimestamp ? `_${Math.floor(Date.now() / (1000 * 60 * 60))}` : ''; // Hour-based
-        
+
         const combined = `${normalizedContent}_${type}_v${version}${timeComponent}`;
         const hash = crypto.createHash('md5').update(combined, 'utf8').digest('hex');
         return `cache:${type}:${hash.substring(0, 16)}`;
@@ -230,7 +230,7 @@ class CacheService {
         if (!this.options.enableSmartCaching) return null;
 
         const similarityKey = this.generateSimilarityKey(question);
-        
+
         // Check for exact match first
         const exactKey = this.generateCacheKey(question, type);
         let result = await this.get(exactKey);
@@ -256,11 +256,11 @@ class CacheService {
     async setSimilarCachedResponse(question, type, response) {
         const exactKey = this.generateCacheKey(question, type);
         const similarityKey = this.generateSimilarityKey(question);
-        
+
         // Store in both caches
         await this.set(exactKey, response);
         this.questionSimilarityCache.set(similarityKey, exactKey);
-        
+
         // Limit similarity cache size
         if (this.questionSimilarityCache.size > 500) {
             const firstKey = this.questionSimilarityCache.keys().next().value;
@@ -283,20 +283,20 @@ class CacheService {
 
     async setGeminiResponse(prompt, type = 'gemini', response, customTtl = null) {
         const ttl = customTtl || this.options.geminiCacheTtl;
-        
+
         // Store with similarity tracking
         await this.setSimilarCachedResponse(prompt, type, response);
-        
+
         // Also store in dedicated Gemini memory cache with longer TTL
         this.setGeminiMemoryCache(prompt, response, ttl);
-        
+
         logger.info(`[Cache] Gemini response cached: ${type}`);
     }
 
     setGeminiMemoryCache(prompt, response, ttl) {
         const key = this.generateCacheKey(prompt, 'gemini_memory');
         const expiryTime = Date.now() + (ttl * 1000);
-        
+
         // Evict if needed
         if (this.geminiCache.size >= 1000) { // Dedicated limit for Gemini cache
             const firstKey = this.geminiCache.keys().next().value;
@@ -314,7 +314,7 @@ class CacheService {
     getGeminiMemoryCache(prompt) {
         const key = this.generateCacheKey(prompt, 'gemini_memory');
         const cached = this.geminiCache.get(key);
-        
+
         if (!cached) return null;
 
         // Check expiry
@@ -327,7 +327,7 @@ class CacheService {
         cached.accessCount++;
         this.geminiCache.delete(key);
         this.geminiCache.set(key, cached);
-        
+
         this.cacheStats.geminiCacheHits++;
         return cached.response;
     }
@@ -337,13 +337,13 @@ class CacheService {
     // ===================================================
     compressIfNeeded(data) {
         const jsonString = typeof data === 'string' ? data : JSON.stringify(data);
-        
+
         if (jsonString.length > this.options.cacheCompressionThreshold) {
             try {
                 const zlib = require('zlib');
                 const compressed = zlib.gzipSync(jsonString);
                 this.cacheStats.compressionSaved += jsonString.length - compressed.length;
-                
+
                 return {
                     compressed: true,
                     data: compressed.toString('base64')
@@ -352,7 +352,7 @@ class CacheService {
                 logger.warn('[Cache] Compression failed:', error.message);
             }
         }
-        
+
         return { compressed: false, data: jsonString };
     }
 
@@ -368,7 +368,7 @@ class CacheService {
                 return null;
             }
         }
-        
+
         return typeof cachedData === 'string' ? JSON.parse(cachedData) : cachedData;
     }
 
@@ -386,13 +386,13 @@ class CacheService {
 
         try {
             const result = await operation();
-            
+
             // Success - reset circuit breaker if in HALF_OPEN
             if (this.circuitBreaker.state === 'HALF_OPEN') {
                 this.resetCircuitBreaker();
                 logger.info('[Cache] Circuit breaker: HALF_OPEN -> CLOSED');
             }
-            
+
             return result;
         } catch (error) {
             logger.warn('[Cache] Redis operation failed, using fallback:', error.message);
@@ -452,9 +452,9 @@ class CacheService {
         // Try Redis with compression
         await this.executeRedisOperation(async () => {
             if (!this.client?.isOpen) throw new Error('Redis not connected');
-            
+
             const dataToStore = JSON.stringify(compressed);
-            
+
             if (actualTtl) {
                 await this.client.setEx(key, actualTtl, dataToStore);
             } else {
@@ -470,7 +470,7 @@ class CacheService {
     // ===================================================
     setPromptCache(templateName, content) {
         const key = `prompt:${templateName}`;
-        
+
         // Evict if needed
         if (this.promptCache.size >= 50) {
             const firstKey = this.promptCache.keys().next().value;
@@ -486,12 +486,12 @@ class CacheService {
     getPromptCache(templateName) {
         const key = `prompt:${templateName}`;
         const cached = this.promptCache.get(key);
-        
+
         if (cached) {
             this.cacheStats.promptCacheHits++;
             return cached.content;
         }
-        
+
         return null;
     }
 
@@ -537,7 +537,7 @@ class CacheService {
     async searchSimilar(queryEmbedding, topK = 3) {
         const result = await this.executeRedisOperation(async () => {
             if (!this.client?.isOpen) throw new Error('Redis not connected');
-            
+
             const buffer = this.serializeEmbedding(queryEmbedding);
             const q = `*=>[KNN ${topK} @embedding $vector AS score]`;
 
@@ -564,9 +564,9 @@ class CacheService {
 
         await this.executeRedisOperation(async () => {
             if (!this.client?.isOpen) throw new Error('Redis not connected');
-            
+
             const buffer = this.serializeEmbedding(embeddingArray);
-            
+
             await this.client.hSet(key, {
                 question,
                 embedding: buffer,
@@ -585,7 +585,7 @@ class CacheService {
     async isRateLimited(identifier, limit = 5, window = 60) {
         const result = await this.executeRedisOperation(async () => {
             if (!this.client?.isOpen) throw new Error('Redis not connected');
-            
+
             const key = `rate-limit:${identifier}`;
             const current = await this.client.incr(key);
 
@@ -602,7 +602,7 @@ class CacheService {
     async getRemainingLimit(identifier, limit = 5, window = 60) {
         const result = await this.executeRedisOperation(async () => {
             if (!this.client?.isOpen) throw new Error('Redis not connected');
-            
+
             const key = `rate-limit:${identifier}`;
             const current = await this.client.get(key);
             const ttl = await this.client.ttl(key);
@@ -620,7 +620,7 @@ class CacheService {
     async createIndexIfNotExists() {
         await this.executeRedisOperation(async () => {
             if (!this.client?.isOpen) throw new Error('Redis not connected');
-            
+
             try {
                 await this.client.ft.info(this.indexName);
                 logger.info(`[Cache] Index ${this.indexName} already exists`);
@@ -699,13 +699,13 @@ class CacheService {
     // ENHANCED STATISTICS
     // ===================================================
     getStats() {
-        const total = this.cacheStats.redisHits + this.cacheStats.memoryHits + 
-                     this.cacheStats.geminiCacheHits + this.cacheStats.promptCacheHits + 
-                     this.cacheStats.misses;
-        
-        const hitRate = total > 0 ? 
-            ((this.cacheStats.redisHits + this.cacheStats.memoryHits + 
-              this.cacheStats.geminiCacheHits + this.cacheStats.promptCacheHits) / total * 100).toFixed(2) : 0;
+        const total = this.cacheStats.redisHits + this.cacheStats.memoryHits +
+            this.cacheStats.geminiCacheHits + this.cacheStats.promptCacheHits +
+            this.cacheStats.misses;
+
+        const hitRate = total > 0 ?
+            ((this.cacheStats.redisHits + this.cacheStats.memoryHits +
+                this.cacheStats.geminiCacheHits + this.cacheStats.promptCacheHits) / total * 100).toFixed(2) : 0;
 
         const geminiHitRate = (this.cacheStats.geminiCacheHits + this.cacheStats.redisHits + this.cacheStats.memoryHits) > 0 ?
             (this.cacheStats.geminiCacheHits / (this.cacheStats.geminiCacheHits + this.cacheStats.misses) * 100).toFixed(2) : 0;
@@ -730,7 +730,7 @@ class CacheService {
     // ===================================================
     async warmCache(commonQuestions = []) {
         logger.info('[Cache] Starting cache warming...');
-        
+
         const warmingPromises = commonQuestions.map(async (question) => {
             try {
                 // Pre-generate cache keys for common question patterns
@@ -846,17 +846,35 @@ class CacheService {
                 await this.client.quit();
                 logger.info('[Cache] Redis client disconnected');
             }
-            
+
             // Clear all memory caches
             this.memoryCache.clear();
             this.geminiCache.clear();
             this.promptCache.clear();
             this.questionSimilarityCache.clear();
-            
+
             logger.info('[Cache] All caches cleared');
         } catch (error) {
             logger.error('[Cache] Error during disconnect:', error.message);
         }
+    }
+
+    async clearAllCaches() {
+        // Clear memory caches
+        this.memoryCache.clear();
+        this.geminiCache.clear();
+        this.promptCache.clear();
+        this.questionSimilarityCache.clear();
+
+        // Nếu muốn clear luôn Redis cache:
+        await this.executeRedisOperation(async () => {
+            if (this.client?.isOpen) {
+                await this.client.flushAll(); // Xóa toàn bộ key trong Redis
+                logger.info('[Cache] All Redis keys cleared');
+            }
+        });
+
+        logger.info('[Cache] All caches cleared without disconnecting');
     }
 }
 

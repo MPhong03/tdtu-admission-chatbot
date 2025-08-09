@@ -22,15 +22,16 @@
     "d3-shape": "^3.2.0",
     "jwt-decode": "^4.0.0",
     "prop-types": "15.8.1",
+    "react": "^18.3.1",
     "react-apexcharts": "^1.7.0",
     "react-datepicker": "^8.4.0",
-    "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-hot-toast": "^2.5.2",
     "react-markdown": "^10.1.0",
     "react-router-dom": "^7.6.2",
     "react-select": "^5.10.1",
     "react-toastify": "^11.0.5",
+    "remark-gfm": "^4.0.1",
     "uuid": "^11.1.0"
   },
   "devDependencies": {

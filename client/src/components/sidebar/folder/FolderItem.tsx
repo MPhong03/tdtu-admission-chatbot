@@ -118,7 +118,7 @@ const FolderItem = ({
           fetchChats();
           reload?.();
         } else {
-          message.error(res.Message || "Tạo đoạn chat thất bại");
+          message.error(res.Message || "Tạo đoạn chat thất bại"); 
         }
       } catch {
         message.error("Tạo đoạn chat thất bại");

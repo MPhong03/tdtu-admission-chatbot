@@ -1,0 +1,14 @@
+.markdown-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.markdown-table th,
+.markdown-table td {
+    border: 1px solid #ccc;
+    padding: 8px;
+}
+
+.markdown-table th {
+    background-color: #f5f5f5;
+}

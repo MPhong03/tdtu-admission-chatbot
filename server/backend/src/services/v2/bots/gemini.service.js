@@ -84,16 +84,29 @@ class GeminiService {
         }
     }
 
-    handleFailure(error) {
+    handleFailure(error, requestId) {
         if (!this.circuitBreaker.enabled) return;
 
         this.circuitBreaker.failures++;
         this.circuitBreaker.lastFailTime = Date.now();
-        this.circuitBreaker.reason = error?.message || 'Unknown Gemini error';
+
+        // Thu thập chi tiết lỗi
+        let details = {
+            requestId,
+            message: error?.message,
+            code: error?.code,
+            status: error?.response?.status,
+            statusText: error?.response?.statusText,
+            geminiError: error?.response?.data?.error || null
+        };
+
+        this.circuitBreaker.reason = details.message || 'Unknown Gemini error';
+
+        logger.error(`[Gemini] Request ${requestId} failed`, details);
 
         if (this.circuitBreaker.failures >= this.circuitBreaker.threshold) {
             this.circuitBreaker.state = 'OPEN';
-            logger.warn(`[Circuit Breaker] OPEN after ${this.circuitBreaker.failures} failures`);
+            logger.warn(`[Circuit Breaker] OPEN after ${this.circuitBreaker.failures} failures. Last reason: ${details.message}`);
         }
     }
 
@@ -177,7 +190,17 @@ class GeminiService {
 
         } catch (error) {
             this.stats.failedRequests++;
-            this.handleFailure(error);
+            this.handleFailure(error, request.id);
+
+            logger.error(`[Gemini] Failed request ID=${request.id}, Retry=${request.retryCount}`, {
+                promptPreview: request.prompt?.substring(0, 100) + '...',
+                error: {
+                    message: error.message,
+                    code: error.code,
+                    status: error.response?.status,
+                    responseData: error.response?.data
+                }
+            });
 
             if (this.shouldRetry(request, error)) {
                 const retryDelay = this.calculateRetryDelay(request.retryCount);
@@ -217,30 +240,51 @@ class GeminiService {
         const timeInfo = this.getCurrentTimeInfo();
         const enhancedPrompt = `${timeInfo}\n\n${prompt}`;
 
-        const response = await axios.post(
-            `${this.apiUrl}?key=${this.apiKey}`,
-            { contents: [{ parts: [{ text: enhancedPrompt }] }] },
-            {
-                timeout: 30000,
-                headers: { 'Content-Type': 'application/json' }
-            }
-        );
+        try {
+            // Prompt
+            // logger.info(`[Gemini] Prompt: ${enhancedPrompt}`);
 
-        let result = response.data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const response = await axios.post(
+                `${this.apiUrl}?key=${this.apiKey}`,
+                { contents: [{ parts: [{ text: enhancedPrompt }] }] },
+                {
+                    timeout: 30000,
+                    headers: { 'Content-Type': 'application/json' }
+                }
+            );
 
-        if (typeof result === "string") {
-            const jsonMatch = result.match(/```json([\s\S]*?)```/);
-            if (jsonMatch) {
-                result = jsonMatch[1].trim();
+            let result = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+            if (typeof result === "string") {
+                // Tìm JSON trong code block
+                const jsonMatch = result.match(/```json\s*([\s\S]*?)```/i);
+                if (jsonMatch && jsonMatch[1]) {
+                    result = jsonMatch[1].trim();
+                }
+
+                // Thử parse JSON
+                try {
+                    const parsed = JSON.parse(result);
+                    return parsed;
+                } catch (e) {
+                    logger.warn(`[Gemini] JSON parse failed`, JSON.stringify({
+                        rawResultPreview: result?.substring(0, 200) + '...',
+                        error: e.message
+                    }));
+                    // logger.warn(`[Gemini] Raw result: ${e.message}`);
+                    // logger.warn(`[Gemini] Raw result: ${result}`);
+                    return result;
+                }
             }
-            try {
-                result = JSON.parse(result);
-            } catch (e) {
-                // Not JSON, return as string
-            }
+
+            return result ?? null;
+        } catch (err) {
+            logger.error(`[Gemini] API call failed`, {
+                error: err.message,
+                stack: err.stack
+            });
+            return null;
         }
-
-        return result;
     }
 
     getCurrentTimeInfo() {

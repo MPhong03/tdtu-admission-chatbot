@@ -24,13 +24,13 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 app.use(compression()); // Enable compression for better performance
 app.use(helmet()); // Add security headers
-app.use(rateLimit({
-  windowMs: 10 * 60 * 1000,  // 15 phút
-  max: 100,                  // Mỗi IP tối đa 100 request/10p
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many requests, please try again later."
-}));
+// app.use(rateLimit({
+//   windowMs: 5 * 60 * 1000,  // 15 phút
+//   max: 100,                  // Mỗi IP tối đa 100 request/10p
+//   standardHeaders: true,
+//   legacyHeaders: false,
+//   message: "Too many requests, please try again later."
+// }));
 
 // LOG REQUEST
 app.use((req, res, next) => {

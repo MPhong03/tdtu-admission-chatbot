@@ -22,7 +22,7 @@ Thực hiện phân tích chi tiết:
 - Enrichment targets: [thông tin bổ sung có giá trị]
 - Query complexity: [single, multi-step, comprehensive]
 
-Trả về JSON:
+LUÔN LUÔN trả về JSON như sau, không thừa không thiếu bất cứ thuộc tính nào:
 {
     "entities": {
         "majors": ["công nghệ thông tin", "kỹ thuật phần mềm"],
