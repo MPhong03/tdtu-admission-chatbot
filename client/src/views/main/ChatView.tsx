@@ -1,6 +1,6 @@
 // ChatView.tsx - Fixed typewriter effect and initial question re-sending
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import { useParams, useLocation, useNavigate } from "react-router-dom";
 import { Spin, Tooltip } from "antd";
 import { DownOutlined } from "@ant-design/icons";
 import ReactMarkdown from "react-markdown";
@@ -13,6 +13,7 @@ import QuestionItem from "@/components/chat/QuestionItem";
 import AnswerItem from "@/components/chat/AnswerItem";
 import toast from "react-hot-toast";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
+import { useRateLimit } from "@/hooks/useRateLimit";
 
 const TYPEWRITER_INTERVAL = 10;
 const INITIAL_QUESTION_KEY = 'initialQuestionState';
@@ -46,6 +47,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   initialChatId,
   onNewChatCreated,
 }) => {
+  const navigate = useNavigate();
   const chatIdFromParams = useParams<{ chatId: string }>().chatId;
   const location = useLocation();
   const locationState = location.state as { initialQuestion?: string; fromHome?: boolean; chatName?: string } | null;
@@ -61,6 +63,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [botTyping, setBotTyping] = useState(false);
   const [currentTypingAnswer, setCurrentTypingAnswer] = useState("");
   const [showScrollDown, setShowScrollDown] = useState(false);
+  const { rateLimitInfo, checkRateLimit, refreshRateLimit } = useRateLimit();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
@@ -89,6 +92,18 @@ const ChatView: React.FC<ChatViewProps> = ({
     } catch {
       return null;
     }
+  }, []);
+
+  // Cập nhật visitor ID khi có thay đổi
+  useEffect(() => {
+    if (visitorId) {
+      checkRateLimit();
+    }
+  }, [visitorId, checkRateLimit]);
+
+  // Xử lý khi click đăng ký
+  const handleUpgradeClick = useCallback(() => {
+    navigate("/auth");
   }, []);
 
   const setInitialQuestionState = useCallback((chatId: string, question: string) => {
@@ -269,7 +284,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   useEffect(() => {
     const initialQuestion = locationState?.initialQuestion;
     const fromHome = locationState?.fromHome;
-    
+
     if (
       initialQuestion &&
       fromHome &&
@@ -291,10 +306,10 @@ const ChatView: React.FC<ChatViewProps> = ({
 
       console.log("[ChatView] Processing initial question:", initialQuestion);
       hasProcessedInitialQuestion.current = true;
-      
+
       // Store the state
       setInitialQuestionState(currentChatId, initialQuestion);
-      
+
       // Clear location state to prevent re-processing
       window.history.replaceState({}, '', window.location.pathname);
 
@@ -521,8 +536,14 @@ const ChatView: React.FC<ChatViewProps> = ({
     async (question: string) => {
       if (!question.trim()) return;
 
+      // Kiểm tra rate limit trước khi gửi
+      if (rateLimitInfo && rateLimitInfo.isLimited) {
+        toast.error("Bạn đã hết lượt chat. Vui lòng đăng ký tài khoản để tiếp tục.");
+        return;
+      }
+
       console.log("[ChatView] Sending question:", question);
-      
+
       const tempId = `temp-${Date.now()}`;
       tempMessageIdRef.current = tempId;
 
@@ -561,6 +582,13 @@ const ChatView: React.FC<ChatViewProps> = ({
             )
           );
           tempMessageIdRef.current = data.historyId;
+        }
+
+        // Cập nhật rate limit sau khi gửi thành công
+        if (visitorId) {
+          setTimeout(() => {
+            refreshRateLimit();
+          }, 1000);
         }
 
         if (data.chatId && data.chatId !== currentChatId) {
@@ -707,8 +735,8 @@ const ChatView: React.FC<ChatViewProps> = ({
             )}
             {chatItems.map((item, index) => (
               <div key={`${item._id}-${index}`} className="space-y-4 my-6 flex flex-col">
-                <QuestionItem 
-                  content={item.question} 
+                <QuestionItem
+                  content={item.question}
                   timestamp={item.createdAt}
                 />
                 <AnswerItem
@@ -751,12 +779,14 @@ const ChatView: React.FC<ChatViewProps> = ({
 
       {/* Input section */}
       <div className="relative">
-        <ChatInputBox 
-          onSend={handleSend} 
-          chatId={currentChatId} 
+        <ChatInputBox
+          onSend={handleSend}
+          chatId={currentChatId}
           isDisabled={false}
           isBotTyping={botTyping}
           mode="chat"
+          rateLimitInfo={rateLimitInfo}
+          onUpgradeClick={handleUpgradeClick}
         />
       </div>
     </div>

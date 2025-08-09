@@ -627,10 +627,7 @@ const QAModal = ({ open, onClose, history, onUpdateHistory }) => {
                                                                 {detail.cypher && (
                                                                     <div className="bg-gray-900 rounded p-2 overflow-x-auto">
                                                                         <pre className="text-xs text-green-400 font-mono">
-                                                                            {detail.cypher.length > 200 ?
-                                                                                detail.cypher.substring(0, 200) + '...' :
-                                                                                detail.cypher
-                                                                            }
+                                                                            {detail.cypher}
                                                                         </pre>
                                                                     </div>
                                                                 )}

@@ -13,6 +13,8 @@ const commonRoutes = require("./common.route");
 const feedbackRoutes = require("./feedback.route");
 const helperRoutes = require("./helper.route");
 const notificationRoutes = require("./notification.route");
+const adminRoutes = require("./admin.route");
+const visitorRoutes = require("./visitor.route");
 
 // V2
 const majorRoutes = require("./v2/major.route");
@@ -44,6 +46,8 @@ router.use("/systemconfigs", commonRoutes);
 router.use("/feedbacks", feedbackRoutes);
 router.use("/helpers", helperRoutes);
 router.use("/notifications", notificationRoutes);
+router.use("/admin", adminRoutes);
+router.use("/visitor", visitorRoutes);
 //...
 
 // V2

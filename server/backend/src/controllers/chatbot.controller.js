@@ -4,9 +4,14 @@ const RetrieverService = require('../services/chatbots/retriever.service');
 const HistoryService = require("../services/users/history.service");
 const EntityRecognizer = require('../services/regconizers/entity.regconizer');
 const BotService = require("../services/v2/bots/bot.service");
+const VisitorRateLimitService = require("../services/visitor-rate-limit.service");
 
 class ChatbotController {
-    async chatWithBot(req, res) {
+    constructor() {
+        this.visitorRateLimitService = new VisitorRateLimitService();
+    }
+
+    chatWithBot = async (req, res) => {
         try {
             const { question, chatId } = req.body;
             const userId = req.user?.id || null;
@@ -82,7 +87,16 @@ class ChatbotController {
                 console.warn("Lưu lịch sử thất bại:", saveResult.Message);
             }
 
-            // 3. Trả về cho frontend với enhanced tracking info
+            // 3. Tăng counter cho visitor rate limit (nếu là visitor)
+            if (req.isVisitor && req.visitorId) {
+                try {
+                    await this.visitorRateLimitService.incrementCounter(req.visitorId, 'chat');
+                } catch (error) {
+                    console.warn("Không thể tăng counter cho visitor rate limit:", error.message);
+                }
+            }
+
+            // 4. Trả về cho frontend với enhanced tracking info
             return res.json(
                 HttpResponse.success("Nhận kết quả", {
                     answer,

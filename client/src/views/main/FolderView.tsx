@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Typography, Spin, message } from "antd";
 import { IoChatbubblesOutline } from "react-icons/io5";
 import ChatInputBox from "@/components/chat/ChatInputBox";
@@ -10,6 +10,7 @@ import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 import { saveVisitorId, getVisitorId } from "@/utils/auth";
 import toast from "react-hot-toast";
 import { useChat } from "@/contexts/ChatContext";
+import rateLimitService, { RateLimitInfo } from "@/services/rateLimitService";
 
 const { Title, Paragraph } = Typography;
 
@@ -32,6 +33,7 @@ const FolderView = () => {
   const [chats, setChats] = useState<Chat[]>([]);
   const [loading, setLoading] = useState(true);
   const [chatCreationLoading, setChatCreationLoading] = useState(false);
+  const [rateLimitInfo, setRateLimitInfo] = useState<RateLimitInfo | null>(null);
   const { notifyNewChat } = useChat();
 
   const { setTitle } = useBreadcrumb();
@@ -70,9 +72,34 @@ const FolderView = () => {
     fetchData();
   }, [folderId]);
 
+  // Kiểm tra rate limit
+  const checkRateLimit = useCallback(async () => {
+    const visitorId = getVisitorId();
+    if (!visitorId) return;
+    
+    try {
+      const result = await rateLimitService.canSendMessage();
+      if (result.info) {
+        setRateLimitInfo(result.info);
+      }
+    } catch (error) {
+      console.error('[FolderView] Error checking rate limit:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkRateLimit();
+  }, [checkRateLimit]);
+
   // Handle send message - similar to HomeView but with folderId
   const handleSend = async (question: string) => {
     if (!question.trim()) return;
+
+    // Kiểm tra rate limit trước khi gửi
+    if (rateLimitInfo && rateLimitInfo.isLimited) {
+      toast.error("Bạn đã hết lượt chat. Vui lòng đăng ký tài khoản để tiếp tục.");
+      return;
+    }
     
     setChatCreationLoading(true);
     try {
@@ -145,6 +172,8 @@ const FolderView = () => {
           mode="home"
           loading={chatCreationLoading}
           placeholder="Đặt câu hỏi để bắt đầu trò chuyện mới trong thư mục..."
+          rateLimitInfo={rateLimitInfo}
+          onUpgradeClick={() => navigate("/auth")}
         />
         
         {/* Loading feedback */}

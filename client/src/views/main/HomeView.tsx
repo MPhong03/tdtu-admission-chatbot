@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import ChatInputBox from "@/components/chat/ChatInputBox";
 import axiosClient from "@/api/axiosClient";
@@ -7,9 +7,12 @@ import { saveVisitorId, getVisitorId } from "@/utils/auth";
 import toast from "react-hot-toast";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 import { useChat } from "@/contexts/ChatContext";
+import { useRateLimit } from "@/hooks/useRateLimit";
+import rateLimitService, { RateLimitInfo } from "@/services/rateLimitService";
 
 const HomeView = () => {
   const [loading, setLoading] = useState(false);
+  const [rateLimitInfo, setRateLimitInfo] = useState<RateLimitInfo | null>(null);
   const { setTitle } = useBreadcrumb();
   const navigate = useNavigate();
   const { notifyNewChat } = useChat();
@@ -19,8 +22,33 @@ const HomeView = () => {
     setTitle("Trang chủ");
   }, []);
 
+  // Kiểm tra rate limit
+  const checkRateLimit = useCallback(async () => {
+    const visitorId = getVisitorId();
+    if (!visitorId) return;
+    
+    try {
+      const result = await rateLimitService.canSendMessage();
+      if (result.info) {
+        setRateLimitInfo(result.info);
+      }
+    } catch (error) {
+      console.error('[HomeView] Error checking rate limit:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    checkRateLimit();
+  }, [checkRateLimit]);
+
   const handleSend = async (question: string) => {
     if (!question.trim()) return;
+
+    // Kiểm tra rate limit trước khi gửi
+    if (rateLimitInfo && rateLimitInfo.isLimited) {
+      toast.error("Bạn đã hết lượt chat. Vui lòng đăng ký tài khoản để tiếp tục.");
+      return;
+    }
     
     setLoading(true);
     try {
@@ -84,6 +112,8 @@ const HomeView = () => {
           mode="home"
           loading={loading}
           placeholder="Đặt câu hỏi để bắt đầu trò chuyện với AI..."
+          rateLimitInfo={rateLimitInfo}
+          onUpgradeClick={() => navigate("/auth")}
         />
         
         {/* Loading feedback */}
