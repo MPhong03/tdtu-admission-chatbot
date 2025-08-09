@@ -2,17 +2,21 @@ const express = require('express');
 const router = express.Router();
 const ChatbotController = require('../controllers/chatbot.controller');
 const { verifyToken, optionalAuth, apiLock, rateLimiter } = require('../middlewares/auth.middleware');
+const { visitorChatRateLimit } = require('../middlewares/visitor-rate-limit.middleware');
 
 // ============= API CHATBOT ============= //
 
 /**
  * Chat với chatbot, tự động lưu lịch sử
  * POST /chatbot/chat
- * Headers: Authorization: Bearer <token>
+ * Headers: Authorization: Bearer <token> (optional)
+ * Headers: X-Visitor-Id: <visitor-id> (required for visitors)
  * Body: { "question": String, "chatId": String (optional) }
  *    - Nếu không truyền chatId, hệ thống sẽ tự tạo mới
+ *    - Visitor: giới hạn 20 câu mỗi 5 giờ
+ *    - User đã đăng nhập: không giới hạn
  */
-router.post("/chat", optionalAuth, ChatbotController.chatWithBot);
+router.post("/chat", optionalAuth, visitorChatRateLimit, ChatbotController.chatWithBot);
 
 /**
  * Test chat với Gemini
