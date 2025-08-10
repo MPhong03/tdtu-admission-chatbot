@@ -174,7 +174,7 @@ class BotService {
             const verificationDecision = this.verification.shouldVerifyWithMode(question, answer, category, contextScore);
             
             if (!verificationDecision.shouldVerify) {
-                return this.getSkippedVerification('not_eligible');
+                return this.verification.getSkippedVerification('not_eligible');
             }
 
             // Use the determined mode for verification
