@@ -76,87 +76,24 @@ class VerificationService {
 
     // ===== POST-RESPONSE ASYNC VERIFICATION =====
     async verifyAnswerAsync(historyId, question, answer, contextNodes = [], category = 'simple_admission') {
-        if (this.config.mode === 'background') {
-            // Background mode: always run async
-            this.scheduleBackgroundVerification(historyId, question, answer, contextNodes, category);
-            return;
-        }
-
-        if (this.config.mode === 'post_async') {
-            // Post-async mode: use Redis queue for reliable execution
-            try {
-                const taskData = {
-                    historyId,
-                    question,
-                    answer,
-                    contextNodes: JSON.stringify(contextNodes),
-                    category,
-                    type: 'verification'
-                };
-
-                // Enqueue to Redis for reliable processing
-                await this.cache.enqueueVerificationTask(taskData);
-                
-                logger.info(`[Verification] Enqueued verification task for history ${historyId}`);
-            } catch (error) {
-                logger.error(`[Verification] Failed to enqueue verification task for history ${historyId}:`, error);
-            }
-        }
-    }
-
-    // ===== QUEUE PROCESSOR CALLBACK =====
-    async handleVerificationTask(task) {
+        // Always perform verification immediately in the main request
         try {
-            // Parse context nodes
-            let contextNodes = [];
-            try {
-                contextNodes = task.contextNodes ? JSON.parse(task.contextNodes) : [];
-            } catch (e) {
-                contextNodes = [];
-            }
-
-            // Perform verification
-            const verification = await this.verifyAnswer(
-                task.question,
-                task.answer,
-                contextNodes,
-                task.category
-            );
-
+            const verification = await this.verifyAnswer(question, answer, contextNodes, category);
+            
             if (verification.isVerified || verification.fallback) {
-                await this.updateHistoryVerification(task.historyId, verification);
-                logger.info(`[Verification] Completed verification for history ${task.historyId}`);
+                await this.updateHistoryVerification(historyId, verification);
+                logger.info(`[Verification] Completed verification for history ${historyId} - Score: ${verification.score} - Result: ${verification.isCorrect ? 'CORRECT' : 'INCORRECT'}`);
             }
-
+            
+            return verification;
         } catch (error) {
-            logger.error(`[Verification] Task processing failed for history ${task.historyId}:`, error);
-            throw error; // Re-throw to trigger retry mechanism
+            logger.error(`[Verification] Failed to verify answer for history ${historyId}:`, error);
+            return this.getSkippedVerification('error');
         }
     }
 
-    // ===== BACKGROUND VERIFICATION =====
-    scheduleBackgroundVerification(historyId, question, answer, contextNodes, category) {
-        // Schedule for later execution (e.g., during low traffic periods)
-        const delay = Math.random() * 30000 + 10000; // 10-40 seconds delay
-        
-        setTimeout(async () => {
-            try {
-                const taskData = {
-                    historyId,
-                    question,
-                    answer,
-                    contextNodes: JSON.stringify(contextNodes),
-                    category,
-                    type: 'verification'
-                };
-
-                await this.cache.enqueueVerificationTask(taskData);
-                logger.info(`[Verification] Scheduled background verification for history ${historyId}`);
-            } catch (error) {
-                logger.error(`[Verification] Failed to schedule background verification for history ${historyId}:`, error);
-            }
-        }, delay);
-    }
+    // ===== QUEUE PROCESSOR CALLBACK (REMOVED) =====
+    // No longer needed - verification runs in main request
 
     // ===== SMART VERIFICATION DECISION =====
     shouldVerifyWithMode(question, answer, category, contextScore = 0) {
@@ -164,23 +101,8 @@ class VerificationService {
             return { shouldVerify: false, mode: 'skip', reason: 'not_eligible' };
         }
 
-        // High confidence answers: use pre-response verification
-        if (contextScore > this.config.highPriorityThreshold) {
-            return { shouldVerify: true, mode: 'pre_response', reason: 'high_confidence' };
-        }
-
-        // Complex questions: use post-async verification
-        if (category === 'complex_admission') {
-            return { shouldVerify: true, mode: 'post_async', reason: 'complex_question' };
-        }
-
-        // Simple questions: use background verification
-        if (category === 'simple_admission') {
-            return { shouldVerify: true, mode: 'background', reason: 'simple_question' };
-        }
-
-        // Default: use configured mode
-        return { shouldVerify: true, mode: this.config.mode, reason: 'default' };
+        // Always use immediate verification now
+        return { shouldVerify: true, mode: 'immediate', reason: 'main_request' };
     }
 
     // ===== CORE VERIFICATION LOGIC =====

@@ -93,18 +93,21 @@ class ChatbotController {
                 console.warn("Lưu lịch sử thất bại:", saveResult.Message);
             }
 
-            // 3. Trigger async verification with context score
+            // 4. Trigger verification immediately in main request
             if (saveResult?.Data?.history?._id && !isError) {
                 try {
-                    await BotService.triggerAsyncVerification(
+                    const verification = await BotService.triggerAsyncVerification(
                         saveResult.Data.history._id,
                         question,
                         answer,
                         contextNodes,
                         questionType || category || 'simple_admission'
                     );
+                    
+                    // Add verification info to response
+                    result.verificationInfo = verification;
                 } catch (error) {
-                    console.warn("Không thể trigger async verification:", error.message);
+                    console.warn("Không thể verify answer:", error.message);
                 }
             }
 
@@ -117,7 +120,7 @@ class ChatbotController {
                 }
             }
 
-            // 4. Trả về cho frontend với enhanced tracking info
+            // 6. Trả về cho frontend với enhanced tracking info
             return res.json(
                 HttpResponse.success("Nhận kết quả", {
                     answer,
@@ -126,7 +129,7 @@ class ChatbotController {
                     chatId: saveResult?.Data?.chatId || chatId,
                     visitorId: req.isVisitor ? req.visitorId : null,
                     historyId: saveResult?.Data?.history?._id || null,
-                    // === TRACKING INFO FOR CLIENT ===
+                    // Tracking info for client
                     trackingInfo: {
                         questionType: questionType || category || 'simple_admission',
                         processingMethod: processingMethod || 'rag_simple',
@@ -135,7 +138,9 @@ class ChatbotController {
                         processingTime: processingTime || 0,
                         classificationConfidence: classificationConfidence || classification?.confidence || 0,
                         errorType: errorType || 'none'
-                    }
+                    },
+                    // Verification info
+                    verification: result.verificationInfo || null
                 })
             );
         } catch (err) {

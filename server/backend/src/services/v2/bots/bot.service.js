@@ -56,13 +56,7 @@ class BotService {
             const validationStats = this.cypher.getValidationStats();
             logger.info("[BotService] Cypher validation enabled:", validationStats.enabled);
             
-            // Start verification queue processor
-            logger.info("[BotService] Starting verification queue processor...");
-            this.cache.startVerificationQueueProcessor(
-                (task) => this.verification.handleVerificationTask(task)
-            );
-            
-            logger.info("[BotService] Successfully initialized all services with Redis queue");
+            logger.info("[BotService] Successfully initialized all services");
         } catch (error) {
             logger.error("[BotService] Initialization failed:", error);
         }
@@ -215,9 +209,8 @@ class BotService {
 
     // ===== ASYNC VERIFICATION TRIGGER =====
     async triggerAsyncVerification(historyId, question, answer, contextNodes, category) {
-        // Always trigger async verification regardless of mode
-        // The verification service will handle the mode-specific logic
-        await this.verification.verifyAnswerAsync(historyId, question, answer, contextNodes, category);
+        // Perform verification immediately and return result
+        return await this.verification.verifyAnswerAsync(historyId, question, answer, contextNodes, category);
     }
 
     // ===================================================
@@ -566,9 +559,6 @@ class BotService {
         logger.info("[BotService] Shutting down...");
         
         try {
-            // Stop verification queue processor
-            this.cache.stopVerificationQueueProcessor();
-            
             // Clear caches
             await this.cache.clearAllCaches();
             
