@@ -1,7 +1,6 @@
 const logger = require("../../../utils/logger.util");
 const BaseRepository = require("../../../repositories/common/base.repository");
 const History = require("../../../models/users/history.model");
-const VerificationTask = require("../../../models/system/verification-task.model");
 
 class VerificationService {
     constructor(geminiService, promptService, cacheService) {
@@ -9,7 +8,6 @@ class VerificationService {
         this.prompts = promptService;
         this.cache = cacheService;
         this.historyRepo = new BaseRepository(History);
-        this.verificationTaskRepo = new BaseRepository(VerificationTask);
 
         this.config = {
             enabled: process.env.ENABLE_VERIFICATION !== 'false',
@@ -85,126 +83,54 @@ class VerificationService {
         }
 
         if (this.config.mode === 'post_async') {
-            // Post-async mode: save to database queue for reliable execution
+            // Post-async mode: use Redis queue for reliable execution
             try {
-                await this.saveVerificationTask(historyId, question, answer, contextNodes, category);
+                const taskData = {
+                    historyId,
+                    question,
+                    answer,
+                    contextNodes: JSON.stringify(contextNodes),
+                    category,
+                    type: 'verification'
+                };
+
+                // Enqueue to Redis for reliable processing
+                await this.cache.enqueueVerificationTask(taskData);
                 
-                // Also try immediate execution for faster results
-                setImmediate(async () => {
-                    try {
-                        const verification = await this.verifyAnswer(question, answer, contextNodes, category);
-                        if (verification.isVerified || verification.fallback) {
-                            await this.updateHistoryVerification(historyId, verification);
-                            // Mark task as completed
-                            await this.markVerificationTaskCompleted(historyId);
-                        }
-                    } catch (error) {
-                        logger.error(`[Verification] Async verification failed for history ${historyId}:`, error);
-                        // Task will be retried by background processor
-                    }
-                });
+                logger.info(`[Verification] Enqueued verification task for history ${historyId}`);
             } catch (error) {
-                logger.error(`[Verification] Failed to save verification task for history ${historyId}:`, error);
+                logger.error(`[Verification] Failed to enqueue verification task for history ${historyId}:`, error);
             }
         }
     }
 
-    // ===== DATABASE QUEUE METHODS =====
-    async saveVerificationTask(historyId, question, answer, contextNodes, category) {
+    // ===== QUEUE PROCESSOR CALLBACK =====
+    async handleVerificationTask(task) {
         try {
-            const taskData = {
-                historyId,
-                question,
-                answer,
-                contextNodes: JSON.stringify(contextNodes),
-                category,
-                status: 'pending',
-                retryCount: 0,
-                maxRetries: 3,
-                createdAt: new Date(),
-                scheduledAt: new Date(Date.now() + 5000) // 5 seconds delay
-            };
+            // Parse context nodes
+            let contextNodes = [];
+            try {
+                contextNodes = task.contextNodes ? JSON.parse(task.contextNodes) : [];
+            } catch (e) {
+                contextNodes = [];
+            }
 
-            // Save to verification_tasks collection
-            await this.verificationTaskRepo.create(taskData);
-            logger.info(`[Verification] Saved verification task for history ${historyId}`);
-        } catch (error) {
-            logger.error(`[Verification] Failed to save verification task:`, error);
-            throw error;
-        }
-    }
-
-    async markVerificationTaskCompleted(historyId) {
-        try {
-            await this.verificationTaskRepo.update(
-                { historyId },
-                { 
-                    status: 'completed',
-                    completedAt: new Date()
-                }
+            // Perform verification
+            const verification = await this.verifyAnswer(
+                task.question,
+                task.answer,
+                contextNodes,
+                task.category
             );
-        } catch (error) {
-            logger.error(`[Verification] Failed to mark task completed:`, error);
-        }
-    }
 
-    // ===== BACKGROUND TASK PROCESSOR =====
-    async processPendingVerificationTasks() {
-        try {
-            const pendingTasks = await this.verificationTaskRepo.getAll({
-                status: 'pending',
-                scheduledAt: { $lte: new Date() },
-                retryCount: { $lt: 3 }
-            });
-
-            logger.info(`[Verification] Processing ${pendingTasks.length} pending verification tasks`);
-
-            for (const task of pendingTasks) {
-                try {
-                    // Mark as processing
-                    await this.verificationTaskRepo.update(
-                        { _id: task._id },
-                        { status: 'processing', processingAt: new Date() }
-                    );
-
-                    // Parse context nodes
-                    let contextNodes = [];
-                    try {
-                        contextNodes = task.contextNodes ? JSON.parse(task.contextNodes) : [];
-                    } catch (e) {
-                        contextNodes = [];
-                    }
-
-                    // Perform verification
-                    const verification = await this.verifyAnswer(
-                        task.question,
-                        task.answer,
-                        contextNodes,
-                        task.category
-                    );
-
-                    if (verification.isVerified || verification.fallback) {
-                        await this.updateHistoryVerification(task.historyId, verification);
-                        await this.markVerificationTaskCompleted(task.historyId);
-                    }
-
-                } catch (error) {
-                    logger.error(`[Verification] Task ${task._id} failed:`, error);
-                    
-                    // Increment retry count
-                    await this.verificationTaskRepo.update(
-                        { _id: task._id },
-                        { 
-                            retryCount: task.retryCount + 1,
-                            status: task.retryCount + 1 >= 3 ? 'failed' : 'pending',
-                            lastError: error.message,
-                            scheduledAt: new Date(Date.now() + 30000) // 30 seconds delay for retry
-                        }
-                    );
-                }
+            if (verification.isVerified || verification.fallback) {
+                await this.updateHistoryVerification(task.historyId, verification);
+                logger.info(`[Verification] Completed verification for history ${task.historyId}`);
             }
+
         } catch (error) {
-            logger.error(`[Verification] Background task processor failed:`, error);
+            logger.error(`[Verification] Task processing failed for history ${task.historyId}:`, error);
+            throw error; // Re-throw to trigger retry mechanism
         }
     }
 
@@ -215,12 +141,19 @@ class VerificationService {
         
         setTimeout(async () => {
             try {
-                const verification = await this.verifyAnswer(question, answer, contextNodes, category);
-                if (verification.isVerified) {
-                    await this.updateHistoryVerification(historyId, verification);
-                }
+                const taskData = {
+                    historyId,
+                    question,
+                    answer,
+                    contextNodes: JSON.stringify(contextNodes),
+                    category,
+                    type: 'verification'
+                };
+
+                await this.cache.enqueueVerificationTask(taskData);
+                logger.info(`[Verification] Scheduled background verification for history ${historyId}`);
             } catch (error) {
-                logger.error(`[Verification] Background verification failed for history ${historyId}:`, error);
+                logger.error(`[Verification] Failed to schedule background verification for history ${historyId}:`, error);
             }
         }, delay);
     }
@@ -554,51 +487,6 @@ Trong đó:
             correctRate: total > 0 ? correct / total : 0,
             incorrectRate: total > 0 ? incorrect / total : 0
         };
-    }
-
-    // ===== BACKGROUND PROCESSOR MANAGEMENT =====
-    startBackgroundProcessor() {
-        if (this.backgroundProcessorInterval) {
-            logger.info("[Verification] Background processor already running");
-            return;
-        }
-
-        // Process every 30 seconds
-        this.backgroundProcessorInterval = setInterval(async () => {
-            try {
-                await this.processPendingVerificationTasks();
-            } catch (error) {
-                logger.error("[Verification] Background processor error:", error);
-            }
-        }, 30000);
-
-        logger.info("[Verification] Background processor started (30s interval)");
-    }
-
-    stopBackgroundProcessor() {
-        if (this.backgroundProcessorInterval) {
-            clearInterval(this.backgroundProcessorInterval);
-            this.backgroundProcessorInterval = null;
-            logger.info("[Verification] Background processor stopped");
-        }
-    }
-
-    // ===== CLEANUP METHODS =====
-    async cleanupOldTasks() {
-        try {
-            const cutoffDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // 7 days ago
-            
-            const result = await this.verificationTaskRepo.removeRange({
-                $or: [
-                    { status: 'completed', completedAt: { $lt: cutoffDate } },
-                    { status: 'failed', updatedAt: { $lt: cutoffDate } }
-                ]
-            });
-
-            logger.info(`[Verification] Cleaned up ${result.deletedCount} old verification tasks`);
-        } catch (error) {
-            logger.error("[Verification] Cleanup failed:", error);
-        }
     }
 }
 

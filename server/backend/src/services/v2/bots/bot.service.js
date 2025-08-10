@@ -53,10 +53,12 @@ class BotService {
             const validationStats = this.cypher.getValidationStats();
             logger.info("[BotService] Cypher validation enabled:", validationStats.enabled);
             
-            // Start verification background processor
-            this.verification.startBackgroundProcessor();
+            // Start verification queue processor
+            this.cache.startVerificationQueueProcessor(
+                (task) => this.verification.handleVerificationTask(task)
+            );
             
-            logger.info("[BotService] Successfully initialized all services with Cypher validation");
+            logger.info("[BotService] Successfully initialized all services with Redis queue");
         } catch (error) {
             logger.error("[BotService] Initialization failed:", error);
         }
@@ -560,14 +562,11 @@ class BotService {
         logger.info("[BotService] Shutting down...");
         
         try {
-            // Stop verification background processor
-            this.verification.stopBackgroundProcessor();
-            
-            // Cleanup old verification tasks
-            await this.verification.cleanupOldTasks();
+            // Stop verification queue processor
+            this.cache.stopVerificationQueueProcessor();
             
             // Clear caches
-            await this.cache.clearAll();
+            await this.cache.clearAllCaches();
             
             // Close database connections
             await this.gemini.shutdown();
