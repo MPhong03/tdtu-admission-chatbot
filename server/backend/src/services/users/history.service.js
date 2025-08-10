@@ -13,6 +13,53 @@ const FeedbackRepo = new BaseRepository(Feedback);
 const NotificationRepo = new BaseRepository(Notification);
 
 class HistoryService {
+    // Helper function to truncate large strings
+    truncateString(str, maxLength = 10000) {
+        if (!str || typeof str !== 'string') return str;
+        if (str.length <= maxLength) return str;
+        return str.substring(0, maxLength) + '... [TRUNCATED]';
+    }
+
+    // Helper function to truncate arrays
+    truncateArray(arr, maxItems = 50, maxItemLength = 1000) {
+        if (!Array.isArray(arr)) return arr;
+        if (arr.length <= maxItems) {
+            return arr.map(item => {
+                if (typeof item === 'string' && item.length > maxItemLength) {
+                    return this.truncateString(item, maxItemLength);
+                }
+                return item;
+            });
+        }
+        return arr.slice(0, maxItems).map(item => {
+            if (typeof item === 'string' && item.length > maxItemLength) {
+                return this.truncateString(item, maxItemLength);
+            }
+            return item;
+        });
+    }
+
+    // Helper function to check document size
+    checkDocumentSize(data) {
+        try {
+            const docSize = JSON.stringify(data).length;
+            const maxSize = 16 * 1024 * 1024; // 16MB
+            const sizeMB = (docSize / 1024 / 1024).toFixed(2);
+            const percentage = (docSize / maxSize * 100).toFixed(1);
+            
+            console.log(`[HistoryService] Document size: ${sizeMB}MB (${percentage}% of limit)`);
+            
+            if (docSize > maxSize * 0.8) {
+                console.warn(`[HistoryService] Document size warning: ${sizeMB}MB (${percentage}% of limit)`);
+            }
+            
+            return { size: docSize, sizeMB, percentage, isLarge: docSize > maxSize * 0.8 };
+        } catch (error) {
+            console.error('[HistoryService] Error checking document size:', error);
+            return { size: 0, sizeMB: '0', percentage: '0', isLarge: false };
+        }
+    }
+
     async saveChat(data) {
         try {
             const {
@@ -77,28 +124,40 @@ class HistoryService {
                 userId,
                 visitorId,
                 chatId,
-                question,
-                answer,
+                question: this.truncateString(question, 5000),
+                answer: this.truncateString(answer, 15000),
                 status,
                 errorType: finalErrorType,
                 errorDetails: finalErrorDetails,
-                cypher,
-                contextNodes: JSON.stringify(contextNodes || []),
+                cypher: this.truncateString(cypher, 5000),
+                contextNodes: this.truncateString(JSON.stringify(contextNodes || []), 10000),
                 questionType: questionType || 'simple_admission',
                 classificationConfidence: classificationConfidence || 0,
-                classificationReasoning: classificationReasoning || '',
+                classificationReasoning: this.truncateString(classificationReasoning || '', 2000),
                 enrichmentSteps: enrichmentSteps || 0,
-                enrichmentDetails: typeof enrichmentDetails === 'string' ? enrichmentDetails : JSON.stringify(enrichmentDetails || []),
-                enrichmentQueries: Array.isArray(enrichmentQueries) ? enrichmentQueries : [],
-                enrichmentResults: Array.isArray(enrichmentResults) ? enrichmentResults : [],
+                enrichmentDetails: this.truncateString(
+                    typeof enrichmentDetails === 'string' ? enrichmentDetails : JSON.stringify(enrichmentDetails || []),
+                    10000
+                ),
+                enrichmentQueries: this.truncateArray(enrichmentQueries || [], 20, 500),
+                enrichmentResults: this.truncateArray(enrichmentResults || [], 20, 500),
                 contextScore: contextScore || 0,
-                contextScoreHistory: Array.isArray(contextScoreHistory) ? contextScoreHistory : [],
-                contextScoreReasons: Array.isArray(contextScoreReasons) ? contextScoreReasons : [],
-                agentSteps: Array.isArray(agentSteps) ? JSON.stringify(agentSteps) : (agentSteps || ''),
+                contextScoreHistory: this.truncateArray(contextScoreHistory || [], 10, 200),
+                contextScoreReasons: this.truncateArray(contextScoreReasons || [], 10, 200),
+                agentSteps: this.truncateString(
+                    Array.isArray(agentSteps) ? JSON.stringify(agentSteps) : (agentSteps || ''),
+                    15000
+                ),
                 processingMethod: processingMethod || 'rag_simple',
                 processingTime: processingTime || 0,
                 verificationResult: 'pending' // Mặc định pending cho verification
             };
+
+            // Kiểm tra kích thước document trước khi lưu
+            const sizeInfo = this.checkDocumentSize(historyData);
+            if (sizeInfo.isLarge) {
+                console.warn(`[HistoryService] Large document detected: ${sizeInfo.sizeMB}MB. Consider truncating data.`);
+            }
 
             const result = await HistoryRepo.create(historyData);
 
