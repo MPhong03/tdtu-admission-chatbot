@@ -12,9 +12,62 @@ import {
     UserIcon,
     ChatBubbleLeftRightIcon,
     ClockIcon,
-    CheckBadgeIcon
+    CheckBadgeIcon,
+    CheckCircleIcon,
+    XCircleIcon,
+    ExclamationTriangleIcon,
 } from "@heroicons/react/24/solid";
 import { truncateWords } from "@/utils/tools";
+
+// Helper function để hiển thị verification status
+const getVerificationDisplay = (history) => {
+    if (!history.isVerified) {
+        return {
+            icon: <ExclamationTriangleIcon className="h-4 w-4" />,
+            color: "orange",
+            label: "Chưa xác thực",
+            tooltip: "Câu trả lời chưa được xác thực bởi AI"
+        };
+    }
+
+    switch (history.verificationResult) {
+        case 'correct':
+            return {
+                icon: <CheckCircleIcon className="h-4 w-4" />,
+                color: "green",
+                label: "Đúng",
+                tooltip: `Đã xác thực đúng (${(history.verificationScore * 100).toFixed(1)}%)`
+            };
+        case 'incorrect':
+            return {
+                icon: <XCircleIcon className="h-4 w-4" />,
+                color: "red",
+                label: "Sai",
+                tooltip: `Đã xác thực sai (${(history.verificationScore * 100).toFixed(1)}%)`
+            };
+        case 'pending':
+            return {
+                icon: <ClockIcon className="h-4 w-4" />,
+                color: "blue",
+                label: "Đang chờ",
+                tooltip: "Đang chờ xác thực"
+            };
+        case 'skipped':
+            return {
+                icon: <ExclamationTriangleIcon className="h-4 w-4" />,
+                color: "gray",
+                label: "Bỏ qua",
+                tooltip: "Bỏ qua xác thực"
+            };
+        default:
+            return {
+                icon: <ExclamationTriangleIcon className="h-4 w-4" />,
+                color: "orange",
+                label: "Chưa xác thực",
+                tooltip: "Trạng thái xác thực không xác định"
+            };
+    }
+};
 
 const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
     <>
@@ -47,6 +100,7 @@ const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
                                 { label: "Câu hỏi", width: "w-72" },
                                 { label: "Câu trả lời", width: "w-72" },
                                 { label: "Trạng thái", width: "w-32" },
+                                { label: "Xác thực", width: "w-32" },
                                 { label: "Admin", width: "w-24" },
                                 { label: "Thời gian", width: "w-36" },
                                 { label: "Thao tác", width: "w-20" }
@@ -63,13 +117,14 @@ const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
                         </tr>
                     </thead>
                     <tbody>
-                        {histories.map(({ _id, userId, chatId, question, answer, status, createdAt, isAdminReviewed, adminAnswer }, key) => {
+                        {histories.map((history, key) => {
                             const isLast = key === histories.length - 1;
                             const stt = (page - 1) * size + key + 1;
+                            const verificationDisplay = getVerificationDisplay(history);
 
                             return (
                                 <tr
-                                    key={_id}
+                                    key={history._id}
                                     className={`hover:bg-gray-50/50 transition-colors duration-200 ${!isLast ? "border-b border-blue-gray-50" : ""
                                         }`}
                                 >
@@ -83,10 +138,10 @@ const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
                                         <div className="flex items-center gap-2">
                                             <div>
                                                 <Typography variant="small" className="font-semibold text-blue-gray-900">
-                                                    {userId?.username || "(unknown)"}
+                                                    {history.userId?.username || "(unknown)"}
                                                 </Typography>
                                                 <Typography className="text-xs font-normal text-blue-gray-500">
-                                                    {userId?.email || ""}
+                                                    {history.userId?.email || ""}
                                                 </Typography>
                                             </div>
                                         </div>
@@ -95,7 +150,7 @@ const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
                                     <td className="py-4 px-4">
                                         <div className="bg-blue-50 p-3 rounded-lg border-l-4 border-blue-500">
                                             <Typography variant="small" className="font-medium text-blue-gray-800">
-                                                {truncateWords(question, 15)}
+                                                {truncateWords(history.question, 15)}
                                             </Typography>
                                         </div>
                                     </td>
@@ -103,7 +158,7 @@ const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
                                     <td className="py-4 px-4">
                                         <div className="bg-green-50 p-3 rounded-lg border-l-4 border-green-500">
                                             <Typography variant="small" className="font-medium text-blue-gray-800">
-                                                {truncateWords(answer, 15)}
+                                                {truncateWords(history.answer, 15)}
                                             </Typography>
                                         </div>
                                     </td>
@@ -111,15 +166,28 @@ const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
                                     <td className="py-4 px-4">
                                         <Chip
                                             variant="ghost"
-                                            color={status === "success" ? "green" : "red"}
+                                            color={history.status === "success" ? "green" : "red"}
                                             size="sm"
-                                            value={status}
+                                            value={history.status}
                                             className="font-medium"
                                         />
                                     </td>
 
                                     <td className="py-4 px-4">
-                                        {isAdminReviewed && adminAnswer ? (
+                                        <div className="flex items-center gap-2" title={verificationDisplay.tooltip}>
+                                            {verificationDisplay.icon}
+                                            <Chip
+                                                variant="ghost"
+                                                color={verificationDisplay.color}
+                                                size="sm"
+                                                value={verificationDisplay.label}
+                                                className="font-medium"
+                                            />
+                                        </div>
+                                    </td>
+
+                                    <td className="py-4 px-4">
+                                        {history.isAdminReviewed && history.adminAnswer ? (
                                             <Chip
                                                 variant="ghost"
                                                 color="blue"
@@ -143,10 +211,10 @@ const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
                                             <ClockIcon className="h-4 w-4 text-blue-gray-400" />
                                             <div>
                                                 <Typography variant="small" className="font-medium text-blue-gray-800">
-                                                    {new Date(createdAt).toLocaleDateString()}
+                                                    {new Date(history.createdAt).toLocaleDateString()}
                                                 </Typography>
                                                 <Typography variant="small" className="text-xs text-blue-gray-500">
-                                                    {new Date(createdAt).toLocaleTimeString()}
+                                                    {new Date(history.createdAt).toLocaleTimeString()}
                                                 </Typography>
                                             </div>
                                         </div>
@@ -158,7 +226,7 @@ const QATable = ({ histories, onOpenModal, page = 1, size = 5 }) => (
                                             color="blue-gray"
                                             size="sm"
                                             className="hover:bg-blue-gray-50 transition-colors duration-200"
-                                            onClick={() => onOpenModal(histories[key])}
+                                            onClick={() => onOpenModal(history)}
                                         >
                                             <EyeIcon className="h-4 w-4" />
                                         </IconButton>
