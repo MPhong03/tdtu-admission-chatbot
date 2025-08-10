@@ -53,6 +53,9 @@ class BotService {
             const validationStats = this.cypher.getValidationStats();
             logger.info("[BotService] Cypher validation enabled:", validationStats.enabled);
             
+            // Start verification background processor
+            this.verification.startBackgroundProcessor();
+            
             logger.info("[BotService] Successfully initialized all services with Cypher validation");
         } catch (error) {
             logger.error("[BotService] Initialization failed:", error);
@@ -554,25 +557,25 @@ class BotService {
     // GRACEFUL SHUTDOWN
     // ===================================================
     async shutdown() {
-        logger.info('[BotService] Starting graceful shutdown...');
-
-        const shutdownPromises = [];
-
-        // Wait for active Gemini requests
-        const maxWaitTime = 30000;
-        const startTime = Date.now();
-
-        while (this.gemini.activeRequests > 0 && (Date.now() - startTime) < maxWaitTime) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+        logger.info("[BotService] Shutting down...");
+        
+        try {
+            // Stop verification background processor
+            this.verification.stopBackgroundProcessor();
+            
+            // Cleanup old verification tasks
+            await this.verification.cleanupOldTasks();
+            
+            // Clear caches
+            await this.cache.clearAll();
+            
+            // Close database connections
+            await this.gemini.shutdown();
+            
+            logger.info("[BotService] Shutdown completed");
+        } catch (error) {
+            logger.error("[BotService] Shutdown error:", error);
         }
-
-        // Shutdown cache
-        if (this.cache && typeof this.cache.disconnect === 'function') {
-            shutdownPromises.push(this.cache.disconnect());
-        }
-
-        await Promise.allSettled(shutdownPromises);
-        logger.info('[BotService] Graceful shutdown completed');
     }
 
     // ===================================================
