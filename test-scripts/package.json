@@ -1,0 +1,36 @@
+{
+  "name": "tdtu-chatbot-tests",
+  "version": "1.0.0",
+  "description": "Test scripts for TDTU Admission Chatbot",
+  "main": "run-testcases.js",
+  "scripts": {
+    "test:all": "node run-testcases.js all",
+    "test:classification": "node run-testcases.js category classification",
+    "test:simple": "node run-testcases.js category simple_admission",
+    "test:complex": "node run-testcases.js category complex_admission",
+    "test:verification": "node run-testcases.js category verification",
+    "test:error": "node run-testcases.js category error_handling",
+    "test:edge": "node run-testcases.js category edge_cases",
+    "test:load": "node load-test.js",
+    "test:stress": "node stress-test.js",
+    "test:report": "node generate-report.js",
+    "test:coverage": "node coverage-report.js"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7"
+  },
+  "devDependencies": {
+    "artillery": "^2.0.0",
+    "autocannon": "^7.15.0"
+  },
+  "keywords": [
+    "chatbot",
+    "testing",
+    "tdtu",
+    "admission"
+  ],
+  "author": "TDTU Chatbot Team",
+  "license": "MIT"
+}
