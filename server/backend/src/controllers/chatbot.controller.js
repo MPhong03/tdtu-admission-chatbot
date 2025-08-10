@@ -81,7 +81,7 @@ class ChatbotController {
                 contextScore: contextScore || 0,
                 contextScoreHistory: contextScoreHistory || [],
                 contextScoreReasons: contextScoreReasons || [],
-                agentSteps: agentSteps || [],
+                agentSteps: Array.isArray(agentSteps) ? JSON.stringify(agentSteps) : (agentSteps || ''),
                 processingMethod: processingMethod || 'rag_simple',
                 processingTime: processingTime || 0,
                 // === ERROR CLASSIFICATION ===
@@ -299,7 +299,7 @@ class ChatbotController {
                 enrichmentSteps: result.enrichmentSteps,
                 contextScore: result.contextScore,
                 contextScoreHistory: result.contextScoreHistory,
-                agentSteps: result.agentSteps,
+                agentSteps: typeof result.agentSteps === 'string' ? JSON.parse(result.agentSteps) : result.agentSteps,
                 processingTime: result.processingTime
             }));
         } catch (err) {

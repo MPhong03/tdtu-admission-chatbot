@@ -394,7 +394,7 @@ class AgentService {
                 processingTime,
 
                 // === DETAILED TRACKING INFO ===
-                agentSteps: agentSteps,
+                agentSteps: JSON.stringify(agentSteps),
                 analysis: analysis,
                 enrichmentSteps: enrichmentStepsCount,
                 enrichmentDetails: JSON.stringify(agentSteps),

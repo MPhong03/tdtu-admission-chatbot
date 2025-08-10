@@ -246,7 +246,7 @@ class BotService {
                 contextScoreReasons: [],
 
                 // === AGENT INFO (None for simple) ===
-                agentSteps: [],
+                agentSteps: JSON.stringify([]),
 
                 // === CYPHER VALIDATION INFO ===
                 cypherValidated: !!result.validationInfo,
@@ -296,7 +296,7 @@ class BotService {
                 contextScoreReasons: result.contextScoreReasons || [],
 
                 // === ENSURE AGENT INFO ===
-                agentSteps: result.agentSteps || [],
+                agentSteps: Array.isArray(result.agentSteps) ? JSON.stringify(result.agentSteps) : (result.agentSteps || ''),
 
                 // === ENSURE CYPHER VALIDATION INFO ===
                 cypherValidated: !!result.validationSummary,
@@ -340,7 +340,7 @@ class BotService {
             contextScoreReasons: result.contextScoreReasons || [],
 
             // === AGENT INFO ===
-            agentSteps: result.agentSteps || [],
+            agentSteps: Array.isArray(result.agentSteps) ? JSON.stringify(result.agentSteps) : (result.agentSteps || ''),
             processingMethod: result.processingMethod || 'rag_simple',
             processingTime,
 
@@ -388,8 +388,16 @@ class BotService {
         }
 
         // Log detailed agent steps for complex processing
-        if (result.agentSteps && result.agentSteps.length > 0) {
-            logger.info(`[${requestId}] Agent Steps: ${result.agentSteps.length} total steps`);
+        if (result.agentSteps) {
+            let agentStepsArray = [];
+            try {
+                agentStepsArray = typeof result.agentSteps === 'string' ? JSON.parse(result.agentSteps) : result.agentSteps;
+            } catch (e) {
+                agentStepsArray = [];
+            }
+            if (agentStepsArray.length > 0) {
+                logger.info(`[${requestId}] Agent Steps: ${agentStepsArray.length} total steps`);
+            }
         }
 
         // Log enrichment details
