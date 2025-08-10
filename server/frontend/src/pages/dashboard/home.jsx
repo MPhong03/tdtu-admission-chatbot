@@ -5,6 +5,8 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ArrowUpIcon,
+  ClockIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 import { StatisticsCard } from "@/widgets/cards";
 import { StatisticsChart } from "@/widgets/charts";
@@ -21,6 +23,8 @@ export function Home() {
   const [qaByDay, setQaByDay] = useState([]);
   const [qaByStatus, setQaByStatus] = useState([]);
   const [wordCloudData, setWordCloudData] = useState([]);
+  const [verificationStats, setVerificationStats] = useState(null);
+  const [verificationScoreByDay, setVerificationScoreByDay] = useState([]);
 
   // Hàm lấy ngày đầu & cuối tháng
   const getDefaultDateRange = () => {
@@ -42,7 +46,7 @@ export function Home() {
 
   const fetchStatistics = async () => {
     try {
-      const [summaryRes, byDayRes, byStatusRes, wordCloudRes] = await Promise.all([
+      const [summaryRes, byDayRes, byStatusRes, wordCloudRes, verificationRes, verificationScoreRes] = await Promise.all([
         api.get("/statistics/summary", {
           params: {
             startDate: startDate?.toISOString().split("T")[0],
@@ -67,6 +71,18 @@ export function Home() {
             endDate: endDate?.toISOString().split("T")[0],
           },
         }),
+        api.get("/statistics/verification", {
+          params: {
+            startDate: startDate?.toISOString().split("T")[0],
+            endDate: endDate?.toISOString().split("T")[0],
+          },
+        }),
+        api.get("/statistics/verification-score-by-day", {
+          params: {
+            startDate: startDate?.toISOString().split("T")[0],
+            endDate: endDate?.toISOString().split("T")[0],
+          },
+        }),
       ]);
       setStatistics(summaryRes.data.Data);
       setQaByDay(byDayRes.data.Data);
@@ -74,6 +90,9 @@ export function Home() {
       setWordCloudData(
         wordCloudRes.data.Data.map(w => ({ text: w.word, value: w.count }))
       );
+      // Lưu verification stats để sử dụng trong cards
+      setVerificationStats(verificationRes.data.Data);
+      setVerificationScoreByDay(verificationScoreRes.data.Data);
     } catch (error) {
       console.error("Lỗi khi gọi API thống kê:", error);
     }
@@ -139,17 +158,47 @@ export function Home() {
               color="amber"
               icon={<CheckCircleIcon className="w-6 h-6 text-white" />}
               title="Tỷ lệ trả lời đúng"
-              value={`${(statistics.successRate * 100).toFixed(1)}%`}
+              value={verificationStats ? `${(verificationStats.correctRate * 100).toFixed(1)}%` : `${(statistics.successRate * 100).toFixed(1)}%`}
             />
             <StatisticsCard
               color="red"
               icon={<XCircleIcon className="w-6 h-6 text-white" />}
-              title="Tỷ lệ lỗi"
-              value={`${(statistics.errorRate * 100).toFixed(1)}%`}
+              title="Tỷ lệ trả lời sai"
+              value={verificationStats ? `${(verificationStats.incorrectRate * 100).toFixed(1)}%` : `${(statistics.errorRate * 100).toFixed(1)}%`}
             />
           </>
         )}
       </div>
+
+      {/* Verification Stats Row */}
+      {verificationStats && (
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4 mb-6">
+          <StatisticsCard
+            color="blue"
+            icon={<ClockIcon className="w-6 h-6 text-white" />}
+            title="Đang chờ xác thực"
+            value={`${(verificationStats.pendingRate * 100).toFixed(1)}%`}
+          />
+          <StatisticsCard
+            color="gray"
+            icon={<ExclamationTriangleIcon className="w-6 h-6 text-white" />}
+            title="Bỏ qua xác thực"
+            value={`${(verificationStats.skippedRate * 100).toFixed(1)}%`}
+          />
+          <StatisticsCard
+            color="green"
+            icon={<CheckCircleIcon className="w-6 h-6 text-white" />}
+            title="Đã xác thực đúng"
+            value={verificationStats.correct}
+          />
+          <StatisticsCard
+            color="red"
+            icon={<XCircleIcon className="w-6 h-6 text-white" />}
+            title="Đã xác thực sai"
+            value={verificationStats.incorrect}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
         {/* {qaByDay.length > 0 && ( */}
@@ -187,6 +236,35 @@ export function Home() {
         />
         {/* )} */}
       </div>
+
+      {/* Verification Score Chart */}
+      {verificationScoreByDay.length > 0 && (
+        <div className="grid grid-cols-1 gap-6 mb-12">
+          <StatisticsChart
+            chart={{
+              type: "line",
+              height: 320,
+              series: [{ 
+                name: "Điểm xác thực trung bình", 
+                data: verificationScoreByDay.map((d) => (d.averageScore * 100).toFixed(1)) 
+              }],
+              options: {
+                chart: { toolbar: { show: false } },
+                xaxis: { categories: verificationScoreByDay.map((d) => d._id) },
+                yaxis: { 
+                  title: { text: "Điểm (%)" },
+                  min: 0,
+                  max: 100
+                },
+                dataLabels: { enabled: true },
+                colors: ["#10B981"],
+              },
+            }}
+            title="Điểm xác thực trung bình theo ngày"
+            description="Biểu đồ điểm xác thực trung bình của các câu trả lời theo từng ngày"
+          />
+        </div>
+      )}
 
       {/* Word Cloud */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-300">
