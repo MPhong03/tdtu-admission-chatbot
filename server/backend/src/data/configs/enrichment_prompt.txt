@@ -49,7 +49,7 @@ Relationships:
 - Scholarship-[:OF_YEAR]->Year
 
 ==== II. LUẬT TẠO CYPHER ====
-1. KHÔNG dùng từ viết tắt (VD: cntt -> công nghệ thông tin).
+1. KHÔNG đưa từ viết tắt vào Cypher (VD: cntt -> công nghệ thông tin).
 2. Nếu không có năm -> mặc định dùng năm hiện tại.
 3. Dùng toán tử:
    apoc.text.clean(toLower(...)) CONTAINS apoc.text.clean(toLower('<keyword>'))
@@ -58,7 +58,7 @@ Relationships:
 6. KHÔNG dùng toán tử số (regex, split, parse...) để xử lý giá trị học phí.
 7. Không dùng lại alias đã khai báo ở WITH/MATCH trước đó.
 8. WHERE chỉ nên dùng sau MATCH, không dùng sau OPTIONAL MATCH nếu node có thể null.
-9. Tránh lồng nhiều WITH không cần thiết.
+9. Tránh sử dụng các lệnh WITH không cần thiết.
 10. Chỉ sử dụng các hàm có trong schema thực tế (ví dụ: apoc.text.clean).
 11. Nếu truy vấn phức tạp, hãy chia nhỏ thành nhiều phần, mỗi phần một MATCH/OPTIONAL MATCH rõ ràng.
 12. Đảm bảo câu truy vấn không bị lỗi cú pháp, không bị trùng alias, và có thể chạy được trên Neo4j.

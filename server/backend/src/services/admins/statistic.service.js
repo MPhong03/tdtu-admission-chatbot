@@ -3,6 +3,7 @@ const History = require("../../models/users/history.model");
 const User = require("../../models/users/user.model");
 const diacritics = require("diacritics");
 const stopwords = require("stopwords-vi");
+const { answer } = require("../v2/bots/bot.service");
 
 class StatisticService {
     constructor() {
@@ -37,11 +38,12 @@ class StatisticService {
     async getAnswerStats(startDate, endDate) {
         const filter = this._buildDateFilter(startDate, endDate);
 
-        const [total, success, error, unanswered] = await Promise.all([
+        const [total, success, error, unanswered, incorrect_answer] = await Promise.all([
             this.historyRepo.count(filter),
             this.historyRepo.count({ ...filter, status: "success" }),
             this.historyRepo.count({ ...filter, status: "error" }),
             this.historyRepo.count({ ...filter, status: "unanswered" }),
+            this.historyRepo.count({ ...filter, status: "incorrect_answer" }),
         ]);
 
         return {
@@ -52,10 +54,99 @@ class StatisticService {
             successRate: total ? success / total : 0,
             errorRate: total ? error / total : 0,
             unansweredRate: total ? unanswered / total : 0,
+            incorrectAnswerRate: total ? incorrect_answer / total : 0,
+            answerRate: total ? (success + incorrect_answer) / total : 0
         };
     }
 
-    /** Tóm tắt tổng hợp: số người dùng, lượt hỏi, và tỷ lệ thành công */
+    /** === THỐNG KÊ MỚI: PHÂN LOẠI CHI TIẾT === */
+
+    /** Thống kê tỷ lệ trả lời đúng/sai dựa trên verification */
+    async getVerificationStats(startDate, endDate) {
+        const filter = this._buildDateFilter(startDate, endDate);
+
+        const [total, correct, incorrect, pending, skipped] = await Promise.all([
+            this.historyRepo.count(filter),
+            this.historyRepo.count({ ...filter, verificationResult: "correct" }),
+            this.historyRepo.count({ ...filter, verificationResult: "incorrect" }),
+            this.historyRepo.count({ ...filter, verificationResult: "pending" }),
+            this.historyRepo.count({ ...filter, verificationResult: "skipped" }),
+        ]);
+
+        return {
+            total,
+            correct,
+            incorrect,
+            pending,
+            skipped,
+            correctRate: total ? correct / total : 0,
+            incorrectRate: total ? incorrect / total : 0,
+            pendingRate: total ? pending / total : 0,
+            skippedRate: total ? skipped / total : 0,
+        };
+    }
+
+    /** Thống kê phân loại lỗi chi tiết */
+    async getErrorTypeStats(startDate, endDate) {
+        const filter = this._buildDateFilter(startDate, endDate);
+
+        const pipeline = [
+            { $match: { ...filter, errorType: { $ne: 'none' } } },
+            {
+                $group: {
+                    _id: "$errorType",
+                    count: { $sum: 1 },
+                },
+            },
+            { $sort: { count: -1 } },
+        ];
+
+        const errorTypes = await this.historyRepo.aggregate(pipeline);
+        const totalErrors = errorTypes.reduce((sum, item) => sum + item.count, 0);
+
+        // Tính tỷ lệ cho từng loại lỗi
+        const errorTypeStats = errorTypes.map(item => ({
+            errorType: item._id,
+            count: item.count,
+            rate: totalErrors ? item.count / totalErrors : 0
+        }));
+
+        return {
+            totalErrors,
+            errorTypes: errorTypeStats,
+            // Phân loại lỗi thành 2 nhóm chính
+            systemErrors: errorTypeStats.filter(item =>
+                ['system_error', 'cypher_error', 'context_not_found', 'validation_error'].includes(item.errorType)
+            ),
+            apiErrors: errorTypeStats.filter(item =>
+                ['api_rate_limit', 'api_timeout', 'api_quota_exceeded', 'api_authentication'].includes(item.errorType)
+            )
+        };
+    }
+
+    /** Thống kê tổng hợp mới với phân loại chi tiết */
+    async getDetailedSummaryStats(startDate, endDate) {
+        const [totalUsers, totalInteractions, verificationStats, errorTypeStats] = await Promise.all([
+            this.getTotalUsers(startDate, endDate),
+            this.getTotalInteractions(startDate, endDate),
+            this.getVerificationStats(startDate, endDate),
+            this.getErrorTypeStats(startDate, endDate),
+        ]);
+
+        return {
+            totalUsers,
+            totalInteractions,
+            verificationStats,
+            errorTypeStats,
+            // Tính toán các chỉ số tổng hợp
+            overallAccuracy: verificationStats.correctRate,
+            overallErrorRate: errorTypeStats.totalErrors / totalInteractions,
+            systemErrorRate: errorTypeStats.systemErrors.reduce((sum, item) => sum + item.count, 0) / totalInteractions,
+            apiErrorRate: errorTypeStats.apiErrors.reduce((sum, item) => sum + item.count, 0) / totalInteractions,
+        };
+    }
+
+    /** Tóm tắt tổng hợp: số người dùng, lượt hỏi, và tỷ lệ thành công - LEGACY */
     async getSummaryStats(startDate, endDate) {
         const [totalUsers, totalInteractions, answerStats] = await Promise.all([
             this.getTotalUsers(startDate, endDate),
@@ -100,6 +191,61 @@ class StatisticService {
                     count: { $sum: 1 },
                 },
             },
+        ];
+
+        return this.historyRepo.aggregate(pipeline);
+    }
+
+    /** Thống kê số câu hỏi theo loại lỗi */
+    async getCountQuestionsByErrorType(startDate, endDate) {
+        const match = this._buildDateFilter(startDate, endDate);
+
+        const pipeline = [
+            { $match: { ...match, errorType: { $ne: 'none' } } },
+            {
+                $group: {
+                    _id: "$errorType",
+                    count: { $sum: 1 },
+                },
+            },
+            { $sort: { count: -1 } },
+        ];
+
+        return this.historyRepo.aggregate(pipeline);
+    }
+
+    /** Thống kê số câu hỏi theo kết quả verification */
+    async getCountQuestionsByVerificationResult(startDate, endDate) {
+        const match = this._buildDateFilter(startDate, endDate);
+
+        const pipeline = [
+            { $match: match },
+            {
+                $group: {
+                    _id: { $ifNull: ["$verificationResult", "pending"] },
+                    count: { $sum: 1 },
+                },
+            },
+            { $sort: { count: -1 } },
+        ];
+
+        return this.historyRepo.aggregate(pipeline);
+    }
+
+    /** Thống kê verification score trung bình theo ngày */
+    async getAverageVerificationScoreByDay(startDate, endDate) {
+        const match = this._buildDateFilter(startDate, endDate);
+
+        const pipeline = [
+            { $match: { ...match, isVerified: true } },
+            {
+                $group: {
+                    _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+                    avgScore: { $avg: "$verificationScore" },
+                    count: { $sum: 1 },
+                },
+            },
+            { $sort: { _id: 1 } },
         ];
 
         return this.historyRepo.aggregate(pipeline);

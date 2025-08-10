@@ -46,14 +46,17 @@ class BotService {
 
     async initialize() {
         try {
+            logger.info("[BotService] Starting initialization...");
+            
             // Load Gemini configuration
             await this.gemini.loadConfig();
+            logger.info("[BotService] Gemini config loaded");
             
             // Log validation service status
             const validationStats = this.cypher.getValidationStats();
             logger.info("[BotService] Cypher validation enabled:", validationStats.enabled);
             
-            logger.info("[BotService] Successfully initialized all services with Cypher validation");
+            logger.info("[BotService] Successfully initialized all services");
         } catch (error) {
             logger.error("[BotService] Initialization failed:", error);
         }
@@ -117,7 +120,8 @@ class BotService {
                 question, 
                 result.answer, 
                 result.contextNodes || [], 
-                classification.category
+                classification.category,
+                result.contextScore || 0 // Pass contextScore to verification
             );
 
             // Log final tracking info
@@ -167,27 +171,27 @@ class BotService {
     }
 
     // ===== ANSWER VERIFICATION =====
-    async performAnswerVerification(question, answer, contextNodes, category) {
+    async performAnswerVerification(question, answer, contextNodes, category, contextScore = 0) {
         try {
-            // For performance, use async verification most of the time
-            if (this.verification.config.asyncMode) {
-                // Return default verification info immediately
-                const defaultVerification = {
-                    isVerified: false,
-                    score: 0,
-                    isCorrect: null,
-                    isIncorrect: false,
-                    reasoning: 'Pending async verification',
-                    issues: [],
-                    suggestions: ''
-                };
-                
-                // This will be updated later via async process
-                return defaultVerification;
-            } else {
-                // Synchronous verification (only when explicitly enabled)
-                return await this.verification.verifyAnswer(question, answer, contextNodes, category);
+            // Smart verification decision based on question type and context score
+            const verificationDecision = this.verification.shouldVerifyWithMode(question, answer, category, contextScore);
+            
+            if (!verificationDecision.shouldVerify) {
+                return this.verification.getSkippedVerification('not_eligible');
             }
+
+            // Use the determined mode for verification
+            const verification = await this.verification.verifyAnswer(
+                question, 
+                answer, 
+                contextNodes, 
+                category, 
+                { mode: verificationDecision.mode }
+            );
+
+            logger.info(`[Verification] Mode: ${verificationDecision.mode} (${verificationDecision.reason}) - Score: ${verification.score} - Result: ${verification.isCorrect ? 'CORRECT' : 'INCORRECT'}`);
+
+            return verification;
 
         } catch (error) {
             logger.warn("[BotService] Verification failed:", error.message);
@@ -205,9 +209,8 @@ class BotService {
 
     // ===== ASYNC VERIFICATION TRIGGER =====
     async triggerAsyncVerification(historyId, question, answer, contextNodes, category) {
-        if (this.verification.config.asyncMode) {
-            await this.verification.verifyAnswerAsync(historyId, question, answer, contextNodes, category);
-        }
+        // Perform verification immediately and return result
+        return await this.verification.verifyAnswerAsync(historyId, question, answer, contextNodes, category);
     }
 
     // ===================================================
@@ -218,6 +221,9 @@ class BotService {
 
         try {
             const result = await this.answer.generateSimpleAnswer(question, questionEmbedding, chatHistory);
+
+            // Calculate context score
+            const contextScore = this.calculateSimpleContextScore(result.contextNodes || []);
 
             // Enhance simple admission result with all required tracking data
             const enhancedResult = {
@@ -237,12 +243,12 @@ class BotService {
                 enrichmentResults: [],
 
                 // === CONTEXT SCORING INFO ===
-                contextScore: this.calculateSimpleContextScore(result.contextNodes || []),
+                contextScore: contextScore,
                 contextScoreHistory: [],
                 contextScoreReasons: [],
 
                 // === AGENT INFO (None for simple) ===
-                agentSteps: [],
+                agentSteps: JSON.stringify([]),
 
                 // === CYPHER VALIDATION INFO ===
                 cypherValidated: !!result.validationInfo,
@@ -292,7 +298,7 @@ class BotService {
                 contextScoreReasons: result.contextScoreReasons || [],
 
                 // === ENSURE AGENT INFO ===
-                agentSteps: result.agentSteps || [],
+                agentSteps: Array.isArray(result.agentSteps) ? JSON.stringify(result.agentSteps) : (result.agentSteps || ''),
 
                 // === ENSURE CYPHER VALIDATION INFO ===
                 cypherValidated: !!result.validationSummary,
@@ -336,7 +342,7 @@ class BotService {
             contextScoreReasons: result.contextScoreReasons || [],
 
             // === AGENT INFO ===
-            agentSteps: result.agentSteps || [],
+            agentSteps: Array.isArray(result.agentSteps) ? JSON.stringify(result.agentSteps) : (result.agentSteps || ''),
             processingMethod: result.processingMethod || 'rag_simple',
             processingTime,
 
@@ -384,8 +390,16 @@ class BotService {
         }
 
         // Log detailed agent steps for complex processing
-        if (result.agentSteps && result.agentSteps.length > 0) {
-            logger.info(`[${requestId}] Agent Steps: ${result.agentSteps.length} total steps`);
+        if (result.agentSteps) {
+            let agentStepsArray = [];
+            try {
+                agentStepsArray = typeof result.agentSteps === 'string' ? JSON.parse(result.agentSteps) : result.agentSteps;
+            } catch (e) {
+                agentStepsArray = [];
+            }
+            if (agentStepsArray.length > 0) {
+                logger.info(`[${requestId}] Agent Steps: ${agentStepsArray.length} total steps`);
+            }
         }
 
         // Log enrichment details
@@ -542,25 +556,19 @@ class BotService {
     // GRACEFUL SHUTDOWN
     // ===================================================
     async shutdown() {
-        logger.info('[BotService] Starting graceful shutdown...');
-
-        const shutdownPromises = [];
-
-        // Wait for active Gemini requests
-        const maxWaitTime = 30000;
-        const startTime = Date.now();
-
-        while (this.gemini.activeRequests > 0 && (Date.now() - startTime) < maxWaitTime) {
-            await new Promise(resolve => setTimeout(resolve, 100));
+        logger.info("[BotService] Shutting down...");
+        
+        try {
+            // Clear caches
+            await this.cache.clearAllCaches();
+            
+            // Close database connections
+            await this.gemini.shutdown();
+            
+            logger.info("[BotService] Shutdown completed");
+        } catch (error) {
+            logger.error("[BotService] Shutdown error:", error);
         }
-
-        // Shutdown cache
-        if (this.cache && typeof this.cache.disconnect === 'function') {
-            shutdownPromises.push(this.cache.disconnect());
-        }
-
-        await Promise.allSettled(shutdownPromises);
-        logger.info('[BotService] Graceful shutdown completed');
     }
 
     // ===================================================

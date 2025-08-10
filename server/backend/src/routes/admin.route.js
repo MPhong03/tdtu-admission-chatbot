@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken, isAdmin } = require('../middlewares/auth.middleware');
 const VisitorRateLimitService = require('../services/visitor-rate-limit.service');
+const botService = require('../services/v2/bots/bot.service');
 
 const visitorRateLimitService = new VisitorRateLimitService();
 
@@ -121,6 +122,17 @@ router.get("/visitor-rate-limit/:visitorId", verifyToken, isAdmin, async (req, r
             Data: null
         });
     }
+});
+
+router.get('/debug/queue', async (req, res) => {
+    const queueLength = await botService.getCacheService().getVerificationQueueLength();
+    const status = botService.getCacheService().getQueueProcessorStatus();
+    
+    res.json({
+        queueLength,
+        processorStatus: status,
+        timestamp: new Date()
+    });
 });
 
 module.exports = router;

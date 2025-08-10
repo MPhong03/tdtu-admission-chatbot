@@ -839,6 +839,170 @@ class CacheService {
         }
     }
 
+    // ===================================================
+    // QUEUE OPERATIONS FOR VERIFICATION TASKS
+    // ===================================================
+    async enqueueVerificationTask(taskData) {
+        try {
+            const queueKey = 'verification:queue';
+            const task = {
+                id: crypto.randomUUID(),
+                ...taskData,
+                enqueuedAt: new Date().toISOString(),
+                retryCount: 0
+            };
+
+            // Add to Redis list (FIFO queue)
+            await this.executeRedisOperation(async () => {
+                await this.client.lPush(queueKey, JSON.stringify(task));
+                // Set TTL for queue items (24 hours)
+                await this.client.expire(queueKey, 24 * 60 * 60);
+            });
+
+            logger.info(`[Cache] Enqueued verification task: ${task.id}`);
+            return task.id;
+        } catch (error) {
+            logger.error('[Cache] Failed to enqueue verification task:', error);
+            throw error;
+        }
+    }
+
+    async dequeueVerificationTask() {
+        try {
+            const queueKey = 'verification:queue';
+            
+            // Pop from right side (FIFO)
+            const result = await this.executeRedisOperation(async () => {
+                return await this.client.rPop(queueKey);
+            });
+
+            if (result) {
+                const task = JSON.parse(result);
+                logger.info(`[Cache] Dequeued verification task: ${task.id}`);
+                return task;
+            }
+            
+            return null;
+        } catch (error) {
+            logger.error('[Cache] Failed to dequeue verification task:', error);
+            return null;
+        }
+    }
+
+    async getVerificationQueueLength() {
+        try {
+            const queueKey = 'verification:queue';
+            return await this.executeRedisOperation(async () => {
+                return await this.client.lLen(queueKey);
+            }, 0);
+        } catch (error) {
+            logger.error('[Cache] Failed to get queue length:', error);
+            return 0;
+        }
+    }
+
+    async markVerificationTaskCompleted(taskId) {
+        try {
+            const completedKey = `verification:completed:${taskId}`;
+            await this.executeRedisOperation(async () => {
+                await this.client.set(completedKey, JSON.stringify({
+                    completedAt: new Date().toISOString(),
+                    status: 'completed'
+                }));
+                // Keep completed tasks for 1 hour
+                await this.client.expire(completedKey, 60 * 60);
+            });
+        } catch (error) {
+            logger.error('[Cache] Failed to mark task completed:', error);
+        }
+    }
+
+    async markVerificationTaskFailed(taskId, error) {
+        try {
+            const failedKey = `verification:failed:${taskId}`;
+            await this.executeRedisOperation(async () => {
+                await this.client.set(failedKey, JSON.stringify({
+                    failedAt: new Date().toISOString(),
+                    status: 'failed',
+                    error: error.message
+                }));
+                // Keep failed tasks for 1 hour
+                await this.client.expire(failedKey, 60 * 60);
+            });
+        } catch (err) {
+            logger.error('[Cache] Failed to mark task failed:', err);
+        }
+    }
+
+    // ===================================================
+    // BACKGROUND QUEUE PROCESSOR
+    // ===================================================
+    startVerificationQueueProcessor(callback) {
+        if (this.queueProcessorInterval) {
+            logger.info('[Cache] Verification queue processor already running');
+            return;
+        }
+
+        this.verificationCallback = callback;
+        
+        // Process queue every 5 seconds
+        this.queueProcessorInterval = setInterval(async () => {
+            try {
+                const queueLength = await this.getVerificationQueueLength();
+                
+                if (queueLength > 0) {
+                    logger.info(`[Cache] Processing verification queue: ${queueLength} tasks`);
+                    
+                    // Process up to 5 tasks per cycle
+                    for (let i = 0; i < Math.min(queueLength, 5); i++) {
+                        const task = await this.dequeueVerificationTask();
+                        if (task && this.verificationCallback) {
+                            try {
+                                await this.verificationCallback(task);
+                                await this.markVerificationTaskCompleted(task.id);
+                            } catch (error) {
+                                logger.error(`[Cache] Task ${task.id} processing failed:`, error);
+                                await this.markVerificationTaskFailed(task.id, error);
+                                
+                                // Re-queue if retry count < 3
+                                if (task.retryCount < 3) {
+                                    task.retryCount++;
+                                    task.retryAt = new Date().toISOString();
+                                    await this.enqueueVerificationTask(task);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                logger.error('[Cache] Queue processor error:', error);
+            }
+        }, 5000);
+
+        logger.info('[Cache] Verification queue processor started (5s interval)');
+    }
+
+    stopVerificationQueueProcessor() {
+        if (this.queueProcessorInterval) {
+            clearInterval(this.queueProcessorInterval);
+            this.queueProcessorInterval = null;
+            this.verificationCallback = null;
+            logger.info('[Cache] Verification queue processor stopped');
+        }
+    }
+
+    isQueueProcessorRunning() {
+        return !!this.queueProcessorInterval;
+    }
+    
+    getQueueProcessorStatus() {
+        return {
+            isRunning: !!this.queueProcessorInterval,
+            callbackDefined: !!this.verificationCallback,
+            lastCheck: new Date().toISOString()
+        };
+    }
+
     // Graceful shutdown
     async disconnect() {
         try {

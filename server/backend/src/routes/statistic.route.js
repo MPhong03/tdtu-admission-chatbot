@@ -41,4 +41,40 @@ router.get('/qa-by-status', verifyToken, isAdmin, StatisticController.getCountQu
  */
 router.get('/word-cloud', StatisticController.getWordCloud);
 
+/**
+ * Thống kê tổng hợp mới với phân loại chi tiết
+ * GET /statistics/detailed-summary?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ */
+router.get('/detailed-summary', verifyToken, isAdmin, StatisticController.getDetailedSummaryStats);
+
+/**
+ * Thống kê verification (tỷ lệ trả lời đúng/sai)
+ * GET /statistics/verification?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ */
+router.get('/verification', verifyToken, isAdmin, StatisticController.getVerificationStats);
+
+/**
+ * Thống kê phân loại lỗi chi tiết
+ * GET /statistics/error-types?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ */
+router.get('/error-types', verifyToken, isAdmin, StatisticController.getErrorTypeStats);
+
+/**
+ * Thống kê số câu hỏi theo loại lỗi
+ * GET /statistics/qa-by-error-type?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ */
+router.get('/qa-by-error-type', verifyToken, isAdmin, StatisticController.getCountQuestionsByErrorType);
+
+/**
+ * Thống kê số câu hỏi theo kết quả verification
+ * GET /statistics/qa-by-verification-result?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ */
+router.get('/qa-by-verification-result', verifyToken, isAdmin, StatisticController.getCountQuestionsByVerificationResult);
+
+/**
+ * Thống kê verification score trung bình theo ngày
+ * GET /statistics/verification-score-by-day?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD
+ */
+router.get('/verification-score-by-day', verifyToken, isAdmin, StatisticController.getAverageVerificationScoreByDay);
+
 module.exports = router;

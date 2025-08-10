@@ -124,7 +124,7 @@ export function Home() {
         {statistics && (
           <>
             <StatisticsCard
-              color="light-blue"
+              color="blue"
               icon={<UserGroupIcon className="w-6 h-6 text-white" />}
               title="Tổng người dùng"
               value={statistics.totalUsers}
@@ -138,8 +138,30 @@ export function Home() {
             <StatisticsCard
               color="amber"
               icon={<CheckCircleIcon className="w-6 h-6 text-white" />}
-              title="Tỷ lệ trả lời đúng"
-              value={`${(statistics.successRate * 100).toFixed(1)}%`}
+              title="Tỷ lệ trả lời"
+              value={
+                <div className="space-y-2">
+                  <div className="text-2xl font-bold text-gray-900">
+                    {`${(statistics.answerRate * 100).toFixed(1)}%`}
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                      <span className="font-medium text-green-700">Đúng</span>
+                      <span className="font-bold text-green-700">
+                        {`${(statistics.successRate * 100).toFixed(1)}%`}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                      <span className="font-medium text-red-700">Sai</span>
+                      <span className="font-bold text-red-700">
+                        {`${(statistics.incorrectAnswerRate * 100).toFixed(1)}%`}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              }
             />
             <StatisticsCard
               color="red"

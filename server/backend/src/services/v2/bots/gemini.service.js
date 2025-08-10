@@ -85,29 +85,48 @@ class GeminiService {
     }
 
     handleFailure(error, requestId) {
-        if (!this.circuitBreaker.enabled) return;
-
-        this.circuitBreaker.failures++;
-        this.circuitBreaker.lastFailTime = Date.now();
-
-        // Thu thập chi tiết lỗi
-        let details = {
-            requestId,
-            message: error?.message,
-            code: error?.code,
+        this.stats.failedRequests++;
+        
+        // Phân loại lỗi chi tiết
+        let errorType = 'unknown';
+        let errorDetails = {
+            message: error.message,
+            code: error.code || '',
             status: error?.response?.status,
             statusText: error?.response?.statusText,
-            geminiError: error?.response?.data?.error || null
+            retryCount: 0
         };
 
-        this.circuitBreaker.reason = details.message || 'Unknown Gemini error';
-
-        logger.error(`[Gemini] Request ${requestId} failed`, details);
-
-        if (this.circuitBreaker.failures >= this.circuitBreaker.threshold) {
-            this.circuitBreaker.state = 'OPEN';
-            logger.warn(`[Circuit Breaker] OPEN after ${this.circuitBreaker.failures} failures. Last reason: ${details.message}`);
+        // Phân loại lỗi dựa trên status code hoặc error message
+        if (error?.response?.status === 429) {
+            errorType = 'api_rate_limit';
+        } else if (error?.response?.status === 401 || error?.response?.status === 403) {
+            errorType = 'api_authentication';
+        } else if (error?.response?.status === 402) {
+            errorType = 'api_quota_exceeded';
+        } else if (error.message.includes('timeout') || error?.response?.status === 408) {
+            errorType = 'api_timeout';
+        } else if (error.code === 'ECONNRESET' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+            errorType = 'system_error';
+        } else {
+            errorType = 'system_error';
         }
+
+        logger.error(`[Gemini] Request ${requestId} failed`, {
+            errorType,
+            errorDetails,
+            queueLength: this.requestQueue.length,
+            activeRequests: this.activeRequests
+        });
+
+        // Update circuit breaker
+        this.circuitBreaker.recordFailure();
+
+        return {
+            errorType,
+            errorDetails,
+            originalError: error
+        };
     }
 
     resetCircuitBreaker() {

@@ -819,13 +819,6 @@ const QAModal = ({ open, onClose, history, onUpdateHistory }) => {
                                                     )}
                                                 </>
                                             )}
-                                            {!history.isVerified && (
-                                                <div className="mt-3 p-3 bg-orange-50 rounded-lg">
-                                                    <Typography className="text-sm text-orange-800">
-                                                        💡 <strong>Gợi ý:</strong> Câu trả lời này cần được admin xem xét và xác thực để đảm bảo tính chính xác.
-                                                    </Typography>
-                                                </div>
-                                            )}
                                         </div>
                                     </Card>
                                 </TabPanel>

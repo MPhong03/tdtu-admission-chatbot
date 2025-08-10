@@ -13,137 +13,101 @@ const FeedbackRepo = new BaseRepository(Feedback);
 const NotificationRepo = new BaseRepository(Notification);
 
 class HistoryService {
-    async saveChat({
-        userId,
-        visitorId,
-        chatId,
-        question,
-        answer,
-        cypher,
-        contextNodes,
-        isError,
-        // === NEW FIELDS FOR ENHANCED TRACKING ===
-        questionType,
-        classificationConfidence,
-        classificationReasoning,
-        enrichmentSteps,
-        enrichmentDetails,
-        enrichmentQueries,
-        enrichmentResults,
-        contextScore,
-        contextScoreHistory,
-        contextScoreReasons,
-        agentSteps,
-        processingMethod,
-        processingTime,
-        verificationInfo
-    }) {
+    async saveChat(data) {
         try {
-            let chat;
+            const {
+                userId,
+                visitorId,
+                chatId,
+                question,
+                answer,
+                cypher,
+                contextNodes,
+                isError,
+                // === ENHANCED TRACKING FIELDS ===
+                questionType,
+                classificationConfidence,
+                classificationReasoning,
+                enrichmentSteps,
+                enrichmentDetails,
+                enrichmentQueries,
+                enrichmentResults,
+                contextScore,
+                contextScoreHistory,
+                contextScoreReasons,
+                agentSteps,
+                processingMethod,
+                processingTime,
+                // === ERROR CLASSIFICATION ===
+                errorType,
+                errorDetails
+            } = data;
 
-            // Nếu không có chatId -> tạo mới chat với tên là "Chat #timestamp"
-            if (!chatId) {
-                chat = await ChatRepo.create({
-                    userId,
-                    visitorId,
-                    name: `Chat ${new Date().toLocaleString()}`
-                });
-            } else {
-                chat = await ChatRepo.getById(chatId);
-                if (!chat) {
-                    return HttpResponse.error("Chat không tồn tại hoặc không thuộc quyền sở hữu");
+            // Xác định trạng thái và loại lỗi
+            let status = 'success';
+            let finalErrorType = 'none';
+            let finalErrorDetails = {};
+
+            if (isError) {
+                status = 'error';
+                // Phân loại lỗi dựa trên errorDetails hoặc tự động detect
+                if (errorType) {
+                    finalErrorType = errorType;
+                    finalErrorDetails = errorDetails || {};
+                } else {
+                    // Tự động phân loại lỗi dựa trên answer hoặc context
+                    if (answer && answer.toLowerCase().includes('rate limit')) {
+                        finalErrorType = 'api_rate_limit';
+                    } else if (answer && answer.toLowerCase().includes('timeout')) {
+                        finalErrorType = 'api_timeout';
+                    } else if (answer && answer.toLowerCase().includes('quota')) {
+                        finalErrorType = 'api_quota_exceeded';
+                    } else if (answer && answer.toLowerCase().includes('cypher')) {
+                        finalErrorType = 'cypher_error';
+                    } else if (answer && answer.toLowerCase().includes('context')) {
+                        finalErrorType = 'context_not_found';
+                    } else {
+                        finalErrorType = 'system_error';
+                    }
                 }
             }
 
-            // === DETERMINE STATUS BASED ON ENHANCED LOGIC ===
-            let status = 'success';
-            if (isError) {
-                status = 'error';
-            } else if (verificationInfo?.isIncorrect) {
-                status = 'incorrect_answer';
-            } else if (!answer || answer.trim().length === 0) {
-                status = 'unanswered';
-            }
-
-            // === PREPARE HISTORY DATA ===
             const historyData = {
                 userId,
-                visitorId: visitorId,
-                chatId: chat._id,
+                visitorId,
+                chatId,
                 question,
-                answer: typeof answer === 'object' && answer?.data ? answer.data : answer,
+                answer,
                 status,
-                cypher: cypher || "",
-                contextNodes: contextNodes ? JSON.stringify(contextNodes) : "",
-
-                // === CLASSIFICATION INFO ===
+                errorType: finalErrorType,
+                errorDetails: finalErrorDetails,
+                cypher,
+                contextNodes: JSON.stringify(contextNodes || []),
                 questionType: questionType || 'simple_admission',
                 classificationConfidence: classificationConfidence || 0,
                 classificationReasoning: classificationReasoning || '',
-
-                // === ENRICHMENT INFO ===
                 enrichmentSteps: enrichmentSteps || 0,
-                enrichmentDetails: enrichmentDetails || '',
-                enrichmentQueries: enrichmentQueries || [],
-                enrichmentResults: enrichmentResults || [],
-
-                // === CONTEXT SCORING INFO ===
+                enrichmentDetails: typeof enrichmentDetails === 'string' ? enrichmentDetails : JSON.stringify(enrichmentDetails || []),
+                enrichmentQueries: Array.isArray(enrichmentQueries) ? enrichmentQueries : [],
+                enrichmentResults: Array.isArray(enrichmentResults) ? enrichmentResults : [],
                 contextScore: contextScore || 0,
-                contextScoreHistory: contextScoreHistory || [],
-                contextScoreReasons: contextScoreReasons || [],
-
-                // === AGENT INFO ===
-                agentSteps: agentSteps ? JSON.stringify(agentSteps) : '',
+                contextScoreHistory: Array.isArray(contextScoreHistory) ? contextScoreHistory : [],
+                contextScoreReasons: Array.isArray(contextScoreReasons) ? contextScoreReasons : [],
+                agentSteps: Array.isArray(agentSteps) ? JSON.stringify(agentSteps) : (agentSteps || ''),
                 processingMethod: processingMethod || 'rag_simple',
                 processingTime: processingTime || 0,
-
-                // === VERIFICATION INFO ===
-                isVerified: verificationInfo?.isVerified || false,
-                verificationScore: verificationInfo?.score || 0,
-                verificationReason: verificationInfo?.reasoning || ''
+                verificationResult: 'pending' // Mặc định pending cho verification
             };
 
-            // Tạo lịch sử chat mới
-            const history = await HistoryRepo.create(historyData);
+            const result = await HistoryRepo.create(historyData);
 
-            // ===== NEW: TRIGGER ASYNC VERIFICATION =====
-            if (history && !isError) {
-                // Parse context nodes for verification
-                let parsedContextNodes = [];
-                try {
-                    parsedContextNodes = contextNodes ? JSON.parse(contextNodes) : [];
-                } catch (e) {
-                    parsedContextNodes = [];
-                }
-
-                // Trigger async verification
-                await BotService.triggerAsyncVerification(
-                    history._id,
-                    question,
-                    typeof answer === 'object' && answer?.data ? answer.data : answer,
-                    parsedContextNodes,
-                    questionType || 'simple_admission'
-                );
-            }
-
-            return HttpResponse.success("Lưu tin nhắn thành công", {
-                chatId: chat._id,
-                history,
-                trackingInfo: {
-                    questionType,
-                    enrichmentSteps,
-                    contextScore,
-                    processingMethod,
-                    processingTime,
-                    verificationInfo: verificationInfo ? {
-                        isVerified: verificationInfo.isVerified,
-                        score: verificationInfo.score
-                    } : null
-                }
+            return HttpResponse.success("Lưu lịch sử chat thành công", {
+                chatId: result.chatId || chatId,
+                history: result
             });
         } catch (error) {
-            console.error("Error saving chat:", error);
-            return HttpResponse.error("Lỗi hệ thống khi lưu lịch sử chat");
+            console.error("Error saving chat history:", error);
+            return HttpResponse.error("Lỗi lưu lịch sử chat", -1, error.message);
         }
     }
 

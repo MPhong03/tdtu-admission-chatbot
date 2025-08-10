@@ -36,7 +36,6 @@ I. Mô tả các nodes
 - Thuộc tính:
   - id: Mã tài liệu
   - year_id: Năm áp dụng
-  - type: Loại tài liệu (ví dụ: "phuong-thuc-tuyen-sinh")
   - name: Tên tài liệu
   - url: Link tài liệu
   - html: Nội dung HTML

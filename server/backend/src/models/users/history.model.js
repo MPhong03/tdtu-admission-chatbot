@@ -7,11 +7,39 @@ const HistorySchema = new mongoose.Schema({
     visitorId: { type: String },
     question: { type: String, required: true },
     answer: { type: String, required: true },
-    // Trạng thái câu trả lời được mở rộng
+
+    // === TRẠNG THÁI CHI TIẾT ===
     status: {
         type: String,
         enum: ['success', 'incorrect_answer', 'unanswered', 'error'],
         default: 'success'
+    },
+    
+    // === PHÂN LOẠI LỖI CHI TIẾT ===
+    errorType: {
+        type: String,
+        enum: [
+            'none',                    // Không có lỗi
+            'system_error',            // Lỗi hệ thống (database, network...)
+            'api_rate_limit',          // Lỗi rate limit từ Gemini API (429)
+            'api_timeout',             // Lỗi timeout từ Gemini API
+            'api_quota_exceeded',      // Lỗi quota exceeded
+            'api_authentication',      // Lỗi authentication với API
+            'cypher_error',            // Lỗi truy vấn Cypher
+            'context_not_found',       // Không tìm thấy context phù hợp
+            'validation_error',        // Lỗi validation
+            'unknown'                  // Lỗi không xác định
+        ],
+        default: 'none'
+    },
+    
+    // === THÔNG TIN LỖI CHI TIẾT ===
+    errorDetails: {
+        message: { type: String, default: '' },
+        code: { type: String, default: '' },
+        stack: { type: String, default: '' },
+        retryCount: { type: Number, default: 0 },
+        lastRetryAt: { type: Date, default: null }
     },
     
     // Thông tin cơ bản về cypher và context
@@ -59,10 +87,15 @@ const HistorySchema = new mongoose.Schema({
     // === THÔNG TIN PERFORMANCE ===
     processingTime: { type: Number, default: 0 }, // Thời gian xử lý (giây)
     
-    // === THÔNG TIN VERIFICATION (FUTURE) ===
+    // === THÔNG TIN VERIFICATION ===
     isVerified: { type: Boolean, default: false }, // Đã được verify bởi LLM chưa
     verificationScore: { type: Number, default: 0 }, // Điểm verify (0-1)
     verificationReason: { type: String, default: '' }, // Lý do verify
+    verificationResult: {
+        type: String,
+        enum: ['correct', 'incorrect', 'pending', 'skipped'],
+        default: 'pending'
+    }
 }, {
     timestamps: true
 });
@@ -70,6 +103,8 @@ const HistorySchema = new mongoose.Schema({
 HistorySchema.index({ createdAt: -1 });
 HistorySchema.index({ questionType: 1 });
 HistorySchema.index({ status: 1 });
+HistorySchema.index({ errorType: 1 });
+HistorySchema.index({ verificationResult: 1 });
 HistorySchema.index({ contextScore: 1 });
 
 module.exports = mongoose.model("History", HistorySchema);

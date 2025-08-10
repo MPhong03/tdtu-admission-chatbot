@@ -11,6 +11,53 @@ class ChatbotController {
         this.visitorRateLimitService = new VisitorRateLimitService();
     }
 
+    // Helper function to truncate large strings
+    truncateString(str, maxLength = 10000) {
+        if (!str || typeof str !== 'string') return str;
+        if (str.length <= maxLength) return str;
+        return str.substring(0, maxLength) + '... [TRUNCATED]';
+    }
+
+    // Helper function to truncate arrays
+    truncateArray(arr, maxItems = 50, maxItemLength = 1000) {
+        if (!Array.isArray(arr)) return arr;
+        if (arr.length <= maxItems) {
+            return arr.map(item => {
+                if (typeof item === 'string' && item.length > maxItemLength) {
+                    return this.truncateString(item, maxItemLength);
+                }
+                return item;
+            });
+        }
+        return arr.slice(0, maxItems).map(item => {
+            if (typeof item === 'string' && item.length > maxItemLength) {
+                return this.truncateString(item, maxItemLength);
+            }
+            return item;
+        });
+    }
+
+    // Helper function to check document size
+    checkDocumentSize(data) {
+        try {
+            const docSize = JSON.stringify(data).length;
+            const maxSize = 16 * 1024 * 1024; // 16MB
+            const sizeMB = (docSize / 1024 / 1024).toFixed(2);
+            const percentage = (docSize / maxSize * 100).toFixed(1);
+            
+            console.log(`[HistoryService] Document size: ${sizeMB}MB (${percentage}% of limit)`);
+            
+            if (docSize > maxSize * 0.8) {
+                console.warn(`[HistoryService] Document size warning: ${sizeMB}MB (${percentage}% of limit)`);
+            }
+            
+            return { size: docSize, sizeMB, percentage, isLarge: docSize > maxSize * 0.8 };
+        } catch (error) {
+            console.error('[HistoryService] Error checking document size:', error);
+            return { size: 0, sizeMB: '0', percentage: '0', isLarge: false };
+        }
+    }
+
     chatWithBot = async (req, res) => {
         try {
             const { question, chatId } = req.body;
@@ -54,7 +101,10 @@ class ChatbotController {
                 processingMethod,
                 processingTime,
                 category,
-                classification
+                classification,
+                // === ERROR CLASSIFICATION ===
+                errorType,
+                errorDetails
             } = result;
 
             // 2. Lưu vào lịch sử chat với enhanced data
@@ -75,19 +125,43 @@ class ChatbotController {
                 enrichmentDetails: enrichmentDetails || '',
                 enrichmentQueries: enrichmentQueries || [],
                 enrichmentResults: enrichmentResults || [],
-                contextScore: contextScore || 0,
-                contextScoreHistory: contextScoreHistory || [],
-                contextScoreReasons: contextScoreReasons || [],
-                agentSteps: agentSteps || [],
+                contextNodes: this.truncateString(JSON.stringify(contextNodes || []), 10000),
+                contextScoreHistory: this.truncateArray(contextScoreHistory || [], 20, 2000),
+                contextScoreReasons: this.truncateArray(contextScoreReasons || [], 20, 2000),
+                agentSteps: this.truncateString(
+                    Array.isArray(agentSteps) ? JSON.stringify(agentSteps) : (agentSteps || ''),
+                    15000
+                ),
                 processingMethod: processingMethod || 'rag_simple',
-                processingTime: processingTime || 0
+                processingTime: processingTime || 0,
+                // === ERROR CLASSIFICATION ===
+                errorType: errorType || 'none',
+                errorDetails: errorDetails || {}
             });
 
             if (saveResult.Code !== 1) {
                 console.warn("Lưu lịch sử thất bại:", saveResult.Message);
             }
 
-            // 3. Tăng counter cho visitor rate limit (nếu là visitor)
+            // 4. Trigger verification immediately in main request
+            if (saveResult?.Data?.history?._id && !isError) {
+                try {
+                    const verification = await BotService.triggerAsyncVerification(
+                        saveResult.Data.history._id,
+                        question,
+                        answer,
+                        contextNodes,
+                        questionType || category || 'simple_admission'
+                    );
+                    
+                    // Add verification info to response
+                    result.verificationInfo = verification;
+                } catch (error) {
+                    console.warn("Không thể verify answer:", error.message);
+                }
+            }
+
+            // 4. Tăng counter cho visitor rate limit (nếu là visitor)
             if (req.isVisitor && req.visitorId) {
                 try {
                     await this.visitorRateLimitService.incrementCounter(req.visitorId, 'chat');
@@ -96,7 +170,7 @@ class ChatbotController {
                 }
             }
 
-            // 4. Trả về cho frontend với enhanced tracking info
+            // 6. Trả về cho frontend với enhanced tracking info
             return res.json(
                 HttpResponse.success("Nhận kết quả", {
                     answer,
@@ -105,15 +179,18 @@ class ChatbotController {
                     chatId: saveResult?.Data?.chatId || chatId,
                     visitorId: req.isVisitor ? req.visitorId : null,
                     historyId: saveResult?.Data?.history?._id || null,
-                    // === TRACKING INFO FOR CLIENT ===
+                    // Tracking info for client
                     trackingInfo: {
                         questionType: questionType || category || 'simple_admission',
                         processingMethod: processingMethod || 'rag_simple',
                         enrichmentSteps: enrichmentSteps || 0,
                         contextScore: contextScore || 0,
                         processingTime: processingTime || 0,
-                        classificationConfidence: classificationConfidence || classification?.confidence || 0
-                    }
+                        classificationConfidence: classificationConfidence || classification?.confidence || 0,
+                        errorType: errorType || 'none'
+                    },
+                    // Verification info
+                    verification: result.verificationInfo || null
                 })
             );
         } catch (err) {
@@ -265,7 +342,6 @@ class ChatbotController {
                 return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
             }
 
-            // Only for development/testing
             if (process.env.NODE_ENV === 'production') {
                 return res.json(HttpResponse.error("Endpoint không khả dụng trong production", -403));
             }
@@ -277,12 +353,33 @@ class ChatbotController {
                 enrichmentSteps: result.enrichmentSteps,
                 contextScore: result.contextScore,
                 contextScoreHistory: result.contextScoreHistory,
-                agentSteps: result.agentSteps,
+                agentSteps: typeof result.agentSteps === 'string' ? JSON.parse(result.agentSteps) : result.agentSteps,
                 processingTime: result.processingTime
             }));
         } catch (err) {
             console.error(err);
             return res.json(HttpResponse.error("Lỗi test enrichment", -1, err.message));
+        }
+    }
+
+    // === QUEUE STATUS ENDPOINT ===
+    async getQueueStatus(req, res) {
+        try {
+            if (process.env.NODE_ENV === 'production') {
+                return res.json(HttpResponse.error("Endpoint không khả dụng trong production", -403));
+            }
+
+            const queueLength = await BotService.getCacheService().getVerificationQueueLength();
+            const cacheStats = BotService.getCacheService().getStats();
+
+            return res.json(HttpResponse.success("Queue Status", {
+                queueLength,
+                cacheStats,
+                timestamp: new Date().toISOString()
+            }));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi lấy queue status", -1, err.message));
         }
     }
 }
