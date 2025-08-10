@@ -49,8 +49,13 @@ server.listen(PORT, "0.0.0.0", async () => {
   await checkNeo4jConnection();
   await cache.clearAllCaches();
 
-  // Gemini load cấu hình và health check
-  // await BotService.initialize();
+  // Initialize BotService and start queue processor
+  try {
+    await BotService.initialize();
+    logger.info("BotService initialized successfully");
+  } catch (error) {
+    logger.error("Failed to initialize BotService:", error);
+  }
 
   // Kiểm tra kết nối Redis
   // try {
