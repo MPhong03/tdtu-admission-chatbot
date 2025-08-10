@@ -117,7 +117,8 @@ class BotService {
                 question, 
                 result.answer, 
                 result.contextNodes || [], 
-                classification.category
+                classification.category,
+                result.contextScore || 0 // Pass contextScore to verification
             );
 
             // Log final tracking info
@@ -167,27 +168,27 @@ class BotService {
     }
 
     // ===== ANSWER VERIFICATION =====
-    async performAnswerVerification(question, answer, contextNodes, category) {
+    async performAnswerVerification(question, answer, contextNodes, category, contextScore = 0) {
         try {
-            // For performance, use async verification most of the time
-            if (this.verification.config.asyncMode) {
-                // Return default verification info immediately
-                const defaultVerification = {
-                    isVerified: false,
-                    score: 0,
-                    isCorrect: null,
-                    isIncorrect: false,
-                    reasoning: 'Pending async verification',
-                    issues: [],
-                    suggestions: ''
-                };
-                
-                // This will be updated later via async process
-                return defaultVerification;
-            } else {
-                // Synchronous verification (only when explicitly enabled)
-                return await this.verification.verifyAnswer(question, answer, contextNodes, category);
+            // Smart verification decision based on question type and context score
+            const verificationDecision = this.verification.shouldVerifyWithMode(question, answer, category, contextScore);
+            
+            if (!verificationDecision.shouldVerify) {
+                return this.getSkippedVerification('not_eligible');
             }
+
+            // Use the determined mode for verification
+            const verification = await this.verification.verifyAnswer(
+                question, 
+                answer, 
+                contextNodes, 
+                category, 
+                { mode: verificationDecision.mode }
+            );
+
+            logger.info(`[Verification] Mode: ${verificationDecision.mode} (${verificationDecision.reason}) - Score: ${verification.score} - Result: ${verification.isCorrect ? 'CORRECT' : 'INCORRECT'}`);
+
+            return verification;
 
         } catch (error) {
             logger.warn("[BotService] Verification failed:", error.message);
@@ -205,9 +206,9 @@ class BotService {
 
     // ===== ASYNC VERIFICATION TRIGGER =====
     async triggerAsyncVerification(historyId, question, answer, contextNodes, category) {
-        if (this.verification.config.asyncMode) {
-            await this.verification.verifyAnswerAsync(historyId, question, answer, contextNodes, category);
-        }
+        // Always trigger async verification regardless of mode
+        // The verification service will handle the mode-specific logic
+        await this.verification.verifyAnswerAsync(historyId, question, answer, contextNodes, category);
     }
 
     // ===================================================
@@ -218,6 +219,9 @@ class BotService {
 
         try {
             const result = await this.answer.generateSimpleAnswer(question, questionEmbedding, chatHistory);
+
+            // Calculate context score
+            const contextScore = this.calculateSimpleContextScore(result.contextNodes || []);
 
             // Enhance simple admission result with all required tracking data
             const enhancedResult = {
@@ -237,7 +241,7 @@ class BotService {
                 enrichmentResults: [],
 
                 // === CONTEXT SCORING INFO ===
-                contextScore: this.calculateSimpleContextScore(result.contextNodes || []),
+                contextScore: contextScore,
                 contextScoreHistory: [],
                 contextScoreReasons: [],
 

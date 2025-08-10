@@ -8,23 +8,41 @@ class VerificationService {
 
         this.config = {
             enabled: process.env.ENABLE_VERIFICATION !== 'false',
-            asyncMode: process.env.VERIFICATION_ASYNC !== 'false',
+            mode: process.env.VERIFICATION_MODE || 'post_async', // 'pre_response', 'post_async', 'background'
             sampleRate: parseFloat(process.env.VERIFICATION_SAMPLE_RATE) || 0.3, // Verify 30% answers
             minAnswerLength: parseInt(process.env.MIN_ANSWER_LENGTH_VERIFY) || 50,
-            excludeCategories: ['inappropriate', 'off_topic'] // Don't verify these
+            excludeCategories: ['inappropriate', 'off_topic'], // Don't verify these
+            preResponseTimeout: parseInt(process.env.VERIFICATION_PRE_TIMEOUT) || 5000, // 5s timeout for pre-response
+            highPriorityThreshold: parseFloat(process.env.VERIFICATION_HIGH_PRIORITY_THRESHOLD) || 0.8 // High confidence threshold
         };
     }
 
     // ===== MAIN VERIFICATION METHOD =====
-    async verifyAnswer(question, answer, contextNodes = [], category = 'simple_admission') {
+    async verifyAnswer(question, answer, contextNodes = [], category = 'simple_admission', options = {}) {
+        const { mode = this.config.mode, timeout = this.config.preResponseTimeout } = options;
+        
         if (!this.shouldVerify(question, answer, category)) {
             return this.getSkippedVerification('not_eligible');
         }
 
         try {
-            const verification = await this.performVerification(question, answer, contextNodes);
-            logger.info(`[Verification] Q: "${question.substring(0, 50)}..." - Score: ${verification.score} - Result: ${verification.isCorrect ? 'CORRECT' : 'INCORRECT'}`);
-            return verification;
+            // Pre-response verification (blocking)
+            if (mode === 'pre_response') {
+                return await this.performVerificationWithTimeout(question, answer, contextNodes, timeout);
+            }
+            
+            // Post-response async verification (non-blocking)
+            if (mode === 'post_async') {
+                return await this.performVerification(question, answer, contextNodes);
+            }
+            
+            // Background verification (always async)
+            if (mode === 'background') {
+                return this.getSkippedVerification('background_mode');
+            }
+
+            // Default to post_async
+            return await this.performVerification(question, answer, contextNodes);
 
         } catch (error) {
             logger.warn("[Verification] Failed:", error.message);
@@ -32,23 +50,90 @@ class VerificationService {
         }
     }
 
-    // ===== ASYNC VERIFICATION FOR BATCH PROCESSING =====
-    async verifyAnswerAsync(historyId, question, answer, contextNodes = [], category = 'simple_admission') {
-        if (!this.config.asyncMode) return;
+    // ===== PRE-RESPONSE VERIFICATION (BLOCKING) =====
+    async performVerificationWithTimeout(question, answer, contextNodes, timeout = 5000) {
+        const verificationPromise = this.performVerification(question, answer, contextNodes);
+        
+        const timeoutPromise = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Verification timeout')), timeout);
+        });
 
-        // Run verification in background without blocking response
-        setImmediate(async () => {
+        try {
+            const verification = await Promise.race([verificationPromise, timeoutPromise]);
+            logger.info(`[Verification] Pre-response completed: Score: ${verification.score} - Result: ${verification.isCorrect ? 'CORRECT' : 'INCORRECT'}`);
+            return verification;
+        } catch (error) {
+            if (error.message === 'Verification timeout') {
+                logger.warn(`[Verification] Pre-response timeout after ${timeout}ms, falling back to async`);
+                return this.getSkippedVerification('timeout');
+            }
+            throw error;
+        }
+    }
+
+    // ===== POST-RESPONSE ASYNC VERIFICATION =====
+    async verifyAnswerAsync(historyId, question, answer, contextNodes = [], category = 'simple_admission') {
+        if (this.config.mode === 'background') {
+            // Background mode: always run async
+            this.scheduleBackgroundVerification(historyId, question, answer, contextNodes, category);
+            return;
+        }
+
+        if (this.config.mode === 'post_async') {
+            // Post-async mode: run immediately but don't block response
+            setImmediate(async () => {
+                try {
+                    const verification = await this.verifyAnswer(question, answer, contextNodes, category);
+                    if (verification.isVerified) {
+                        await this.updateHistoryVerification(historyId, verification);
+                    }
+                } catch (error) {
+                    logger.error(`[Verification] Async verification failed for history ${historyId}:`, error);
+                }
+            });
+        }
+    }
+
+    // ===== BACKGROUND VERIFICATION =====
+    scheduleBackgroundVerification(historyId, question, answer, contextNodes, category) {
+        // Schedule for later execution (e.g., during low traffic periods)
+        const delay = Math.random() * 30000 + 10000; // 10-40 seconds delay
+        
+        setTimeout(async () => {
             try {
                 const verification = await this.verifyAnswer(question, answer, contextNodes, category);
-
                 if (verification.isVerified) {
-                    // Update history record with verification result
                     await this.updateHistoryVerification(historyId, verification);
                 }
             } catch (error) {
-                logger.error(`[Verification] Async verification failed for history ${historyId}:`, error);
+                logger.error(`[Verification] Background verification failed for history ${historyId}:`, error);
             }
-        });
+        }, delay);
+    }
+
+    // ===== SMART VERIFICATION DECISION =====
+    shouldVerifyWithMode(question, answer, category, contextScore = 0) {
+        if (!this.shouldVerify(question, answer, category)) {
+            return { shouldVerify: false, mode: 'skip', reason: 'not_eligible' };
+        }
+
+        // High confidence answers: use pre-response verification
+        if (contextScore > this.config.highPriorityThreshold) {
+            return { shouldVerify: true, mode: 'pre_response', reason: 'high_confidence' };
+        }
+
+        // Complex questions: use post-async verification
+        if (category === 'complex_admission') {
+            return { shouldVerify: true, mode: 'post_async', reason: 'complex_question' };
+        }
+
+        // Simple questions: use background verification
+        if (category === 'simple_admission') {
+            return { shouldVerify: true, mode: 'background', reason: 'simple_question' };
+        }
+
+        // Default: use configured mode
+        return { shouldVerify: true, mode: this.config.mode, reason: 'default' };
     }
 
     // ===== CORE VERIFICATION LOGIC =====
@@ -99,48 +184,62 @@ Context data (mẫu): ${JSON.stringify(contextSample, null, 2)}
    - Không bỏ sót yếu tố quan trọng
    - Có hướng dẫn tiếp theo nếu cần
 
-4. CHẤT LƯỢNG TRÌNH BÀY (10%):
-   - Dễ hiểu, logic, có cấu trúc
-   - Thân thiện, chuyên nghiệp
-   - Có thông tin liên hệ TDTU
+4. TÍNH CHÍNH XÁC (10%):
+   - Không có thông tin sai lệch
+   - Số liệu, ngày tháng chính xác
+   - Thông tin cập nhật
 
-=== CÁC TRƯỜNG HỢP SAI THƯỜNG GẶP ===
-- Bot trả lời nhưng không dựa vào context
-- Thông tin học phí/mã ngành sai
-- Trả lời không đúng câu hỏi (answer mismatch)
-- Thiếu thông tin quan trọng user cần
-- Nói quá chung chung, không cụ thể
-
-=== ĐIỂM SỐ ===
-- 0.0-0.4: SAI - Câu trả lời có vấn đề nghiêm trọng
-- 0.5-0.6: KHUYẾT THIẾU - Đúng nhưng thiếu thông tin quan trọng  
-- 0.7-0.8: TỐT - Đúng và đầy đủ cơ bản
-- 0.9-1.0: XUẤT SẮC - Hoàn hảo về mọi mặt
-
-Trả về JSON:
+=== YÊU CẦU TRẢ LỜI ===
+Trả về JSON với format:
 {
     "score": 0.85,
     "isCorrect": true,
-    "reasoning": "Câu trả lời chính xác về học phí ngành CNTT, cung cấp đầy đủ thông tin cần thiết và có hướng dẫn liên hệ.",
+    "reasoning": "Câu trả lời chính xác về thông tin ngành học và học phí...",
     "issues": [],
-    "suggestions": "Có thể bổ sung thêm thông tin về học bổng"
+    "suggestions": "Có thể bổ sung thêm thông tin về điều kiện xét tuyển"
 }
-        `.trim();
+
+Trong đó:
+- score: Điểm từ 0-1 (1 = hoàn hảo)
+- isCorrect: true/false (true nếu score >= 0.7)
+- reasoning: Lý do đánh giá
+- issues: Danh sách vấn đề tìm thấy
+- suggestions: Gợi ý cải thiện
+`;
+
+        return prompt;
     }
 
     parseVerificationResult(result) {
+        if (!result) {
+            return this.getSkippedVerification('no_result');
+        }
+
         try {
-            const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+            let parsed;
+            if (typeof result === 'string') {
+                // Try to extract JSON from string
+                const jsonMatch = result.match(/\{[\s\S]*\}/);
+                if (jsonMatch) {
+                    parsed = JSON.parse(jsonMatch[0]);
+                } else {
+                    parsed = JSON.parse(result);
+                }
+            } else {
+                parsed = result;
+            }
+
+            const score = Math.max(0, Math.min(1, parseFloat(parsed.score) || 0));
+            const isCorrect = score >= 0.7;
 
             return {
                 isVerified: true,
-                score: Math.max(0, Math.min(1, parseFloat(parsed.score) || 0)),
-                isCorrect: parsed.isCorrect === true,
-                isIncorrect: parsed.isCorrect === false,
+                score,
+                isCorrect,
+                isIncorrect: !isCorrect,
                 reasoning: parsed.reasoning || 'No reasoning provided',
                 issues: parsed.issues || [],
-                suggestions: parsed.suggestions || '',
-                timestamp: new Date()
+                suggestions: parsed.suggestions || ''
             };
 
         } catch (error) {
@@ -149,21 +248,12 @@ Trả về JSON:
         }
     }
 
-    // ===== SAMPLING & FILTERING LOGIC =====
     shouldVerify(question, answer, category) {
-        // Check if verification is enabled
         if (!this.config.enabled) return false;
-
-        // Skip excluded categories
         if (this.config.excludeCategories.includes(category)) return false;
-
-        // Skip very short answers (likely errors or social responses)
-        if (answer.length < this.config.minAnswerLength) return false;
-
-        // Skip emergency fallback responses
-        if (answer.includes('hệ thống đang gặp sự cố') || answer.includes('xin lỗi, tôi không thể')) return false;
-
-        // Apply sampling rate
+        if (!answer || answer.length < this.config.minAnswerLength) return false;
+        
+        // Random sampling based on sample rate
         return Math.random() < this.config.sampleRate;
     }
 
@@ -175,18 +265,12 @@ Trả về JSON:
             isIncorrect: false,
             reasoning: `Verification skipped: ${reason}`,
             issues: [],
-            suggestions: '',
-            timestamp: new Date()
+            suggestions: ''
         };
     }
 
-    // ===== DATABASE UPDATE =====
     async updateHistoryVerification(historyId, verification) {
         try {
-            const HistoryRepo = require("../../../repositories/common/base.repository");
-            const History = require("../../../models/users/history.model");
-            const historyRepo = new HistoryRepo(History);
-
             const updateData = {
                 isVerified: verification.isVerified,
                 verificationScore: verification.score,
@@ -199,62 +283,103 @@ Trả về JSON:
                 updateData.status = 'incorrect_answer';
             }
 
-            await historyRepo.updateById(historyId, updateData);
+            await this.historyRepo.updateById(historyId, updateData);
             logger.info(`[Verification] Updated history ${historyId} with verification result`);
-
         } catch (error) {
             logger.error(`[Verification] Failed to update history ${historyId}:`, error);
         }
     }
 
+    // ===== CONFIGURATION METHODS =====
+    setMode(mode) {
+        const validModes = ['pre_response', 'post_async', 'background'];
+        if (validModes.includes(mode)) {
+            this.config.mode = mode;
+            logger.info(`[Verification] Mode changed to: ${mode}`);
+        } else {
+            logger.warn(`[Verification] Invalid mode: ${mode}. Valid modes: ${validModes.join(', ')}`);
+        }
+    }
+
+    setSampleRate(rate) {
+        if (rate >= 0 && rate <= 1) {
+            this.config.sampleRate = rate;
+            logger.info(`[Verification] Sample rate changed to: ${rate}`);
+        }
+    }
+
+    setPreResponseTimeout(timeout) {
+        if (timeout > 0) {
+            this.config.preResponseTimeout = timeout;
+            logger.info(`[Verification] Pre-response timeout changed to: ${timeout}ms`);
+        }
+    }
+
     // ===== BATCH VERIFICATION FOR ADMIN =====
     async verifyHistoryBatch(historyIds, options = {}) {
-        const results = [];
-        const limit = options.limit || 10;
+        const { mode = 'background', limit = 50 } = options;
+        
+        // Limit batch size to prevent overload
         const limitedIds = historyIds.slice(0, limit);
+        
+        logger.info(`[Verification] Starting batch verification for ${limitedIds.length} histories in ${mode} mode`);
 
-        logger.info(`[Verification] Starting batch verification for ${limitedIds.length} histories`);
+        const results = [];
+        const batchSize = 5; // Process 5 at a time
 
-        for (const historyId of limitedIds) {
-            try {
-                const HistoryRepo = require("../../../repositories/common/base.repository");
-                const History = require("../../../models/users/history.model");
-                const historyRepo = new HistoryRepo(History);
-
-                const history = await historyRepo.getById(historyId);
-                if (!history) continue;
-
-                // Parse context nodes
-                let contextNodes = [];
+        for (let i = 0; i < limitedIds.length; i += batchSize) {
+            const batch = limitedIds.slice(i, i + batchSize);
+            
+            const batchPromises = batch.map(async (historyId) => {
                 try {
-                    contextNodes = history.contextNodes ? JSON.parse(history.contextNodes) : [];
-                } catch (e) {
-                    contextNodes = [];
+                    // Get history data
+                    const history = await this.historyRepo.getById(historyId);
+                    if (!history) {
+                        return { historyId, status: 'not_found' };
+                    }
+
+                    // Parse context nodes
+                    let contextNodes = [];
+                    try {
+                        contextNodes = history.contextNodes ? JSON.parse(history.contextNodes) : [];
+                    } catch (e) {
+                        contextNodes = [];
+                    }
+
+                    // Perform verification
+                    const verification = await this.verifyAnswer(
+                        history.question,
+                        history.answer,
+                        contextNodes,
+                        history.questionType || 'simple_admission'
+                    );
+
+                    if (verification.isVerified) {
+                        await this.updateHistoryVerification(historyId, verification);
+                    }
+
+                    return {
+                        historyId,
+                        status: 'completed',
+                        verification
+                    };
+
+                } catch (error) {
+                    logger.error(`[Verification] Batch item ${historyId} failed:`, error);
+                    return {
+                        historyId,
+                        status: 'failed',
+                        error: error.message
+                    };
                 }
+            });
 
-                const verification = await this.verifyAnswer(
-                    history.question,
-                    history.answer,
-                    contextNodes,
-                    history.questionType
-                );
+            const batchResults = await Promise.all(batchPromises);
+            results.push(...batchResults);
 
-                if (verification.isVerified) {
-                    await this.updateHistoryVerification(historyId, verification);
-                }
-
-                results.push({
-                    historyId,
-                    question: history.question.substring(0, 100),
-                    verification
-                });
-
-            } catch (error) {
-                logger.error(`[Verification] Batch item ${historyId} failed:`, error);
-                results.push({
-                    historyId,
-                    error: error.message
-                });
+            // Small delay between batches
+            if (i + batchSize < limitedIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
         }
 
@@ -262,75 +387,58 @@ Trả về JSON:
         return results;
     }
 
-    // ===== ANALYTICS =====
+    // ===== STATISTICS =====
     async getVerificationStats(timeRange = '7d') {
         try {
-            const HistoryRepo = require("../../../repositories/common/base.repository");
-            const History = require("../../../models/users/history.model");
-            const historyRepo = new HistoryRepo(History);
-
-            const endDate = new Date();
-            const startDate = new Date();
-
-            switch (timeRange) {
-                case '1d': startDate.setDate(endDate.getDate() - 1); break;
-                case '7d': startDate.setDate(endDate.getDate() - 7); break;
-                case '30d': startDate.setDate(endDate.getDate() - 30); break;
-                default: startDate.setDate(endDate.getDate() - 7);
-            }
-
-            const pipeline = [
+            const stats = await this.historyRepo.aggregate([
                 {
                     $match: {
-                        createdAt: { $gte: startDate, $lte: endDate },
-                        isVerified: true
+                        createdAt: {
+                            $gte: new Date(Date.now() - this.parseTimeRange(timeRange))
+                        }
                     }
                 },
                 {
                     $group: {
                         _id: {
-                            questionType: "$questionType",
-                            isCorrect: {
-                                $cond: [{ $gte: ["$verificationScore", 0.7] }, "correct", "incorrect"]
-                            }
+                            $cond: [{ $gte: ["$verificationScore", 0.7] }, "correct", "incorrect"]
                         },
                         count: { $sum: 1 },
                         avgScore: { $avg: "$verificationScore" }
                     }
                 }
-            ];
-
-            const stats = await historyRepo.model.aggregate(pipeline);
+            ]);
 
             return {
-                timeRange,
                 verificationStats: stats,
                 summary: this.calculateVerificationSummary(stats)
             };
-
         } catch (error) {
             logger.error("[Verification] Failed to get stats:", error);
-            return { error: error.message };
+            return { verificationStats: [], summary: {} };
         }
+    }
+
+    parseTimeRange(timeRange) {
+        const ranges = {
+            '1d': 24 * 60 * 60 * 1000,
+            '7d': 7 * 24 * 60 * 60 * 1000,
+            '30d': 30 * 24 * 60 * 60 * 1000
+        };
+        return ranges[timeRange] || ranges['7d'];
     }
 
     calculateVerificationSummary(stats) {
         const total = stats.reduce((sum, item) => sum + item.count, 0);
-        const correct = stats
-            .filter(item => item._id.isCorrect === 'correct')
-            .reduce((sum, item) => sum + item.count, 0);
-
-        const accuracy = total > 0 ? (correct / total * 100).toFixed(2) : 0;
-        const avgScore = stats.length > 0
-            ? (stats.reduce((sum, item) => sum + (item.avgScore * item.count), 0) / total).toFixed(3)
-            : 0;
+        const correct = stats.find(item => item._id === 'correct')?.count || 0;
+        const incorrect = stats.find(item => item._id === 'incorrect')?.count || 0;
 
         return {
-            totalVerified: total,
-            correctAnswers: correct,
-            incorrectAnswers: total - correct,
-            accuracyRate: `${accuracy}%`,
-            averageScore: avgScore
+            total,
+            correct,
+            incorrect,
+            correctRate: total > 0 ? correct / total : 0,
+            incorrectRate: total > 0 ? incorrect / total : 0
         };
     }
 }

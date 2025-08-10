@@ -93,7 +93,22 @@ class ChatbotController {
                 console.warn("Lưu lịch sử thất bại:", saveResult.Message);
             }
 
-            // 3. Tăng counter cho visitor rate limit (nếu là visitor)
+            // 3. Trigger async verification with context score
+            if (saveResult?.Data?.history?._id && !isError) {
+                try {
+                    await BotService.triggerAsyncVerification(
+                        saveResult.Data.history._id,
+                        question,
+                        answer,
+                        contextNodes,
+                        questionType || category || 'simple_admission'
+                    );
+                } catch (error) {
+                    console.warn("Không thể trigger async verification:", error.message);
+                }
+            }
+
+            // 4. Tăng counter cho visitor rate limit (nếu là visitor)
             if (req.isVisitor && req.visitorId) {
                 try {
                     await this.visitorRateLimitService.incrementCounter(req.visitorId, 'chat');
