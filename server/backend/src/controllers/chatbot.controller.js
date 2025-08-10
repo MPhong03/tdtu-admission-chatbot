@@ -54,7 +54,10 @@ class ChatbotController {
                 processingMethod,
                 processingTime,
                 category,
-                classification
+                classification,
+                // === ERROR CLASSIFICATION ===
+                errorType,
+                errorDetails
             } = result;
 
             // 2. Lưu vào lịch sử chat với enhanced data
@@ -80,7 +83,10 @@ class ChatbotController {
                 contextScoreReasons: contextScoreReasons || [],
                 agentSteps: agentSteps || [],
                 processingMethod: processingMethod || 'rag_simple',
-                processingTime: processingTime || 0
+                processingTime: processingTime || 0,
+                // === ERROR CLASSIFICATION ===
+                errorType: errorType || 'none',
+                errorDetails: errorDetails || {}
             });
 
             if (saveResult.Code !== 1) {
@@ -112,7 +118,8 @@ class ChatbotController {
                         enrichmentSteps: enrichmentSteps || 0,
                         contextScore: contextScore || 0,
                         processingTime: processingTime || 0,
-                        classificationConfidence: classificationConfidence || classification?.confidence || 0
+                        classificationConfidence: classificationConfidence || classification?.confidence || 0,
+                        errorType: errorType || 'none'
                     }
                 })
             );

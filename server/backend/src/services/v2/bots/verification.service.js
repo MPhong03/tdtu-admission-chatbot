@@ -190,7 +190,8 @@ Trả về JSON:
             const updateData = {
                 isVerified: verification.isVerified,
                 verificationScore: verification.score,
-                verificationReason: verification.reasoning
+                verificationReason: verification.reasoning,
+                verificationResult: verification.isCorrect ? 'correct' : 'incorrect'
             };
 
             // Update status to incorrect_answer if verification failed
@@ -198,7 +199,7 @@ Trả về JSON:
                 updateData.status = 'incorrect_answer';
             }
 
-            await historyRepo.update(historyId, updateData);
+            await historyRepo.updateById(historyId, updateData);
             logger.info(`[Verification] Updated history ${historyId} with verification result`);
 
         } catch (error) {
