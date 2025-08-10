@@ -1,10 +1,13 @@
 const logger = require("../../../utils/logger.util");
+const BaseRepository = require("../../../repositories/common/base.repository");
+const History = require("../../../models/users/history.model");
 
 class VerificationService {
     constructor(geminiService, promptService, cacheService) {
         this.gemini = geminiService;
         this.prompts = promptService;
         this.cache = cacheService;
+        this.historyRepo = new BaseRepository(History);
 
         this.config = {
             enabled: process.env.ENABLE_VERIFICATION !== 'false',
@@ -283,7 +286,7 @@ Trong đó:
                 updateData.status = 'incorrect_answer';
             }
 
-            await this.historyRepo.updateById(historyId, updateData);
+            await this.historyRepo.update(historyId, updateData);
             logger.info(`[Verification] Updated history ${historyId} with verification result`);
         } catch (error) {
             logger.error(`[Verification] Failed to update history ${historyId}:`, error);
