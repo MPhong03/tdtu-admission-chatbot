@@ -287,7 +287,6 @@ class ChatbotController {
                 return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
             }
 
-            // Only for development/testing
             if (process.env.NODE_ENV === 'production') {
                 return res.json(HttpResponse.error("Endpoint không khả dụng trong production", -403));
             }
@@ -305,6 +304,27 @@ class ChatbotController {
         } catch (err) {
             console.error(err);
             return res.json(HttpResponse.error("Lỗi test enrichment", -1, err.message));
+        }
+    }
+
+    // === QUEUE STATUS ENDPOINT ===
+    async getQueueStatus(req, res) {
+        try {
+            if (process.env.NODE_ENV === 'production') {
+                return res.json(HttpResponse.error("Endpoint không khả dụng trong production", -403));
+            }
+
+            const queueLength = await BotService.getCacheService().getVerificationQueueLength();
+            const cacheStats = BotService.getCacheService().getStats();
+
+            return res.json(HttpResponse.success("Queue Status", {
+                queueLength,
+                cacheStats,
+                timestamp: new Date().toISOString()
+            }));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi lấy queue status", -1, err.message));
         }
     }
 }

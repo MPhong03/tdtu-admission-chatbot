@@ -46,14 +46,18 @@ class BotService {
 
     async initialize() {
         try {
+            logger.info("[BotService] Starting initialization...");
+            
             // Load Gemini configuration
             await this.gemini.loadConfig();
+            logger.info("[BotService] Gemini config loaded");
             
             // Log validation service status
             const validationStats = this.cypher.getValidationStats();
             logger.info("[BotService] Cypher validation enabled:", validationStats.enabled);
             
             // Start verification queue processor
+            logger.info("[BotService] Starting verification queue processor...");
             this.cache.startVerificationQueueProcessor(
                 (task) => this.verification.handleVerificationTask(task)
             );

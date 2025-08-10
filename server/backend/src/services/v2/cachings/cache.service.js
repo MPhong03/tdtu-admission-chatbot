@@ -72,6 +72,13 @@ class CacheService {
     // ===================================================
     async initializeRedis() {
         try {
+            // Check if Redis URL is provided
+            if (!this.redisUrl || this.redisUrl === 'redis://localhost:6379') {
+                logger.warn('[Cache] Redis URL not configured, using in-memory fallback');
+                this.isRedisAvailable = false;
+                return;
+            }
+
             this.client = createClient({
                 url: this.redisUrl,
                 socket: {
@@ -86,7 +93,6 @@ class CacheService {
                 }
             });
 
-            // Event handlers
             this.client.on('connect', () => {
                 logger.info('[Cache] Redis connected');
                 this.isRedisAvailable = true;
@@ -100,19 +106,10 @@ class CacheService {
                 this.handleRedisFailure();
             });
 
-            this.client.on('end', () => {
-                logger.warn('[Cache] Redis disconnected');
-                this.isRedisAvailable = false;
-            });
-
             await this.client.connect();
-            await this.createIndexIfNotExists();
-            await this.loadDataVersion();
-
         } catch (error) {
-            logger.error('[Cache] Failed to initialize Redis, using memory fallback:', error.message);
+            logger.warn('[Cache] Redis initialization failed, using in-memory fallback:', error.message);
             this.isRedisAvailable = false;
-            this.lastRedisError = error;
         }
     }
 
@@ -842,9 +839,115 @@ class CacheService {
     // ===================================================
     // QUEUE OPERATIONS FOR VERIFICATION TASKS
     // ===================================================
+    startVerificationQueueProcessor(callback) {
+        if (this.queueProcessorInterval) {
+            logger.info('[Cache] Verification queue processor already running');
+            return;
+        }
+
+        this.verificationCallback = callback;
+        
+        logger.info('[Cache] Starting verification queue processor...');
+        
+        // Check if Redis is available
+        if (!this.isRedisAvailable) {
+            logger.warn('[Cache] Redis not available, using in-memory queue fallback');
+            this.startInMemoryQueueProcessor();
+            return;
+        }
+        
+        // Process queue every 5 seconds
+        this.queueProcessorInterval = setInterval(async () => {
+            try {
+                const queueLength = await this.getVerificationQueueLength();
+                
+                logger.info(`[Cache] Queue processor tick - Queue length: ${queueLength}`);
+                
+                if (queueLength > 0) {
+                    logger.info(`[Cache] Processing verification queue: ${queueLength} tasks`);
+                    
+                    for (let i = 0; i < Math.min(queueLength, 5); i++) {
+                        const task = await this.dequeueVerificationTask();
+                        if (task && this.verificationCallback) {
+                            try {
+                                logger.info(`[Cache] Processing task: ${task.id}`);
+                                await this.verificationCallback(task);
+                                await this.markVerificationTaskCompleted(task.id);
+                                logger.info(`[Cache] Task ${task.id} completed successfully`);
+                            } catch (error) {
+                                logger.error(`[Cache] Task ${task.id} processing failed:`, error);
+                                await this.markVerificationTaskFailed(task.id, error);
+                                
+                                if (task.retryCount < 3) {
+                                    task.retryCount++;
+                                    task.retryAt = new Date().toISOString();
+                                    await this.enqueueVerificationTask(task);
+                                    logger.info(`[Cache] Task ${task.id} re-queued for retry (${task.retryCount}/3)`);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                logger.error('[Cache] Queue processor error:', error);
+            }
+        }, 5000);
+
+        logger.info('[Cache] Verification queue processor started (5s interval)');
+    }
+
+    // ===== IN-MEMORY QUEUE FALLBACK =====
+    startInMemoryQueueProcessor() {
+        this.inMemoryQueue = [];
+        this.inMemoryCompleted = new Map();
+        this.inMemoryFailed = new Map();
+        
+        this.queueProcessorInterval = setInterval(async () => {
+            try {
+                logger.info(`[Cache] In-memory queue processor tick - Queue length: ${this.inMemoryQueue.length}`);
+                
+                if (this.inMemoryQueue.length > 0) {
+                    logger.info(`[Cache] Processing in-memory verification queue: ${this.inMemoryQueue.length} tasks`);
+                    
+                    for (let i = 0; i < Math.min(this.inMemoryQueue.length, 5); i++) {
+                        const task = this.inMemoryQueue.shift();
+                        if (task && this.verificationCallback) {
+                            try {
+                                logger.info(`[Cache] Processing in-memory task: ${task.id}`);
+                                await this.verificationCallback(task);
+                                this.inMemoryCompleted.set(task.id, {
+                                    completedAt: new Date().toISOString(),
+                                    status: 'completed'
+                                });
+                                logger.info(`[Cache] In-memory task ${task.id} completed successfully`);
+                            } catch (error) {
+                                logger.error(`[Cache] In-memory task ${task.id} processing failed:`, error);
+                                this.inMemoryFailed.set(task.id, {
+                                    failedAt: new Date().toISOString(),
+                                    status: 'failed',
+                                    error: error.message
+                                });
+                                
+                                if (task.retryCount < 3) {
+                                    task.retryCount++;
+                                    task.retryAt = new Date().toISOString();
+                                    this.inMemoryQueue.push(task);
+                                    logger.info(`[Cache] In-memory task ${task.id} re-queued for retry (${task.retryCount}/3)`);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                logger.error('[Cache] In-memory queue processor error:', error);
+            }
+        }, 5000);
+
+        logger.info('[Cache] In-memory verification queue processor started (5s interval)');
+    }
+
     async enqueueVerificationTask(taskData) {
         try {
-            const queueKey = 'verification:queue';
             const task = {
                 id: crypto.randomUUID(),
                 ...taskData,
@@ -852,14 +955,20 @@ class CacheService {
                 retryCount: 0
             };
 
-            // Add to Redis list (FIFO queue)
-            await this.executeRedisOperation(async () => {
-                await this.client.lPush(queueKey, JSON.stringify(task));
-                // Set TTL for queue items (24 hours)
-                await this.client.expire(queueKey, 24 * 60 * 60);
-            });
+            if (this.isRedisAvailable) {
+                // Use Redis
+                const queueKey = 'verification:queue';
+                await this.executeRedisOperation(async () => {
+                    await this.client.lPush(queueKey, JSON.stringify(task));
+                    await this.client.expire(queueKey, 24 * 60 * 60);
+                });
+                logger.info(`[Cache] Enqueued verification task to Redis: ${task.id}`);
+            } else {
+                // Use in-memory queue
+                this.inMemoryQueue.push(task);
+                logger.info(`[Cache] Enqueued verification task to in-memory queue: ${task.id}`);
+            }
 
-            logger.info(`[Cache] Enqueued verification task: ${task.id}`);
             return task.id;
         } catch (error) {
             logger.error('[Cache] Failed to enqueue verification task:', error);
@@ -891,10 +1000,14 @@ class CacheService {
 
     async getVerificationQueueLength() {
         try {
-            const queueKey = 'verification:queue';
-            return await this.executeRedisOperation(async () => {
-                return await this.client.lLen(queueKey);
-            }, 0);
+            if (this.isRedisAvailable) {
+                const queueKey = 'verification:queue';
+                return await this.executeRedisOperation(async () => {
+                    return await this.client.lLen(queueKey);
+                }, 0);
+            } else {
+                return this.inMemoryQueue ? this.inMemoryQueue.length : 0;
+            }
         } catch (error) {
             logger.error('[Cache] Failed to get queue length:', error);
             return 0;
@@ -937,51 +1050,6 @@ class CacheService {
     // ===================================================
     // BACKGROUND QUEUE PROCESSOR
     // ===================================================
-    startVerificationQueueProcessor(callback) {
-        if (this.queueProcessorInterval) {
-            logger.info('[Cache] Verification queue processor already running');
-            return;
-        }
-
-        this.verificationCallback = callback;
-        
-        // Process queue every 5 seconds
-        this.queueProcessorInterval = setInterval(async () => {
-            try {
-                const queueLength = await this.getVerificationQueueLength();
-                
-                if (queueLength > 0) {
-                    logger.info(`[Cache] Processing verification queue: ${queueLength} tasks`);
-                    
-                    // Process up to 5 tasks per cycle
-                    for (let i = 0; i < Math.min(queueLength, 5); i++) {
-                        const task = await this.dequeueVerificationTask();
-                        if (task && this.verificationCallback) {
-                            try {
-                                await this.verificationCallback(task);
-                                await this.markVerificationTaskCompleted(task.id);
-                            } catch (error) {
-                                logger.error(`[Cache] Task ${task.id} processing failed:`, error);
-                                await this.markVerificationTaskFailed(task.id, error);
-                                
-                                // Re-queue if retry count < 3
-                                if (task.retryCount < 3) {
-                                    task.retryCount++;
-                                    task.retryAt = new Date().toISOString();
-                                    await this.enqueueVerificationTask(task);
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch (error) {
-                logger.error('[Cache] Queue processor error:', error);
-            }
-        }, 5000);
-
-        logger.info('[Cache] Verification queue processor started (5s interval)');
-    }
-
     stopVerificationQueueProcessor() {
         if (this.queueProcessorInterval) {
             clearInterval(this.queueProcessorInterval);

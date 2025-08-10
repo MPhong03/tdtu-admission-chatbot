@@ -64,4 +64,19 @@ router.post("/llm/embedding", apiLock, verifyToken, ChatbotController.getEmbeddi
  */
 router.post("/llm/embeddings", apiLock, verifyToken, ChatbotController.getEmbeddings);
 
+// ============ DEBUG ENDPOINTS ============= //
+
+/**
+ * Test enrichment (development only)
+ * POST /chatbot/test-enrichment
+ * Body: { "question": String }
+ */
+router.post("/test-enrichment", apiLock, ChatbotController.testEnrichment);
+
+/**
+ * Get queue status (development only)
+ * GET /chatbot/queue-status
+ */
+router.get("/queue-status", apiLock, ChatbotController.getQueueStatus);
+
 module.exports = router;
