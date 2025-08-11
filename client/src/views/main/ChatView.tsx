@@ -71,6 +71,7 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [currentProgressStep, setCurrentProgressStep] = useState<string>('');
   const [currentProgressDescription, setCurrentProgressDescription] = useState<string>('');
   const [progressSteps, setProgressSteps] = useState<Array<{step: string, description: string, timestamp: number, completed?: boolean}>>([]);
+  const [currentRequestId, setCurrentRequestId] = useState<string>('');
 
   const containerRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
@@ -536,6 +537,12 @@ const ChatView: React.FC<ChatViewProps> = ({
     }) => {
       console.log("[Socket] chat:progress:", data);
       
+      // Chỉ xử lý progress của request hiện tại
+      if (data.requestId !== currentRequestId) {
+        console.log("[Socket] Ignoring progress for different request:", data.requestId, "current:", currentRequestId);
+        return;
+      }
+      
       setCurrentProgressStep(data.step);
       setCurrentProgressDescription(data.description);
       
@@ -546,6 +553,7 @@ const ChatView: React.FC<ChatViewProps> = ({
           setProgressSteps([]);
           setCurrentProgressStep('');
           setCurrentProgressDescription('');
+          setCurrentRequestId('');
         }, 1000);
       } else {
         setShowProgress(true);
@@ -615,8 +623,13 @@ const ChatView: React.FC<ChatViewProps> = ({
       setProgressSteps([]);
       setCurrentProgressStep('');
       setCurrentProgressDescription('');
+      setCurrentRequestId('');
 
       try {
+        // Tạo requestId để track progress
+        const requestId = Math.random().toString(36).substr(2, 9);
+        setCurrentRequestId(requestId);
+        
         const requestData = {
           question,
           chatId: currentChatId,
@@ -624,7 +637,12 @@ const ChatView: React.FC<ChatViewProps> = ({
         };
         console.log("[ChatView] Sending API request:", requestData);
 
-        const res = await axiosClient.post("/chatbot/chat", requestData);
+        // Gửi request với requestId trong header để server có thể track
+        const res = await axiosClient.post("/chatbot/chat", requestData, {
+          headers: {
+            'X-Request-ID': requestId
+          }
+        });
         const data = res.data.Data;
         console.log("[API/chatbot/chat] Response:", data);
 

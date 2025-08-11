@@ -8,6 +8,7 @@ const AnswerService = require("./answer.service");
 const MonitoringService = require("./monitoring.service");
 const CacheService = require("../cachings/cache.service");
 const VerificationService = require("./verification.service");
+const WebSocketProgressService = require("../../../websocket-progress.service");
 
 class BotService {
     constructor() {
@@ -61,7 +62,9 @@ class BotService {
     }
 
     emitProgress(step, description, details = {}) {
+        // Hỗ trợ cả socket trực tiếp và WebSocket progress service
         if (this.socketInstance && this.currentRequestId) {
+            // Socket trực tiếp (cho socket handler)
             this.socketInstance.emit('chat:progress', {
                 requestId: this.currentRequestId,
                 step,
@@ -70,6 +73,9 @@ class BotService {
                 ...details
             });
             logger.info(`[Progress] ${step}: ${description}`);
+        } else if (this.currentRequestId) {
+            // WebSocket progress service (cho HTTP API)
+            WebSocketProgressService.emitProgress(this.currentRequestId, step, description, details);
         }
     }
 

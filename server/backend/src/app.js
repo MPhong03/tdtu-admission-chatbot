@@ -12,6 +12,7 @@ const apiRoutes = require("./routes/index.route");
 const Logger = require("./utils/logger.util");
 const HttpResponse = require("./data/responses/http.response");
 const initSocketHandler = require("./handlers/socket.handler");
+const WebSocketProgressService = require("./services/websocket-progress.service");
 const { default: axios } = require("axios");
 
 dotenv.config();
@@ -62,6 +63,8 @@ const io = new socketIO.Server(server, {
 });
 
 initSocketHandler(io);
+WebSocketProgressService.setIO(io);
+WebSocketProgressService.startCleanupTimer();
 
 // EXCEPTION
 app.use((err, req, res, next) => {

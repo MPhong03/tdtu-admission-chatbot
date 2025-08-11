@@ -5,6 +5,7 @@ const HistoryService = require("../services/users/history.service");
 const EntityRecognizer = require('../services/regconizers/entity.regconizer');
 const BotService = require("../services/v2/bots/bot.service");
 const VisitorRateLimitService = require("../services/visitor-rate-limit.service");
+const WebSocketProgressService = require("../services/websocket-progress.service");
 
 class ChatbotController {
     constructor() {
@@ -64,6 +65,15 @@ class ChatbotController {
             const userId = req.user?.id || null;
 
             if (!question) return res.json(HttpResponse.error("Thiếu câu hỏi", -1));
+
+            // Lấy requestId từ header hoặc tạo mới
+            const requestId = req.headers['x-request-id'] || Math.random().toString(36).substr(2, 9);
+            
+            // Đăng ký request với WebSocketProgressService
+            WebSocketProgressService.registerRequest(requestId, req.headers['x-forwarded-for'] || req.ip || 'unknown');
+            
+            // Set requestId cho BotService
+            BotService.setCurrentRequestId(requestId);
 
             // let questionEmbedding = await LLMService.getEmbeddingV2(question);
             let questionEmbedding = null;
@@ -159,6 +169,9 @@ class ChatbotController {
                     console.warn("Không thể tăng counter cho visitor rate limit:", error.message);
                 }
             }
+
+            // 4. Hoàn thành progress tracking
+            WebSocketProgressService.completeRequest(requestId);
 
             // 4. Trả về cho frontend với enhanced tracking info
             return res.json(
