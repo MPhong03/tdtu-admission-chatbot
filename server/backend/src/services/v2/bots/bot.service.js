@@ -251,14 +251,19 @@ class BotService {
     // ===== ANSWER VERIFICATION =====
     async performAnswerVerification(question, answer, contextNodes, category, contextScore = 0) {
         try {
+            logger.info(`[BotService] performAnswerVerification called: category=${category}, contextScore=${contextScore}, answerLength=${answer?.length || 0}`);
+            
             // Smart verification decision based on question type and context score
             const verificationDecision = this.verification.shouldVerifyWithMode(question, answer, category, contextScore);
+            logger.info(`[BotService] Verification decision: ${JSON.stringify(verificationDecision)}`);
             
             if (!verificationDecision.shouldVerify) {
+                logger.info(`[BotService] Verification not eligible, returning skipped`);
                 return this.verification.getSkippedVerification('not_eligible');
             }
 
             // Use the determined mode for verification
+            logger.info(`[BotService] Calling verification.verifyAnswer with mode: ${verificationDecision.mode}`);
             const verification = await this.verification.verifyAnswer(
                 question, 
                 answer, 
@@ -267,7 +272,7 @@ class BotService {
                 { mode: verificationDecision.mode }
             );
 
-            logger.info(`[Verification] Mode: ${verificationDecision.mode} (${verificationDecision.reason}) - Score: ${verification.score} - Result: ${verification.isCorrect ? 'CORRECT' : 'INCORRECT'}`);
+            logger.info(`[BotService] Verification completed: Mode: ${verificationDecision.mode} (${verificationDecision.reason}) - Score: ${verification.score} - Result: ${verification.isCorrect ? 'CORRECT' : 'INCORRECT'}`);
 
             return verification;
 

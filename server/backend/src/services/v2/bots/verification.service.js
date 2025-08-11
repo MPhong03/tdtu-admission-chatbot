@@ -24,27 +24,36 @@ class VerificationService {
     async verifyAnswer(question, answer, contextNodes = [], category = 'simple_admission', options = {}) {
         const { mode = this.config.mode, timeout = this.config.preResponseTimeout } = options;
         
+        logger.info(`[Verification] verifyAnswer called: category=${category}, mode=${mode}, options=${JSON.stringify(options)}`);
+        
         if (!this.shouldVerify(question, answer, category)) {
+            logger.info(`[Verification] shouldVerify returned false, returning skipped verification`);
             return this.getSkippedVerification('not_eligible');
         }
 
         try {
+            logger.info(`[Verification] Processing with mode: ${mode}`);
+            
             // Pre-response verification (blocking)
             if (mode === 'pre_response') {
+                logger.info(`[Verification] Using pre_response mode with timeout: ${timeout}ms`);
                 return await this.performVerificationWithTimeout(question, answer, contextNodes, timeout);
             }
             
             // Post-response async verification (non-blocking)
             if (mode === 'post_async') {
+                logger.info(`[Verification] Using post_async mode`);
                 return await this.performVerification(question, answer, contextNodes);
             }
             
             // Background verification (always async)
             if (mode === 'background') {
+                logger.info(`[Verification] Using background mode, returning skipped`);
                 return this.getSkippedVerification('background_mode');
             }
 
             // Default to post_async
+            logger.info(`[Verification] Using default post_async mode`);
             return await this.performVerification(question, answer, contextNodes);
 
         } catch (error) {
@@ -97,26 +106,41 @@ class VerificationService {
 
     // ===== SMART VERIFICATION DECISION =====
     shouldVerifyWithMode(question, answer, category, contextScore = 0) {
+        logger.info(`[Verification] shouldVerifyWithMode called: category=${category}, contextScore=${contextScore}`);
+        
         if (!this.shouldVerify(question, answer, category)) {
+            logger.info(`[Verification] shouldVerify returned false, skipping verification`);
             return { shouldVerify: false, mode: 'skip', reason: 'not_eligible' };
         }
 
         // Always use immediate verification now
+        logger.info(`[Verification] shouldVerify returned true, using immediate mode`);
         return { shouldVerify: true, mode: 'immediate', reason: 'main_request' };
     }
 
     // ===== CORE VERIFICATION LOGIC =====
     async performVerification(question, answer, contextNodes) {
+        logger.info(`[Verification] performVerification called: questionLength=${question?.length || 0}, answerLength=${answer?.length || 0}, contextNodesCount=${contextNodes?.length || 0}`);
+        
         const prompt = this.buildVerificationPrompt(question, answer, contextNodes);
+        logger.info(`[Verification] Built prompt length: ${prompt.length}`);
 
         const cacheKey = this.cache.generateCacheKey(prompt, 'verification');
+        logger.info(`[Verification] Cache key: ${cacheKey}`);
+        
         let result = await this.cache.get(cacheKey);
 
         if (!result) {
+            logger.info(`[Verification] No cache hit, calling Gemini service`);
             result = await this.gemini.queueRequest(prompt, 'normal');
             if (result) {
+                logger.info(`[Verification] Gemini response received, caching result`);
                 await this.cache.set(cacheKey, result, 24 * 60 * 60); // Cache for 24 hours
+            } else {
+                logger.warn(`[Verification] No response from Gemini service`);
             }
+        } else {
+            logger.info(`[Verification] Cache hit, using cached result`);
         }
 
         return this.parseVerificationResult(result);
@@ -180,7 +204,10 @@ Trong đó:
     }
 
     parseVerificationResult(result) {
+        logger.info(`[Verification] parseVerificationResult called with result type: ${typeof result}`);
+        
         if (!result) {
+            logger.warn(`[Verification] No result to parse, returning skipped verification`);
             return this.getSkippedVerification('no_result');
         }
 
@@ -218,12 +245,25 @@ Trong đó:
     }
 
     shouldVerify(question, answer, category) {
-        if (!this.config.enabled) return false;
-        if (this.config.excludeCategories.includes(category)) return false;
-        if (!answer || answer.length < this.config.minAnswerLength) return false;
+        logger.info(`[Verification] Checking eligibility: enabled=${this.config.enabled}, category=${category}, answerLength=${answer?.length || 0}, sampleRate=${this.config.sampleRate}`);
+        
+        if (!this.config.enabled) {
+            logger.info(`[Verification] Disabled by config`);
+            return false;
+        }
+        if (this.config.excludeCategories.includes(category)) {
+            logger.info(`[Verification] Excluded category: ${category}`);
+            return false;
+        }
+        if (!answer || answer.length < this.config.minAnswerLength) {
+            logger.info(`[Verification] Answer too short: ${answer?.length || 0} < ${this.config.minAnswerLength}`);
+            return false;
+        }
         
         // Random sampling based on sample rate
-        return Math.random() < this.config.sampleRate;
+        const shouldVerify = Math.random() < this.config.sampleRate;
+        logger.info(`[Verification] Random sampling result: ${shouldVerify} (${Math.random()} < ${this.config.sampleRate})`);
+        return shouldVerify;
     }
 
     getSkippedVerification(reason) {
