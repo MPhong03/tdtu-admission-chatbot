@@ -30,6 +30,9 @@ class BotService {
         this.monitoring = new MonitoringService(this.gemini, this.cache);
         this.verification = new VerificationService(this.gemini, this.prompts, this.cache);
 
+        // Set bot service reference for progress tracking
+        this.agent.setBotService(this);
+
         // Service configuration
         this.config = {
             maxRetries: parseInt(process.env.MAX_RETRIES) || 2,
@@ -40,8 +43,53 @@ class BotService {
             cypherValidationMode: process.env.CYPHER_VALIDATION_MODE || 'auto' // 'auto', 'always', 'never'
         };
 
+        // Progress tracking
+        this.socketInstance = null;
+        this.currentRequestId = null;
+
         // Initialize
         this.initialize();
+    }
+
+    // ===== PROGRESS TRACKING METHODS =====
+    setSocketInstance(socket) {
+        this.socketInstance = socket;
+    }
+
+    setCurrentRequestId(requestId) {
+        this.currentRequestId = requestId;
+    }
+
+    emitProgress(step, description, details = {}) {
+        if (this.socketInstance && this.currentRequestId) {
+            this.socketInstance.emit('chat:progress', {
+                requestId: this.currentRequestId,
+                step,
+                description,
+                timestamp: Date.now(),
+                ...details
+            });
+            logger.info(`[Progress] ${step}: ${description}`);
+        }
+    }
+
+    mapStepToUserFriendly(step) {
+        const stepMap = {
+            'classification': 'Đang phân tích câu hỏi...',
+            'analysis': 'Đang phân tích chi tiết...',
+            'main_query': 'Đang tìm kiếm dữ liệu...',
+            'main_query_validation': 'Đang kiểm tra và tối ưu tìm kiếm...',
+            'context_score_main': 'Đang đánh giá thông tin...',
+            'enrichment_1': 'Đang mở rộng tìm kiếm (1/3)...',
+            'enrichment_2': 'Đang mở rộng tìm kiếm (2/3)...',
+            'enrichment_3': 'Đang mở rộng tìm kiếm (3/3)...',
+            'context_score_enrichment_1': 'Đang đánh giá thông tin bổ sung...',
+            'context_score_enrichment_2': 'Đang đánh giá thông tin bổ sung...',
+            'context_score_enrichment_3': 'Đang đánh giá thông tin bổ sung...',
+            'answer_generation': 'Đang tạo câu trả lời...',
+            'verification': 'Đang kiểm tra chất lượng câu trả lời...'
+        };
+        return stepMap[step] || `Đang xử lý ${step}...`;
     }
 
     async initialize() {
@@ -65,14 +113,22 @@ class BotService {
     // ===================================================
     // MAIN GENERATE ANSWER METHOD - With Cypher Validation
     // ===================================================
-    async generateAnswer(question, questionEmbedding, chatHistory = []) {
+    async generateAnswer(question, questionEmbedding, chatHistory = [], socket = null) {
         const startTime = Date.now();
         const requestId = Math.random().toString(36).substr(2, 9);
+
+        // Set up progress tracking
+        if (socket) {
+            this.setSocketInstance(socket);
+            this.setCurrentRequestId(requestId);
+        }
 
         logger.info(`[${requestId}] Processing: "${question.substring(0, 80)}..." (validation: ${this.config.enableCypherValidation})`);
 
         try {
             // Phase 1: Classification with enhanced data collection
+            this.emitProgress('classification', this.mapStepToUserFriendly('classification'));
+            
             const classification = await this.classification.classify(question, chatHistory);
             logger.info(`[${requestId}] Classification: ${classification.category} (${classification.confidence})`);
 
@@ -116,6 +172,8 @@ class BotService {
             }
 
             // ===== ADD VERIFICATION INFO =====
+            this.emitProgress('answer_generation', this.mapStepToUserFriendly('answer_generation'));
+            
             result.verificationInfo = await this.performAnswerVerification(
                 question, 
                 result.answer, 
@@ -124,8 +182,16 @@ class BotService {
                 result.contextScore || 0 // Pass contextScore to verification
             );
 
+            this.emitProgress('verification', this.mapStepToUserFriendly('verification'));
+
             // Log final tracking info
             this.logTrackingInfo(requestId, result);
+
+            // Emit completion
+            this.emitProgress('completed', 'Hoàn thành xử lý!', { 
+                processingTime: result.processingTime,
+                questionType: classification.category 
+            });
 
             return result;
 
@@ -220,8 +286,12 @@ class BotService {
         logger.info("[Simple] Processing with enhanced RAG (validation enabled)");
 
         try {
+            this.emitProgress('main_query', this.mapStepToUserFriendly('main_query'));
+            
             const result = await this.answer.generateSimpleAnswer(question, questionEmbedding, chatHistory);
 
+            this.emitProgress('context_score_main', this.mapStepToUserFriendly('context_score_main'));
+            
             // Calculate context score
             const contextScore = this.calculateSimpleContextScore(result.contextNodes || []);
 
@@ -274,6 +344,8 @@ class BotService {
         logger.info("[Complex] Processing with Agent intelligence (validation enabled)");
 
         try {
+            this.emitProgress('analysis', this.mapStepToUserFriendly('analysis'));
+            
             // Agent service already returns all the enhanced tracking data including validation
             const result = await this.agent.processComplexAdmission(question, questionEmbedding, chatHistory, classification);
 

@@ -15,6 +15,19 @@ class AgentService {
             enableSmartSkipping: true,
             useValidationForEnrichment: process.env.USE_VALIDATION_FOR_ENRICHMENT !== 'false'
         };
+
+        // Reference to bot service for progress tracking
+        this.botService = null;
+    }
+
+    setBotService(botService) {
+        this.botService = botService;
+    }
+
+    emitProgress(step, description, details = {}) {
+        if (this.botService) {
+            this.botService.emitProgress(step, description, details);
+        }
     }
 
     async analyzeComplexQuestion(question, chatHistory, classification) {
@@ -238,10 +251,16 @@ class AgentService {
             });
 
             // ===== STEP 2: MAIN QUERY WITH VALIDATION =====
+            this.emitProgress('main_query', 'Đang tìm kiếm dữ liệu...');
+            
             const cypherData = await this.cypher.generateAndExecuteCypher(question, questionEmbedding, chatHistory);
             
             mainCypher = cypherData.cypher || "";
             allContext = cypherData.contextNodes || [];
+
+            if (cypherData.wasValidated) {
+                this.emitProgress('main_query_validation', 'Đang kiểm tra và tối ưu tìm kiếm...');
+            }
 
             // Log validation results
             if (cypherData.wasValidated && cypherData.validationInfo) {
@@ -266,6 +285,8 @@ class AgentService {
             });
 
             // ===== SCORE CONTEXT AFTER MAIN QUERY =====
+            this.emitProgress('context_score_main', 'Đang đánh giá thông tin...');
+            
             const mainContextScore = await this.scoreContext(question, allContext, "main_query");
             contextScoreHistory.push(mainContextScore.score);
             contextScoreReasons.push(mainContextScore.reasoning);
@@ -291,6 +312,8 @@ class AgentService {
                 allContext.length <= this.config.maxContextSize
             ) {
                 logger.info(`[Agent] Starting enrichment step ${enrichmentStep} (current score: ${currentContextScore.toFixed(3)})`);
+                
+                this.emitProgress(`enrichment_${enrichmentStep}`, `Đang mở rộng tìm kiếm (${enrichmentStep}/${this.config.maxEnrichmentQueries})...`);
 
                 const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, enrichmentStep);
 
@@ -337,6 +360,8 @@ class AgentService {
                         agentSteps.push(enrichmentStepData);
 
                         // ===== SCORE CONTEXT AFTER ENRICHMENT =====
+                        this.emitProgress(`context_score_enrichment_${enrichmentStep}`, 'Đang đánh giá thông tin bổ sung...');
+                        
                         const enrichmentContextScore = await this.scoreContext(question, allContext, `enrichment_${enrichmentStep}`);
                         currentContextScore = enrichmentContextScore.score;
                         contextScoreHistory.push(currentContextScore);

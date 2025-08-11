@@ -11,6 +11,7 @@ import { saveVisitorId, getVisitorId } from "@/utils/auth";
 import "./chat.css";
 import QuestionItem from "@/components/chat/QuestionItem";
 import AnswerItem from "@/components/chat/AnswerItem";
+import ProgressIndicator from "@/components/chat/ProgressIndicator";
 import toast from "react-hot-toast";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 import { useRateLimit } from "@/hooks/useRateLimit";
@@ -64,6 +65,12 @@ const ChatView: React.FC<ChatViewProps> = ({
   const [currentTypingAnswer, setCurrentTypingAnswer] = useState("");
   const [showScrollDown, setShowScrollDown] = useState(false);
   const { rateLimitInfo, checkRateLimit, refreshRateLimit } = useRateLimit();
+
+  // Progress tracking states
+  const [showProgress, setShowProgress] = useState(false);
+  const [currentProgressStep, setCurrentProgressStep] = useState<string>('');
+  const [currentProgressDescription, setCurrentProgressDescription] = useState<string>('');
+  const [progressSteps, setProgressSteps] = useState<Array<{step: string, description: string, timestamp: number, completed?: boolean}>>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const loadingMoreRef = useRef(false);
@@ -519,17 +526,61 @@ const ChatView: React.FC<ChatViewProps> = ({
       }
     };
 
+    // Progress tracking handler
+    const handleChatProgress = (data: {
+      requestId: string;
+      step: string;
+      description: string;
+      timestamp: number;
+      [key: string]: any;
+    }) => {
+      console.log("[Socket] chat:progress:", data);
+      
+      setCurrentProgressStep(data.step);
+      setCurrentProgressDescription(data.description);
+      
+      if (data.step === 'completed') {
+        // Hide progress after a short delay
+        setTimeout(() => {
+          setShowProgress(false);
+          setProgressSteps([]);
+          setCurrentProgressStep('');
+          setCurrentProgressDescription('');
+        }, 1000);
+      } else {
+        setShowProgress(true);
+        setProgressSteps(prev => {
+          const exists = prev.find(s => s.step === data.step);
+          if (exists) {
+            return prev.map(s => 
+              s.step === data.step 
+                ? { ...s, description: data.description, timestamp: data.timestamp }
+                : s
+            );
+          }
+          return [...prev, {
+            step: data.step,
+            description: data.description,
+            timestamp: data.timestamp,
+            completed: false
+          }];
+        });
+      }
+    };
+
     socket.on("chat:receive", handleChatReceive);
     socket.on("chat:response", handleChatResponse);
+    socket.on("chat:progress", handleChatProgress);
 
     return () => {
       console.log("[Socket] Cleaning up socket for chatId:", currentChatId);
       socket.off("chat:receive", handleChatReceive);
       socket.off("chat:response", handleChatResponse);
+      socket.off("chat:progress", handleChatProgress);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [currentChatId, typeWriteAnswer, onNewChatCreated]);
+  }, [currentChatId, typeWriteAnswer, onNewChatCreated, showProgress, botTyping]);
 
   // Enhanced handleSend với better error handling
   const handleSend = useCallback(
@@ -558,6 +609,12 @@ const ChatView: React.FC<ChatViewProps> = ({
       console.log("[ChatView] Adding question to chat:", newChatItem);
       setChatItems((prev) => [...prev, newChatItem]);
       setBotTyping(true);
+
+      // Reset progress tracking
+      setShowProgress(false);
+      setProgressSteps([]);
+      setCurrentProgressStep('');
+      setCurrentProgressDescription('');
 
       try {
         const requestData = {
@@ -599,6 +656,8 @@ const ChatView: React.FC<ChatViewProps> = ({
         // Start typewriter for answer
         if (data.answer) {
           console.log("[ChatView] Starting typewriter for answer length:", data.answer.length);
+          // Hide progress when starting to type answer
+          setShowProgress(false);
           setTimeout(() => typeWriteAnswer(data.answer), 200);
         } else {
           console.warn("[ChatView] No answer received");
@@ -610,19 +669,21 @@ const ChatView: React.FC<ChatViewProps> = ({
             )
           );
           setBotTyping(false);
+          setShowProgress(false);
         }
-      } catch (error) {
-        console.error("[ChatView] Send error:", error);
-        toast.error("Không thể gửi tin nhắn. Vui lòng thử lại.");
-        setChatItems((prev) =>
-          prev.map((item) =>
-            item._id === tempId
-              ? { ...item, answer: "Đã có lỗi xảy ra, vui lòng thử lại sau." }
-              : item
-          )
-        );
-        setBotTyping(false);
-      }
+              } catch (error) {
+          console.error("[ChatView] Send error:", error);
+          toast.error("Không thể gửi tin nhắn. Vui lòng thử lại.");
+          setChatItems((prev) =>
+            prev.map((item) =>
+              item._id === tempId
+                ? { ...item, answer: "Đã có lỗi xảy ra, vui lòng thử lại sau." }
+                : item
+            )
+          );
+          setBotTyping(false);
+          setShowProgress(false);
+        }
     },
     [currentChatId, onNewChatCreated, typeWriteAnswer, visitorId]
   );
@@ -753,6 +814,14 @@ const ChatView: React.FC<ChatViewProps> = ({
                 />
               </div>
             ))}
+            
+            {/* Progress Indicator */}
+            <ProgressIndicator
+              isVisible={showProgress && botTyping}
+              currentStep={currentProgressStep}
+              currentDescription={currentProgressDescription}
+              steps={progressSteps}
+            />
           </>
         )}
       </div>

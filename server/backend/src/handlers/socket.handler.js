@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { v4: uuidv4 } = require('uuid');
 const RetrieverService = require("../services/chatbots/retriever.service");
 const HistoryService = require("../services/users/history.service");
 const HttpResponse = require("../data/responses/http.response");
@@ -38,10 +39,8 @@ function initSocketHandler(io) {
             }
 
             try {
-                // Xử lý chatbot
-                let questionEmbedding = LLMService.getEmbeddingV2(question);
-                // const { answer, prompt, contextNodes, isError } = await RetrieverService.chatWithBot(question);
-                const { answer, prompt, contextNodes, cypher, isError } = await BotService.generateAnswer(question, questionEmbedding);
+                // Xử lý chatbot với progress tracking
+                const { answer, prompt, contextNodes, cypher, isError } = await BotService.generateAnswer(question, null, [], socket);
 
                 // Lưu lịch sử
                 const saveResult = await HistoryService.saveChat({
