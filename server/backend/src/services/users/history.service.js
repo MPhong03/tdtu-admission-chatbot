@@ -13,6 +13,40 @@ const FeedbackRepo = new BaseRepository(Feedback);
 const NotificationRepo = new BaseRepository(Notification);
 
 class HistoryService {
+    // ===== HELPER METHODS =====
+    
+    /**
+     * Calculate contextScore from contextScoreHistory if available
+     * @param {number} contextScore - Original contextScore from database
+     * @param {Array} contextScoreHistory - Array of context scores
+     * @returns {Object} { calculatedScore, source, historyCount }
+     */
+    calculateContextScoreFromHistory(contextScore, contextScoreHistory) {
+        let calculatedScore = contextScore;
+        let source = 'database';
+        let historyCount = 0;
+        
+        if (contextScoreHistory && Array.isArray(contextScoreHistory) && contextScoreHistory.length > 0) {
+            // Filter valid scores and calculate average
+            const validScores = contextScoreHistory.filter(score => 
+                typeof score === 'number' && !isNaN(score) && score >= 0 && score <= 1
+            );
+            
+            if (validScores.length > 0) {
+                const averageScore = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+                calculatedScore = Math.round(averageScore * 1000) / 1000; // Round to 3 decimal places
+                source = `calculated_from_history`;
+                historyCount = validScores.length;
+            }
+        }
+        
+        return {
+            calculatedScore,
+            source,
+            historyCount
+        };
+    }
+
     async saveChat(data) {
         try {
             const {
@@ -168,6 +202,9 @@ class HistoryService {
                 delete obj.enrichmentDetails;
                 delete obj.agentSteps;
 
+                // Calculate contextScore from contextScoreHistory if available
+                const contextScoreInfo = this.calculateContextScoreFromHistory(h.contextScore, h.contextScoreHistory);
+
                 const feedback = feedbackMap.get(String(h._id));
 
                 return {
@@ -179,7 +216,9 @@ class HistoryService {
                         questionType: h.questionType,
                         processingMethod: h.processingMethod,
                         enrichmentSteps: h.enrichmentSteps,
-                        contextScore: h.contextScore,
+                        contextScore: contextScoreInfo.calculatedScore,
+                        contextScoreSource: contextScoreInfo.source,
+                        contextScoreHistoryCount: contextScoreInfo.historyCount,
                         processingTime: h.processingTime,
                         classificationConfidence: h.classificationConfidence,
                         // === VERIFICATION INFO ===
@@ -218,6 +257,12 @@ class HistoryService {
             }
 
             const result = history.toObject();
+
+            // Calculate contextScore from contextScoreHistory if available
+            const contextScoreInfo = this.calculateContextScoreFromHistory(result.contextScore, result.contextScoreHistory);
+            result.contextScore = contextScoreInfo.calculatedScore;
+            result.contextScoreSource = contextScoreInfo.source;
+            result.contextScoreHistoryCount = contextScoreInfo.historyCount;
 
             if (includeDetails) {
                 // Parse JSON fields for detailed view
@@ -284,6 +329,9 @@ class HistoryService {
                     obj.enrichmentSummary = 0;
                 }
 
+                // Calculate contextScore manually from contextScoreHistory if available
+                const contextScoreInfo = this.calculateContextScoreFromHistory(h.contextScore, h.contextScoreHistory);
+
                 return {
                     ...obj,
                     userId: user,
@@ -293,7 +341,10 @@ class HistoryService {
                         questionType: h.questionType,
                         processingMethod: h.processingMethod,
                         enrichmentSteps: h.enrichmentSteps,
-                        contextScore: h.contextScore,
+                        contextScore: contextScoreInfo.calculatedScore,
+                        contextScoreSource: contextScoreInfo.source,
+                        contextScoreHistory: h.contextScoreHistory || [],
+                        contextScoreHistoryCount: contextScoreInfo.historyCount,
                         processingTime: h.processingTime,
                         classificationConfidence: h.classificationConfidence
                     },
@@ -356,6 +407,35 @@ class HistoryService {
                     }
                 },
                 {
+                    $addFields: {
+                        // Calculate contextScore from contextScoreHistory if available
+                        calculatedContextScore: {
+                            $cond: {
+                                if: {
+                                    $and: [
+                                        { $isArray: "$contextScoreHistory" },
+                                        { $gt: [{ $size: "$contextScoreHistory" }, 0] }
+                                    ]
+                                },
+                                then: {
+                                    $avg: {
+                                        $filter: {
+                                            input: "$contextScoreHistory",
+                                            cond: {
+                                                $and: [
+                                                    { $gte: ["$$this", 0] },
+                                                    { $lte: ["$$this", 1] }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                },
+                                else: "$contextScore"
+                            }
+                        }
+                    }
+                },
+                {
                     $group: {
                         _id: {
                             questionType: "$questionType",
@@ -363,7 +443,7 @@ class HistoryService {
                             processingMethod: "$processingMethod"
                         },
                         count: { $sum: 1 },
-                        avgContextScore: { $avg: "$contextScore" },
+                        avgContextScore: { $avg: "$calculatedContextScore" },
                         avgProcessingTime: { $avg: "$processingTime" },
                         avgEnrichmentSteps: { $avg: "$enrichmentSteps" },
                         avgClassificationConfidence: { $avg: "$classificationConfidence" },
@@ -578,6 +658,35 @@ class HistoryService {
                     }
                 },
                 {
+                    $addFields: {
+                        // Calculate contextScore from contextScoreHistory if available
+                        calculatedContextScore: {
+                            $cond: {
+                                if: {
+                                    $and: [
+                                        { $isArray: "$contextScoreHistory" },
+                                        { $gt: [{ $size: "$contextScoreHistory" }, 0] }
+                                    ]
+                                },
+                                then: {
+                                    $avg: {
+                                        $filter: {
+                                            input: "$contextScoreHistory",
+                                            cond: {
+                                                $and: [
+                                                    { $gte: ["$$this", 0] },
+                                                    { $lte: ["$$this", 1] }
+                                                ]
+                                            }
+                                        }
+                                    }
+                                },
+                                else: "$contextScore"
+                            }
+                        }
+                    }
+                },
+                {
                     $group: {
                         _id: null,
                         totalQuestions: { $sum: 1 },
@@ -586,7 +695,7 @@ class HistoryService {
                         totalIncorrect: { $sum: { $cond: [{ $eq: ["$verificationResult", "incorrect"] }, 1, 0] } },
                         totalPending: { $sum: { $cond: [{ $eq: ["$verificationResult", "pending"] }, 1, 0] } },
                         avgVerificationScore: { $avg: "$verificationScore" },
-                        avgContextScore: { $avg: "$contextScore" },
+                        avgContextScore: { $avg: "$calculatedContextScore" },
                         avgProcessingTime: { $avg: "$processingTime" }
                     }
                 }
