@@ -8,6 +8,7 @@ const AnswerService = require("./answer.service");
 const MonitoringService = require("./monitoring.service");
 const CacheService = require("../cachings/cache.service");
 const VerificationService = require("./verification.service");
+const WebSocketProgressService = require("../../websocket-progress.service");
 
 class BotService {
     constructor() {
@@ -61,7 +62,9 @@ class BotService {
     }
 
     emitProgress(step, description, details = {}) {
+        // Hỗ trợ cả socket trực tiếp và WebSocket progress service
         if (this.socketInstance && this.currentRequestId) {
+            // Socket trực tiếp (cho socket handler)
             this.socketInstance.emit('chat:progress', {
                 requestId: this.currentRequestId,
                 step,
@@ -70,6 +73,9 @@ class BotService {
                 ...details
             });
             logger.info(`[Progress] ${step}: ${description}`);
+        } else if (this.currentRequestId) {
+            // WebSocket progress service (cho HTTP API)
+            WebSocketProgressService.emitProgress(this.currentRequestId, step, description, details);
         }
     }
 
@@ -181,6 +187,12 @@ class BotService {
                 classification.category,
                 result.contextScore || 0 // Pass contextScore to verification
             );
+
+            // Add verification data to result for HistoryService
+            result.isVerified = result.verificationInfo.isVerified;
+            result.verificationScore = result.verificationInfo.score;
+            result.verificationReason = result.verificationInfo.reasoning;
+            result.verificationResult = result.verificationInfo.isCorrect ? 'correct' : (result.verificationInfo.isIncorrect ? 'incorrect' : 'pending');
 
             this.emitProgress('verification', this.mapStepToUserFriendly('verification'));
 
@@ -365,7 +377,7 @@ class BotService {
                 enrichmentResults: result.enrichmentResults || [],
 
                 // === ENSURE CONTEXT SCORING INFO ===
-                contextScore: result.contextScore || 0,
+                contextScore: this.calculateFinalContextScore(result.contextScore, result.contextScoreHistory, result.contextNodes),
                 contextScoreHistory: result.contextScoreHistory || [],
                 contextScoreReasons: result.contextScoreReasons || [],
 
@@ -421,6 +433,7 @@ class BotService {
             // === CYPHER VALIDATION INFO ===
             cypherValidated: result.cypherValidated || false,
             validationInfo: result.validationInfo || null,
+            contextScore: this.calculateFinalContextScore(result.contextScore, result.contextScoreHistory, result.contextNodes),
 
             // === VERIFICATION INFO ===
             verificationInfo: result.verificationInfo || {
@@ -441,6 +454,33 @@ class BotService {
         return 0.2;
     }
 
+    calculateFinalContextScore(contextScore, contextScoreHistory, contextNodes) {
+        // Ưu tiên contextScoreHistory nếu có
+        if (contextScoreHistory && contextScoreHistory.length > 0) {
+            // Tính trung bình của tất cả contextScore trong history
+            const validScores = contextScoreHistory.filter(score => 
+                typeof score === 'number' && !isNaN(score) && score >= 0 && score <= 1
+            );
+            
+            if (validScores.length > 0) {
+                const averageScore = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+                logger.info(`[BotService] Using average contextScore from history: ${averageScore.toFixed(3)} (${validScores.length} scores)`);
+                return Math.round(averageScore * 1000) / 1000; // Round to 3 decimal places
+            }
+        }
+
+        // Fallback to provided contextScore if valid
+        if (typeof contextScore === 'number' && !isNaN(contextScore) && contextScore >= 0 && contextScore <= 1) {
+            logger.info(`[BotService] Using provided contextScore: ${contextScore.toFixed(3)}`);
+            return contextScore;
+        }
+
+        // Final fallback to simple calculation based on contextNodes
+        const simpleScore = this.calculateSimpleContextScore(contextNodes);
+        logger.info(`[BotService] Using simple contextScore calculation: ${simpleScore.toFixed(3)}`);
+        return simpleScore;
+    }
+
     logTrackingInfo(requestId, result) {
         const trackingInfo = {
             requestId,
@@ -448,6 +488,7 @@ class BotService {
             processingMethod: result.processingMethod,
             enrichmentSteps: result.enrichmentSteps,
             contextScore: result.contextScore,
+            contextScoreHistory: result.contextScoreHistory || [],
             processingTime: result.processingTime,
             classificationConfidence: result.classificationConfidence,
             cypherValidated: result.cypherValidated

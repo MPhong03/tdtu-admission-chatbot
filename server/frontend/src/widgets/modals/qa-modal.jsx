@@ -656,7 +656,7 @@ const QAModal = ({ open, onClose, history, onUpdateHistory }) => {
                                             </div>
                                         </div>
                                         <div className="p-4">
-                                            <div className="mb-6">
+                                            <div className="mb-6" hidden>
                                                 <div className="flex items-center justify-between mb-2">
                                                     <Typography className="text-sm font-medium text-blue-gray-700">
                                                         Điểm cuối cùng:
@@ -725,7 +725,7 @@ const QAModal = ({ open, onClose, history, onUpdateHistory }) => {
                                             </div>
                                         </div>
                                         <div className="p-4">
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                                 <div className="text-center p-3 bg-purple-50 rounded-lg">
                                                     <Typography className="text-2xl font-bold text-purple-600">
                                                         {history.processingTime?.toFixed(2)}s
@@ -745,7 +745,7 @@ const QAModal = ({ open, onClose, history, onUpdateHistory }) => {
                                                         {history.classificationConfidence > 0.8 ? 'Cao' : history.classificationConfidence > 0.6 ? 'Trung bình' : 'Thấp'}
                                                     </Typography>
                                                 </div>
-                                                <div className="text-center p-3 bg-green-50 rounded-lg">
+                                                <div className="text-center p-3 bg-green-50 rounded-lg" hidden>
                                                     <Typography className="text-2xl font-bold text-green-600">
                                                         {(history.contextScore * 100).toFixed(1)}%
                                                     </Typography>

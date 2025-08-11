@@ -218,12 +218,24 @@ Trong đó:
     }
 
     shouldVerify(question, answer, category) {
-        if (!this.config.enabled) return false;
-        if (this.config.excludeCategories.includes(category)) return false;
-        if (!answer || answer.length < this.config.minAnswerLength) return false;
+        logger.info(`[Verification] Checking eligibility: enabled=${this.config.enabled}, category=${category}, answerLength=${answer?.length || 0}, sampleRate=${this.config.sampleRate}`);
         
+        if (!this.config.enabled) {
+            logger.info(`[Verification] Disabled by config`);
+            return false;
+        }
+        if (this.config.excludeCategories.includes(category)) {
+            logger.info(`[Verification] Excluded category: ${category}`);
+            return false;
+        }
+        if (!answer || answer.length < this.config.minAnswerLength) {
+            logger.info(`[Verification] Answer too short: ${answer?.length || 0} < ${this.config.minAnswerLength}`);
+            return false;
+        }
         // Random sampling based on sample rate
-        return Math.random() < this.config.sampleRate;
+        // const shouldVerify = Math.random() < this.config.sampleRate;
+        // logger.info(`[Verification] Random sampling result: ${shouldVerify} (${Math.random()} < ${this.config.sampleRate})`);
+        return true;
     }
 
     getSkippedVerification(reason) {

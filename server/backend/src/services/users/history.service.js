@@ -96,7 +96,11 @@ class HistoryService {
                 agentSteps: Array.isArray(agentSteps) ? JSON.stringify(agentSteps) : (agentSteps || ''),
                 processingMethod: processingMethod || 'rag_simple',
                 processingTime: processingTime || 0,
-                verificationResult: 'pending' // Mặc định pending cho verification
+                // === VERIFICATION FIELDS ===
+                isVerified: data.isVerified || false,
+                verificationScore: data.verificationScore || 0,
+                verificationReason: data.verificationReason || '',
+                verificationResult: data.verificationResult || 'pending'
             };
 
             const result = await HistoryRepo.create(historyData);
@@ -177,7 +181,11 @@ class HistoryService {
                         enrichmentSteps: h.enrichmentSteps,
                         contextScore: h.contextScore,
                         processingTime: h.processingTime,
-                        classificationConfidence: h.classificationConfidence
+                        classificationConfidence: h.classificationConfidence,
+                        // === VERIFICATION INFO ===
+                        isVerified: h.isVerified,
+                        verificationScore: h.verificationScore,
+                        verificationResult: h.verificationResult
                     }
                 };
             });
@@ -236,7 +244,7 @@ class HistoryService {
     }
 
     // =========== ADMIN METHODS WITH ENHANCED TRACKING ==========
-    async getAllChat({ page = 1, size = 10, questionType, status, processingMethod }) {
+    async getAllChat({ page = 1, size = 10, questionType, status, processingMethod, isVerified, verificationResult }) {
         try {
             const skip = (page - 1) * size;
 
@@ -245,6 +253,8 @@ class HistoryService {
             if (questionType) filter.questionType = questionType;
             if (status) filter.status = status;
             if (processingMethod) filter.processingMethod = processingMethod;
+            if (isVerified !== undefined) filter.isVerified = isVerified === 'true';
+            if (verificationResult) filter.verificationResult = verificationResult;
 
             const query = HistoryRepo.asQueryable(filter)
                 .populate("userId", "username email")
@@ -274,6 +284,9 @@ class HistoryService {
                     obj.enrichmentSummary = 0;
                 }
 
+                // Calculate contextScore manually from contextScoreHistory if available
+                const contextScoreInfo = this.calculateContextScoreFromHistory(h.contextScore, h.contextScoreHistory);
+
                 return {
                     ...obj,
                     userId: user,
@@ -283,9 +296,19 @@ class HistoryService {
                         questionType: h.questionType,
                         processingMethod: h.processingMethod,
                         enrichmentSteps: h.enrichmentSteps,
-                        contextScore: h.contextScore,
+                        contextScore: contextScoreInfo.calculatedScore,
+                        contextScoreSource: contextScoreInfo.source,
+                        contextScoreHistory: h.contextScoreHistory || [],
+                        contextScoreHistoryCount: contextScoreInfo.historyCount,
                         processingTime: h.processingTime,
                         classificationConfidence: h.classificationConfidence
+                    },
+                    // === VERIFICATION METRICS ===
+                    verificationMetrics: {
+                        isVerified: h.isVerified,
+                        verificationScore: h.verificationScore,
+                        verificationResult: h.verificationResult,
+                        verificationReason: h.verificationReason
                     }
                 };
             });
@@ -301,7 +324,9 @@ class HistoryService {
                 filters: {
                     questionType,
                     status,
-                    processingMethod
+                    processingMethod,
+                    isVerified,
+                    verificationResult
                 }
             });
         } catch (error) {
@@ -311,7 +336,7 @@ class HistoryService {
     }
 
     // === ANALYTICS METHODS ===
-    async getAnalytics(timeRange = '7d') {
+    async getAnalytics(timeRange = '7d', includeVerification = true) {
         try {
             const endDate = new Date();
             const startDate = new Date();
@@ -347,7 +372,14 @@ class HistoryService {
                         avgContextScore: { $avg: "$contextScore" },
                         avgProcessingTime: { $avg: "$processingTime" },
                         avgEnrichmentSteps: { $avg: "$enrichmentSteps" },
-                        avgClassificationConfidence: { $avg: "$classificationConfidence" }
+                        avgClassificationConfidence: { $avg: "$classificationConfidence" },
+                        ...(includeVerification && {
+                            // === VERIFICATION STATS ===
+                            avgVerificationScore: { $avg: "$verificationScore" },
+                            verifiedCount: { $sum: { $cond: ["$isVerified", 1, 0] } },
+                            correctCount: { $sum: { $cond: [{ $eq: ["$verificationResult", "correct"] }, 1, 0] } },
+                            incorrectCount: { $sum: { $cond: [{ $eq: ["$verificationResult", "incorrect"] }, 1, 0] } }
+                        })
                     }
                 }
             ];
@@ -384,6 +416,13 @@ class HistoryService {
                 processingMethodStats[processingMethod].count += item.count;
                 processingMethodStats[processingMethod].avgContextScore = item.avgContextScore;
                 processingMethodStats[processingMethod].avgProcessingTime = item.avgProcessingTime;
+
+                // === ACCUMULATE VERIFICATION STATS ===
+                if (includeVerification && verificationStats) {
+                    verificationStats.totalVerified += item.verifiedCount || 0;
+                    verificationStats.totalCorrect += item.correctCount || 0;
+                    verificationStats.totalIncorrect += item.incorrectCount || 0;
+                }
             });
 
             // Calculate percentages
@@ -399,12 +438,24 @@ class HistoryService {
                 processingMethodStats[key].percentage = ((processingMethodStats[key].count / totalQuestions) * 100).toFixed(2);
             });
 
+            // === CALCULATE VERIFICATION PERCENTAGES ===
+            if (includeVerification && verificationStats) {
+                if (verificationStats.totalVerified > 0) {
+                    verificationStats.verificationRate = ((verificationStats.totalVerified / totalQuestions) * 100).toFixed(2);
+                    verificationStats.accuracyRate = ((verificationStats.totalCorrect / verificationStats.totalVerified) * 100).toFixed(2);
+                } else {
+                    verificationStats.verificationRate = 0;
+                    verificationStats.accuracyRate = 0;
+                }
+            }
+
             return HttpResponse.success("Analytics data", {
                 timeRange,
                 totalQuestions,
                 questionTypeStats,
                 statusStats,
                 processingMethodStats,
+                ...(includeVerification && { verificationStats }),
                 rawData: analytics
             });
 
@@ -480,12 +531,19 @@ class HistoryService {
      */
     async updateVerificationStatus(historyId, verificationData) {
         try {
-            const updatedHistory = await HistoryRepo.update(historyId, {
+            const updateData = {
                 isVerified: true,
                 verificationScore: verificationData.score || 0,
                 verificationReason: verificationData.reason || '',
-                status: verificationData.isIncorrect ? 'incorrect_answer' : 'success'
-            });
+                verificationResult: verificationData.isIncorrect ? 'incorrect' : 'correct'
+            };
+
+            // Update status only if verification indicates incorrect answer
+            if (verificationData.isIncorrect) {
+                updateData.status = 'incorrect_answer';
+            }
+
+            const updatedHistory = await HistoryRepo.update(historyId, updateData);
 
             return updatedHistory;
         } catch (error) {
@@ -496,8 +554,57 @@ class HistoryService {
 
     async getVerificationStats(timeRange = '7d') {
         try {
-            const stats = await BotService.getVerificationStats(timeRange);
-            return HttpResponse.success("Verification statistics", stats);
+            const endDate = new Date();
+            const startDate = new Date();
+
+            switch (timeRange) {
+                case '1d':
+                    startDate.setDate(endDate.getDate() - 1);
+                    break;
+                case '7d':
+                    startDate.setDate(endDate.getDate() - 7);
+                    break;
+                case '30d':
+                    startDate.setDate(endDate.getDate() - 30);
+                    break;
+                default:
+                    startDate.setDate(endDate.getDate() - 7);
+            }
+
+            const pipeline = [
+                {
+                    $match: {
+                        createdAt: { $gte: startDate, $lte: endDate }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        totalQuestions: { $sum: 1 },
+                        totalVerified: { $sum: { $cond: ["$isVerified", 1, 0] } },
+                        totalCorrect: { $sum: { $cond: [{ $eq: ["$verificationResult", "correct"] }, 1, 0] } },
+                        totalIncorrect: { $sum: { $cond: [{ $eq: ["$verificationResult", "incorrect"] }, 1, 0] } },
+                        totalPending: { $sum: { $cond: [{ $eq: ["$verificationResult", "pending"] }, 1, 0] } },
+                        avgVerificationScore: { $avg: "$verificationScore" },
+                        avgContextScore: { $avg: "$contextScore" },
+                        avgProcessingTime: { $avg: "$processingTime" }
+                    }
+                }
+            ];
+
+            const stats = await HistoryRepo.model.aggregate(pipeline);
+            const result = stats[0] || {};
+
+            // Calculate percentages
+            if (result.totalQuestions > 0) {
+                result.verificationRate = ((result.totalVerified / result.totalQuestions) * 100).toFixed(2);
+                result.accuracyRate = result.totalVerified > 0 ? ((result.totalCorrect / result.totalVerified) * 100).toFixed(2) : 0;
+            } else {
+                result.verificationRate = 0;
+                result.accuracyRate = 0;
+            }
+
+            return HttpResponse.success("Verification statistics", result);
         } catch (error) {
             console.error("Error getting verification stats:", error);
             return HttpResponse.error("Lỗi hệ thống khi lấy thống kê verification");
@@ -506,17 +613,91 @@ class HistoryService {
 
     async verifyAnswersBatch(historyIds, options = {}) {
         try {
-            const results = await BotService.verifyHistoryBatch(historyIds, options);
+            // Get histories that need verification
+            const histories = await HistoryRepo.asQueryable({ 
+                _id: { $in: historyIds },
+                isVerified: { $ne: true } // Only verify unverified histories
+            }).exec();
+
+            const results = [];
+            
+            for (const history of histories) {
+                try {
+                    // Perform verification using BotService
+                    const verification = await BotService.performAnswerVerification(
+                        history.question,
+                        history.answer,
+                        JSON.parse(history.contextNodes || '[]'),
+                        history.questionType || 'simple_admission',
+                        history.contextScore || 0
+                    );
+
+                    // Update verification status
+                    const updatedHistory = await this.updateVerificationStatus(history._id, {
+                        score: verification.score,
+                        reason: verification.reasoning,
+                        isIncorrect: verification.isIncorrect
+                    });
+
+                    results.push({
+                        historyId: history._id,
+                        success: true,
+                        verification: verification,
+                        updated: !!updatedHistory
+                    });
+                } catch (error) {
+                    results.push({
+                        historyId: history._id,
+                        success: false,
+                        error: error.message
+                    });
+                }
+            }
+
             return HttpResponse.success("Batch verification completed", {
                 results,
                 totalProcessed: results.length,
-                successCount: results.filter(r => !r.error).length,
-                errorCount: results.filter(r => r.error).length
+                successCount: results.filter(r => r.success).length,
+                errorCount: results.filter(r => !r.success).length
             });
         } catch (error) {
             console.error("Error in batch verification:", error);
             return HttpResponse.error("Lỗi hệ thống khi verify batch");
         }
+    }
+
+    // ===== HELPER METHODS =====
+    
+    /**
+     * Calculate contextScore from contextScoreHistory if available
+     * @param {number} contextScore - Original contextScore from database
+     * @param {Array} contextScoreHistory - Array of context scores
+     * @returns {Object} { calculatedScore, source, historyCount }
+     */
+    calculateContextScoreFromHistory(contextScore, contextScoreHistory) {
+        let calculatedScore = contextScore;
+        let source = 'database';
+        let historyCount = 0;
+        
+        if (contextScoreHistory && Array.isArray(contextScoreHistory) && contextScoreHistory.length > 0) {
+            // Filter valid scores and calculate average
+            const validScores = contextScoreHistory.filter(score => 
+                typeof score === 'number' && !isNaN(score) && score >= 0 && score <= 1
+            );
+            
+            if (validScores.length > 0) {
+                const averageScore = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+                calculatedScore = Math.round(averageScore * 1000) / 1000; // Round to 3 decimal places
+                source = `calculated_from_history`;
+                historyCount = validScores.length;
+            }
+        }
+        
+        return {
+            calculatedScore,
+            source,
+            historyCount
+        };
     }
 }
 
