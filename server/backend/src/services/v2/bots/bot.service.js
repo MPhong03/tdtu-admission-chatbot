@@ -341,6 +341,11 @@ class BotService {
             if (enhancedResult.contextScore > 0) {
                 enhancedResult.contextScoreHistory = [enhancedResult.contextScore];
                 enhancedResult.contextScoreReasons = [`Simple RAG context with ${(result.contextNodes || []).length} nodes`];
+            } else {
+                // Fallback: create contextScoreHistory from contextNodes if no score available
+                const simpleScore = this.calculateSimpleContextScore(result.contextNodes || []);
+                enhancedResult.contextScoreHistory = [simpleScore];
+                enhancedResult.contextScoreReasons = [`Simple RAG context with ${(result.contextNodes || []).length} nodes (calculated)`];
             }
 
             return enhancedResult;
@@ -377,7 +382,7 @@ class BotService {
                 enrichmentResults: result.enrichmentResults || [],
 
                 // === ENSURE CONTEXT SCORING INFO ===
-                contextScore: result.contextScore || 0,
+                contextScore: this.calculateFinalContextScore(result.contextScore, result.contextScoreHistory, result.contextNodes),
                 contextScoreHistory: result.contextScoreHistory || [],
                 contextScoreReasons: result.contextScoreReasons || [],
 
@@ -421,7 +426,7 @@ class BotService {
             enrichmentResults: result.enrichmentResults || [],
 
             // === CONTEXT SCORING INFO ===
-            contextScore: result.contextScore || this.calculateSimpleContextScore(result.contextNodes || []),
+            contextScore: this.calculateFinalContextScore(result.contextScore, result.contextScoreHistory, result.contextNodes),
             contextScoreHistory: result.contextScoreHistory || [],
             contextScoreReasons: result.contextScoreReasons || [],
 
@@ -453,6 +458,33 @@ class BotService {
         return 0.2;
     }
 
+    calculateFinalContextScore(contextScore, contextScoreHistory, contextNodes) {
+        // Ưu tiên contextScoreHistory nếu có
+        if (contextScoreHistory && contextScoreHistory.length > 0) {
+            // Tính trung bình của tất cả contextScore trong history
+            const validScores = contextScoreHistory.filter(score => 
+                typeof score === 'number' && !isNaN(score) && score >= 0 && score <= 1
+            );
+            
+            if (validScores.length > 0) {
+                const averageScore = validScores.reduce((sum, score) => sum + score, 0) / validScores.length;
+                logger.info(`[BotService] Using average contextScore from history: ${averageScore.toFixed(3)} (${validScores.length} scores)`);
+                return Math.round(averageScore * 1000) / 1000; // Round to 3 decimal places
+            }
+        }
+
+        // Fallback to provided contextScore if valid
+        if (typeof contextScore === 'number' && !isNaN(contextScore) && contextScore >= 0 && contextScore <= 1) {
+            logger.info(`[BotService] Using provided contextScore: ${contextScore.toFixed(3)}`);
+            return contextScore;
+        }
+
+        // Final fallback to simple calculation based on contextNodes
+        const simpleScore = this.calculateSimpleContextScore(contextNodes);
+        logger.info(`[BotService] Using simple contextScore calculation: ${simpleScore.toFixed(3)}`);
+        return simpleScore;
+    }
+
     logTrackingInfo(requestId, result) {
         const trackingInfo = {
             requestId,
@@ -460,6 +492,7 @@ class BotService {
             processingMethod: result.processingMethod,
             enrichmentSteps: result.enrichmentSteps,
             contextScore: result.contextScore,
+            contextScoreHistory: result.contextScoreHistory || [],
             processingTime: result.processingTime,
             classificationConfidence: result.classificationConfidence,
             cypherValidated: result.cypherValidated
@@ -489,6 +522,13 @@ class BotService {
         // Log enrichment details
         if (result.enrichmentSteps > 0) {
             logger.info(`[${requestId}] Enrichment: ${result.enrichmentSteps} steps, final score: ${result.contextScore}`);
+        }
+
+        // Log context score details
+        if (result.contextScoreHistory && result.contextScoreHistory.length > 0) {
+            logger.info(`[${requestId}] Context Score: ${result.contextScore} (from ${result.contextScoreHistory.length} history scores: [${result.contextScoreHistory.map(s => s.toFixed(3)).join(', ')}])`);
+        } else {
+            logger.info(`[${requestId}] Context Score: ${result.contextScore} (calculated from context nodes)`);
         }
     }
 
