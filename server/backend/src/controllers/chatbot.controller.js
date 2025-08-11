@@ -382,6 +382,66 @@ class ChatbotController {
             return res.json(HttpResponse.error("Lỗi lấy queue status", -1, err.message));
         }
     }
+
+    // === LLM MONITORING ENDPOINTS ===
+    async getLLMStats(req, res) {
+        try {
+            // Check admin permission
+            if (req.user?.role !== 'admin') {
+                return res.json(HttpResponse.error("Không có quyền truy cập", -403));
+            }
+
+            const llmStats = BotService.llmMonitor.getStats();
+            const circuitStats = BotService.circuitBreaker.getStats();
+
+            return res.json(HttpResponse.success("LLM Statistics", {
+                llmMonitor: llmStats,
+                circuitBreaker: circuitStats,
+                timestamp: new Date().toISOString()
+            }));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi lấy LLM stats", -1, err.message));
+        }
+    }
+
+    async resetLLMStats(req, res) {
+        try {
+            // Check admin permission
+            if (req.user?.role !== 'admin') {
+                return res.json(HttpResponse.error("Không có quyền truy cập", -403));
+            }
+
+            BotService.llmMonitor.resetStats();
+            
+            return res.json(HttpResponse.success("Reset LLM stats thành công"));
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi reset LLM stats", -1, err.message));
+        }
+    }
+
+    async resetCircuitBreaker(req, res) {
+        try {
+            const { serviceName } = req.body;
+
+            // Check admin permission
+            if (req.user?.role !== 'admin') {
+                return res.json(HttpResponse.error("Không có quyền truy cập", -403));
+            }
+
+            const success = BotService.circuitBreaker.resetCircuit(serviceName);
+            
+            if (success) {
+                return res.json(HttpResponse.success(`Reset circuit breaker cho ${serviceName} thành công`));
+            } else {
+                return res.json(HttpResponse.error(`Không tìm thấy circuit cho ${serviceName}`, -1));
+            }
+        } catch (err) {
+            console.error(err);
+            return res.json(HttpResponse.error("Lỗi reset circuit breaker", -1, err.message));
+        }
+    }
 }
 
 module.exports = new ChatbotController();

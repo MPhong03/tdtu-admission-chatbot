@@ -19,6 +19,7 @@ class PromptService {
                 classification: this.loadOrDefault(configPath, "classification_prompt.txt", this.getDefaultClassificationPrompt()),
                 analysis: this.loadOrDefault(configPath, "analysis_prompt.txt", this.getDefaultAnalysisPrompt()),
                 enrichment: this.loadOrDefault(configPath, "enrichment_prompt.txt", this.getDefaultEnrichmentPrompt()),
+                batchContextScore: this.getDefaultBatchContextScorePrompt(),
                 complexAnswer: this.loadOrDefault(configPath, "complex_answer_prompt.txt", this.getDefaultComplexAnswerPrompt()),
                 offTopic: this.loadOrDefault(configPath, "off_topic_prompt.txt", this.getDefaultOffTopicPrompt()),
                 social: this.loadOrDefault(configPath, "social_prompt.txt", this.getDefaultSocialPrompt()),
@@ -48,6 +49,7 @@ class PromptService {
             classification: this.getDefaultClassificationPrompt(),
             analysis: this.getDefaultAnalysisPrompt(),
             enrichment: this.getDefaultEnrichmentPrompt(),
+            batchContextScore: this.getDefaultBatchContextScorePrompt(),
             complexAnswer: this.getDefaultComplexAnswerPrompt(),
             offTopic: this.getDefaultOffTopicPrompt(),
             social: this.getDefaultSocialPrompt(),
@@ -117,6 +119,37 @@ class PromptService {
         Quyết định có cần query bổ sung cho: "<user_question>"
         
         Trả về JSON với shouldEnrich, reasoning, cypher.
+        `.trim();
+    }
+
+    getDefaultBatchContextScorePrompt() {
+        return `
+        Đánh giá chất lượng context cho nhiều bước xử lý cùng lúc.
+        
+        Câu hỏi: "<user_question>"
+        Các nhóm context: <context_groups>
+        
+        Đánh giá từng nhóm context theo thang điểm 0-1:
+        - 0.0-0.3: Context kém, không đủ thông tin
+        - 0.4-0.6: Context trung bình, có thể cần bổ sung
+        - 0.7-0.9: Context tốt, đủ thông tin
+        - 1.0: Context hoàn hảo
+        
+        Trả về JSON:
+        {
+            "scores": [
+                {
+                    "stepName": "main_query",
+                    "score": 0.75,
+                    "reasoning": "Context đầy đủ thông tin cơ bản"
+                },
+                {
+                    "stepName": "enrichment_1", 
+                    "score": 0.85,
+                    "reasoning": "Thông tin bổ sung hữu ích"
+                }
+            ]
+        }
         `.trim();
     }
 

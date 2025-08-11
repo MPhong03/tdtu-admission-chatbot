@@ -13,7 +13,11 @@ class AgentService {
             minConfidenceThreshold: parseFloat(process.env.MIN_CONFIDENCE_THRESHOLD) || 0.75,
             maxContextSize: parseInt(process.env.MAX_CONTEXT_SIZE) || 50,
             enableSmartSkipping: true,
-            useValidationForEnrichment: process.env.USE_VALIDATION_FOR_ENRICHMENT !== 'false'
+            useValidationForEnrichment: process.env.USE_VALIDATION_FOR_ENRICHMENT !== 'false',
+            // NEW: Dynamic enrichment config
+            dynamicEnrichmentEnabled: process.env.ENABLE_DYNAMIC_ENRICHMENT !== 'false',
+            earlyTerminationThreshold: parseFloat(process.env.EARLY_TERMINATION_THRESHOLD) || 0.8,
+            minScoreImprovementThreshold: parseFloat(process.env.MIN_SCORE_IMPROVEMENT) || 0.05
         };
 
         // Reference to bot service for progress tracking
@@ -27,6 +31,110 @@ class AgentService {
     emitProgress(step, description, details = {}) {
         if (this.botService) {
             this.botService.emitProgress(step, description, details);
+        }
+    }
+
+    // === DYNAMIC ENRICHMENT DECISION ===
+    shouldContinueEnrichment(contextScoreHistory, enrichmentStep, previousEnrichments) {
+        if (!this.config.dynamicEnrichmentEnabled) {
+            return enrichmentStep <= this.config.maxEnrichmentQueries;
+        }
+
+        const currentScore = contextScoreHistory[contextScoreHistory.length - 1] || 0;
+        
+        // Early termination if score is high enough
+        if (currentScore >= this.config.earlyTerminationThreshold) {
+            logger.info(`[Agent] Early termination: score ${currentScore.toFixed(3)} >= ${this.config.earlyTerminationThreshold}`);
+            return false;
+        }
+
+        // Stop if we've reached max steps
+        if (enrichmentStep > this.config.maxEnrichmentQueries) {
+            return false;
+        }
+
+        // Dynamic max based on current score
+        const dynamicMax = currentScore < 0.3 ? 3 : 
+                          currentScore < 0.6 ? 2 : 1;
+        
+        if (enrichmentStep > dynamicMax) {
+            logger.info(`[Agent] Dynamic limit reached: step ${enrichmentStep} > ${dynamicMax} (score: ${currentScore.toFixed(3)})`);
+            return false;
+        }
+
+        // Check score improvement trend
+        if (contextScoreHistory.length >= 2) {
+            const recentImprovement = currentScore - contextScoreHistory[contextScoreHistory.length - 2];
+            if (recentImprovement < this.config.minScoreImprovementThreshold) {
+                logger.info(`[Agent] Poor improvement: ${recentImprovement.toFixed(3)} < ${this.config.minScoreImprovementThreshold}, considering stop`);
+                
+                // Stop if last 2 enrichments didn't help much
+                if (enrichmentStep > 1 && recentImprovement <= 0) {
+                    logger.info(`[Agent] Stopping due to negative improvement`);
+                    return false;
+                }
+            }
+        }
+
+        // Check if recent enrichments are failing
+        const recentFailures = previousEnrichments.slice(-2).filter(e => e.failed || e.resultCount === 0).length;
+        if (recentFailures >= 2) {
+            logger.info(`[Agent] Stopping due to consecutive failures: ${recentFailures}/2`);
+            return false;
+        }
+
+        return true;
+    }
+
+    // === BATCH CONTEXT SCORING ===
+    async batchScoreContexts(question, contextGroups) {
+        try {
+            // Build batch prompt for multiple context groups
+            const batchPrompt = this.prompts.buildPrompt('batchContextScore', {
+                user_question: question,
+                context_groups: JSON.stringify(contextGroups.map((group, idx) => ({
+                    stepName: group.stepName,
+                    contextCount: group.contextNodes.length,
+                    sampleContext: group.contextNodes.slice(0, 3)
+                })))
+            });
+
+            const cacheKey = this.cache.generateCacheKey(batchPrompt, 'batch_context_score');
+            let result = await this.cache.get(cacheKey);
+
+            if (!result) {
+                result = await this.gemini.queueRequest(batchPrompt);
+                if (result) {
+                    await this.cache.set(cacheKey, result);
+                }
+            }
+
+            // Parse batch results
+            if (result && result.scores) {
+                return result.scores.map((scoreData, idx) => ({
+                    score: Math.max(0, Math.min(1, parseFloat(scoreData.score) || 0)),
+                    reasoning: scoreData.reasoning || 'Batch scoring result',
+                    contextSize: contextGroups[idx].contextNodes.length,
+                    stepName: contextGroups[idx].stepName
+                }));
+            }
+
+            // Fallback to individual scoring if batch fails
+            logger.warn("[Agent] Batch scoring failed, falling back to individual scoring");
+            return await Promise.all(
+                contextGroups.map(group => 
+                    this.scoreContext(question, group.contextNodes, group.stepName)
+                )
+            );
+
+        } catch (error) {
+            logger.error("[Agent] Batch context scoring failed:", error);
+            // Fallback to individual scoring
+            return await Promise.all(
+                contextGroups.map(group => 
+                    this.scoreContext(question, group.contextNodes, group.stepName)
+                )
+            );
         }
     }
 
@@ -371,7 +479,7 @@ class AgentService {
         let previousEnrichments = []; // Track previous enrichment attempts
 
         while (
-            enrichmentStep <= this.config.maxEnrichmentQueries &&
+            this.shouldContinueEnrichment(contextScoreHistory, enrichmentStep, previousEnrichments) &&
             currentContextScore < this.config.minConfidenceThreshold &&
             allContext.length <= this.config.maxContextSize
         ) {

@@ -8,6 +8,8 @@ const AnswerService = require("./answer.service");
 const MonitoringService = require("./monitoring.service");
 const CacheService = require("../cachings/cache.service");
 const VerificationService = require("./verification.service");
+const CircuitBreakerService = require("./circuit-breaker.service");
+const LLMMonitorService = require("./llm-monitor.service");
 
 class BotService {
     constructor() {
@@ -29,6 +31,8 @@ class BotService {
         this.answer = new AnswerService(this.gemini, this.prompts, this.cache, this.cypher);
         this.monitoring = new MonitoringService(this.gemini, this.cache);
         this.verification = new VerificationService(this.gemini, this.prompts, this.cache);
+        this.circuitBreaker = new CircuitBreakerService();
+        this.llmMonitor = new LLMMonitorService();
 
         // Set bot service reference for progress tracking
         this.agent.setBotService(this);
@@ -40,7 +44,10 @@ class BotService {
             enableClassification: process.env.ENABLE_CLASSIFICATION !== 'false',
             // NEW: Cypher validation configuration
             enableCypherValidation: process.env.ENABLE_CYPHER_VALIDATION !== 'false',
-            cypherValidationMode: process.env.CYPHER_VALIDATION_MODE || 'auto' // 'auto', 'always', 'never'
+            cypherValidationMode: process.env.CYPHER_VALIDATION_MODE || 'auto', // 'auto', 'always', 'never'
+            // NEW: Smart optimization config
+            enableSmartValidation: process.env.ENABLE_SMART_VALIDATION !== 'false',
+            skipVerificationThreshold: parseFloat(process.env.SKIP_VERIFICATION_THRESHOLD) || 0.9
         };
 
         // Progress tracking
@@ -87,9 +94,55 @@ class BotService {
             'context_score_enrichment_2': 'Đang đánh giá thông tin bổ sung...',
             'context_score_enrichment_3': 'Đang đánh giá thông tin bổ sung...',
             'answer_generation': 'Đang tạo câu trả lời...',
-            'verification': 'Đang kiểm tra chất lượng câu trả lời...'
+            'verification': 'Đang kiểm tra chất lượng câu trả lời...',
+            'optimization_skip': 'Đã tối ưu hóa - bỏ qua các bước không cần thiết...'
         };
         return stepMap[step] || `Đang xử lý ${step}...`;
+    }
+
+    // === SMART VALIDATION DECISION ===
+    shouldValidateQuery(queryType, contextScore, isRetry = false) {
+        if (!this.config.enableSmartValidation) {
+            return this.config.enableCypherValidation;
+        }
+
+        // Always validate if it's a retry (previous failed)
+        if (isRetry) return true;
+
+        // Skip validation for high-confidence simple queries
+        if (queryType === 'simple' && contextScore > 0.7) {
+            return false;
+        }
+
+        // Always validate complex queries
+        if (queryType === 'complex') return true;
+
+        // For enrichment, only validate if main query had issues
+        if (queryType === 'enrichment') {
+            return contextScore < 0.5; // Only validate if context is poor
+        }
+
+        return this.config.enableCypherValidation;
+    }
+
+    // === SMART VERIFICATION DECISION ===
+    shouldPerformVerification(contextScore, questionType, isError) {
+        // Skip verification if there's an error
+        if (isError) return false;
+
+        // Skip verification for high-confidence answers
+        if (contextScore >= this.config.skipVerificationThreshold) {
+            logger.info(`[Optimization] Skipping verification: high context score ${contextScore.toFixed(3)}`);
+            return false;
+        }
+
+        // Always verify complex questions with low confidence
+        if (questionType === 'complex_admission' && contextScore < 0.6) {
+            return true;
+        }
+
+        // Default verification for others
+        return contextScore < 0.8;
     }
 
     async initialize() {
@@ -129,7 +182,12 @@ class BotService {
             // Phase 1: Classification with enhanced data collection
             this.emitProgress('classification', this.mapStepToUserFriendly('classification'));
             
-            const classification = await this.classification.classify(question, chatHistory);
+            const classification = await this.circuitBreaker.executeWithCircuitBreaker(
+                'classification',
+                () => this.classification.classify(question, chatHistory),
+                { category: 'simple_admission', confidence: 0.5, reasoning: 'Circuit breaker fallback' }
+            );
+            
             logger.info(`[${requestId}] Classification: ${classification.category} (${classification.confidence})`);
 
             let result;
@@ -174,15 +232,33 @@ class BotService {
             // ===== ADD VERIFICATION INFO =====
             this.emitProgress('answer_generation', this.mapStepToUserFriendly('answer_generation'));
             
-            result.verificationInfo = await this.performAnswerVerification(
-                question, 
-                result.answer, 
-                result.contextNodes || [], 
+            // Smart verification decision
+            const shouldVerify = this.shouldPerformVerification(
+                result.contextScore || 0,
                 classification.category,
-                result.contextScore || 0 // Pass contextScore to verification
+                result.isError
             );
 
-            this.emitProgress('verification', this.mapStepToUserFriendly('verification'));
+            if (shouldVerify) {
+                this.emitProgress('verification', this.mapStepToUserFriendly('verification'));
+                
+                result.verificationInfo = await this.performAnswerVerification(
+                    question, 
+                    result.answer, 
+                    result.contextNodes || [], 
+                    classification.category,
+                    result.contextScore || 0
+                );
+            } else {
+                this.emitProgress('optimization_skip', this.mapStepToUserFriendly('optimization_skip'));
+                
+                result.verificationInfo = {
+                    skipped: true,
+                    reason: 'High confidence answer - verification skipped for optimization',
+                    score: result.contextScore || 0,
+                    isCorrect: true
+                };
+            }
 
             // Log final tracking info
             this.logTrackingInfo(requestId, result);
@@ -653,6 +729,24 @@ class BotService {
     getCypherService() { return this.cypher; }
     getCypherValidationService() { return this.cypher.getValidationService(); }
     getAgentService() { return this.agent; }
+    
+    // === NEW: MONITORING & OPTIMIZATION GETTERS ===
+    getLLMMonitor() { return this.llmMonitor; }
+    getCircuitBreaker() { return this.circuitBreaker; }
+    
+    getOptimizationStats() {
+        return {
+            llmMonitor: this.llmMonitor.getStats(),
+            circuitBreaker: this.circuitBreaker.getStats(),
+            config: {
+                dynamicEnrichment: this.config.dynamicEnrichmentEnabled,
+                smartValidation: this.config.enableSmartValidation,
+                cypherValidation: this.config.enableCypherValidation,
+                earlyTerminationThreshold: this.config.earlyTerminationThreshold,
+                skipVerificationThreshold: this.config.skipVerificationThreshold
+            }
+        };
+    }
     getAnswerService() { return this.answer; }
     getMonitoringService() { return this.monitoring; }
 }
