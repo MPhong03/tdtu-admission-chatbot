@@ -182,6 +182,12 @@ class BotService {
                 result.contextScore || 0 // Pass contextScore to verification
             );
 
+            // Add verification data to result for HistoryService
+            result.isVerified = result.verificationInfo.isVerified;
+            result.verificationScore = result.verificationInfo.score;
+            result.verificationReason = result.verificationInfo.reasoning;
+            result.verificationResult = result.verificationInfo.isCorrect ? 'correct' : (result.verificationInfo.isIncorrect ? 'incorrect' : 'pending');
+
             this.emitProgress('verification', this.mapStepToUserFriendly('verification'));
 
             // Log final tracking info

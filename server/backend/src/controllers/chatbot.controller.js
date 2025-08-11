@@ -136,32 +136,22 @@ class ChatbotController {
                 processingTime: processingTime || 0,
                 // === ERROR CLASSIFICATION ===
                 errorType: errorType || 'none',
-                errorDetails: errorDetails || {}
+                errorDetails: errorDetails || {},
+                // === VERIFICATION FIELDS ===
+                isVerified: result.isVerified || false,
+                verificationScore: result.verificationScore || 0,
+                verificationReason: result.verificationReason || '',
+                verificationResult: result.verificationResult || 'pending'
             });
 
             if (saveResult.Code !== 1) {
                 console.warn("Lưu lịch sử thất bại:", saveResult.Message);
             }
 
-            // 4. Trigger verification immediately in main request
-            if (saveResult?.Data?.history?._id && !isError) {
-                try {
-                    const verification = await BotService.triggerAsyncVerification(
-                        saveResult.Data.history._id,
-                        question,
-                        answer,
-                        contextNodes,
-                        questionType || category || 'simple_admission'
-                    );
-                    
-                    // Add verification info to response
-                    result.verificationInfo = verification;
-                } catch (error) {
-                    console.warn("Không thể verify answer:", error.message);
-                }
-            }
+            // Verification đã được thực hiện trong BotService.generateAnswer()
+            // Không cần trigger verification riêng nữa
 
-            // 4. Tăng counter cho visitor rate limit (nếu là visitor)
+            // 3. Tăng counter cho visitor rate limit (nếu là visitor)
             if (req.isVisitor && req.visitorId) {
                 try {
                     await this.visitorRateLimitService.incrementCounter(req.visitorId, 'chat');
@@ -170,7 +160,7 @@ class ChatbotController {
                 }
             }
 
-            // 6. Trả về cho frontend với enhanced tracking info
+            // 4. Trả về cho frontend với enhanced tracking info
             return res.json(
                 HttpResponse.success("Nhận kết quả", {
                     answer,
@@ -189,8 +179,13 @@ class ChatbotController {
                         classificationConfidence: classificationConfidence || classification?.confidence || 0,
                         errorType: errorType || 'none'
                     },
-                    // Verification info
-                    verification: result.verificationInfo || null
+                    // Verification info (đã được thực hiện trong BotService)
+                    verification: {
+                        isVerified: result.isVerified || false,
+                        score: result.verificationScore || 0,
+                        reason: result.verificationReason || '',
+                        result: result.verificationResult || 'pending'
+                    }
                 })
             );
         } catch (err) {
@@ -236,14 +231,14 @@ class ChatbotController {
 
     async getAnalytics(req, res) {
         try {
-            const { timeRange = '7d' } = req.query;
+            const { timeRange = '7d', includeVerification = 'true' } = req.query;
 
             // Check admin permission
             if (req.user?.role !== 'admin') {
                 return res.json(HttpResponse.error("Không có quyền truy cập", -403));
             }
 
-            const result = await HistoryService.getAnalytics(timeRange);
+            const result = await HistoryService.getAnalytics(timeRange, includeVerification === 'true');
             return res.json(result);
         } catch (err) {
             console.error(err);
@@ -258,7 +253,9 @@ class ChatbotController {
                 size = 10,
                 questionType,
                 status,
-                processingMethod
+                processingMethod,
+                isVerified,
+                verificationResult
             } = req.query;
 
             // Check admin permission
@@ -271,7 +268,9 @@ class ChatbotController {
                 size: parseInt(size),
                 questionType,
                 status,
-                processingMethod
+                processingMethod,
+                isVerified,
+                verificationResult
             });
 
             return res.json(result);
@@ -354,7 +353,11 @@ class ChatbotController {
                 contextScore: result.contextScore,
                 contextScoreHistory: result.contextScoreHistory,
                 agentSteps: typeof result.agentSteps === 'string' ? JSON.parse(result.agentSteps) : result.agentSteps,
-                processingTime: result.processingTime
+                processingTime: result.processingTime,
+                // === VERIFICATION INFO ===
+                isVerified: result.isVerified,
+                verificationScore: result.verificationScore,
+                verificationResult: result.verificationResult
             }));
         } catch (err) {
             console.error(err);
@@ -371,10 +374,12 @@ class ChatbotController {
 
             const queueLength = await BotService.getCacheService().getVerificationQueueLength();
             const cacheStats = BotService.getCacheService().getStats();
+            const verificationStats = await HistoryService.getVerificationStats('7d');
 
             return res.json(HttpResponse.success("Queue Status", {
                 queueLength,
                 cacheStats,
+                verificationStats: verificationStats.Data || null,
                 timestamp: new Date().toISOString()
             }));
         } catch (err) {
