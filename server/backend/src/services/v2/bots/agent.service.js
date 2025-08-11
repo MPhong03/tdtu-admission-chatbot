@@ -15,6 +15,64 @@ class AgentService {
             enableSmartSkipping: true,
             useValidationForEnrichment: process.env.USE_VALIDATION_FOR_ENRICHMENT !== 'false'
         };
+        
+        // Reference to bot service for progress tracking
+        this.botService = null;
+    }
+
+    setBotService(botService) {
+        this.botService = botService;
+    }
+
+    emitProgress(step, description, details = {}) {
+        if (this.botService) {
+            this.botService.emitProgress(step, description, details);
+        }
+    }
+
+    // === ENRICHMENT EFFECTIVENESS ANALYSIS ===
+    analyzeEnrichmentEffectiveness(previousEnrichments, contextScoreHistory) {
+        const analysis = {
+            totalAttempts: previousEnrichments.length,
+            successfulAttempts: previousEnrichments.filter(e => e.resultCount > 0).length,
+            failedAttempts: previousEnrichments.filter(e => e.failed || e.resultCount === 0).length,
+            skippedAttempts: previousEnrichments.filter(e => e.skipped).length,
+            averageResults: previousEnrichments.reduce((sum, e) => sum + (e.resultCount || 0), 0) / Math.max(1, previousEnrichments.length),
+            scoreImprovement: contextScoreHistory.length > 1 ? 
+                contextScoreHistory[contextScoreHistory.length - 1] - contextScoreHistory[0] : 0,
+            diversityScore: this.calculateQueryDiversity(previousEnrichments)
+        };
+
+        logger.info(`[Agent] Enrichment effectiveness: ${analysis.successfulAttempts}/${analysis.totalAttempts} successful, score improvement: +${analysis.scoreImprovement.toFixed(3)}, diversity: ${analysis.diversityScore.toFixed(2)}`);
+        
+        return analysis;
+    }
+
+    calculateQueryDiversity(enrichments) {
+        const nodeTypes = new Set();
+        const infoTypes = new Set();
+        const purposes = new Set();
+
+        enrichments.forEach(e => {
+            if (e.cypher) {
+                // Extract node types from cypher (simple regex)
+                const nodeMatches = e.cypher.match(/\((\w+):(\w+)\)/g);
+                if (nodeMatches) {
+                    nodeMatches.forEach(match => {
+                        const nodeType = match.match(/:(\w+)\)/)?.[1];
+                        if (nodeType) nodeTypes.add(nodeType);
+                    });
+                }
+            }
+            if (e.infoType && e.infoType !== 'none') infoTypes.add(e.infoType);
+            if (e.purpose && e.purpose !== 'Skipped') purposes.add(e.purpose);
+        });
+
+        // Diversity score: 0-1 based on variety of approaches
+        const maxPossibleTypes = 7; // Major, Programme, MajorProgramme, Document, Tuition, Scholarship, Year
+        const maxPossibleInfoTypes = 5; // scholarship, career, requirements, comparison, documents
+        
+        return (nodeTypes.size / maxPossibleTypes + infoTypes.size / maxPossibleInfoTypes) / 2;
     }
 
     async analyzeComplexQuestion(question, chatHistory, classification) {
@@ -116,7 +174,7 @@ class AgentService {
     }
 
     // === ENHANCED ENRICHMENT PLANNING ===
-    async planEnrichmentQuery(question, mainContext, analysis, stepNumber) {
+    async planEnrichmentQuery(question, mainContext, analysis, stepNumber, previousEnrichments = [], contextScoreHistory = []) {
         if (stepNumber > this.config.maxEnrichmentQueries) {
             logger.info(`[Agent] Max enrichment steps (${this.config.maxEnrichmentQueries}) reached`);
             return null;
@@ -129,6 +187,19 @@ class AgentService {
         }
 
         try {
+            // Build enrichment history for better planning
+            const enrichmentHistory = previousEnrichments.map((enr, idx) => ({
+                step: idx + 1,
+                query: enr.cypher || 'Unknown',
+                resultCount: enr.resultCount || 0,
+                purpose: enr.purpose || 'Unknown',
+                infoType: enr.infoType || 'Unknown'
+            }));
+
+            const currentContextScore = contextScoreHistory.length > 0 ? contextScoreHistory[contextScoreHistory.length - 1] : 0;
+            const scoreImprovement = contextScoreHistory.length > 1 ? 
+                (contextScoreHistory[contextScoreHistory.length - 1] - contextScoreHistory[contextScoreHistory.length - 2]) : 0;
+
             const prompt = this.prompts.buildPrompt('enrichment', {
                 user_question: question,
                 step: stepNumber.toString(),
@@ -136,7 +207,12 @@ class AgentService {
                 context_count: mainContext.length.toString(),
                 analysis_info: JSON.stringify(analysis),
                 sample_context: JSON.stringify(mainContext.slice(0, 3)), // More sample context
-                enrichment_targets: analysis.strategy?.enrichmentTargets?.join(', ') || 'none'
+                enrichment_targets: analysis.strategy?.enrichmentTargets?.join(', ') || 'none',
+                // NEW: Enhanced context for better planning
+                previous_enrichments: JSON.stringify(enrichmentHistory),
+                current_context_score: currentContextScore.toFixed(3),
+                score_improvement: scoreImprovement.toFixed(3),
+                context_score_history: JSON.stringify(contextScoreHistory.map(s => s.toFixed(3)))
             });
 
             const cacheKey = this.cache.generateCacheKey(prompt, 'enrichment');
@@ -238,10 +314,16 @@ class AgentService {
             });
 
             // ===== STEP 2: MAIN QUERY WITH VALIDATION =====
+            this.emitProgress('main_query', 'Đang tìm kiếm dữ liệu...');
+
             const cypherData = await this.cypher.generateAndExecuteCypher(question, questionEmbedding, chatHistory);
             
             mainCypher = cypherData.cypher || "";
             allContext = cypherData.contextNodes || [];
+
+            if (cypherData.wasValidated) {
+                this.emitProgress('main_query_validation', 'Đang kiểm tra và tối ưu tìm kiếm...');
+            }
 
             // Log validation results
             if (cypherData.wasValidated && cypherData.validationInfo) {
@@ -266,6 +348,8 @@ class AgentService {
             });
 
             // ===== SCORE CONTEXT AFTER MAIN QUERY =====
+            this.emitProgress('context_score_main', 'Đang đánh giá thông tin...');
+            
             const mainContextScore = await this.scoreContext(question, allContext, "main_query");
             contextScoreHistory.push(mainContextScore.score);
             contextScoreReasons.push(mainContextScore.reasoning);
@@ -281,18 +365,21 @@ class AgentService {
 
             logger.info(`[Agent] Main query context score: ${mainContextScore.score.toFixed(3)} (${allContext.length} nodes)`);
 
-            // ===== STEP 3: MULTI-STEP ENRICHMENT WITH VALIDATION =====
-            let enrichmentStep = 1;
-            let currentContextScore = contextScoreHistory[contextScoreHistory.length - 1] || 0;
+                    // ===== STEP 3: MULTI-STEP ENRICHMENT WITH VALIDATION =====
+        let enrichmentStep = 1;
+        let currentContextScore = contextScoreHistory[contextScoreHistory.length - 1] || 0;
+        let previousEnrichments = []; // Track previous enrichment attempts
 
-            while (
-                enrichmentStep <= this.config.maxEnrichmentQueries &&
-                currentContextScore < this.config.minConfidenceThreshold &&
-                allContext.length <= this.config.maxContextSize
-            ) {
-                logger.info(`[Agent] Starting enrichment step ${enrichmentStep} (current score: ${currentContextScore.toFixed(3)})`);
+        while (
+            enrichmentStep <= this.config.maxEnrichmentQueries &&
+            currentContextScore < this.config.minConfidenceThreshold &&
+            allContext.length <= this.config.maxContextSize
+        ) {
+            logger.info(`[Agent] Starting enrichment step ${enrichmentStep} (current score: ${currentContextScore.toFixed(3)})`);
+            
+            this.emitProgress(`enrichment_${enrichmentStep}`, `Đang mở rộng tìm kiếm (${enrichmentStep}/${this.config.maxEnrichmentQueries})...`);
 
-                const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, enrichmentStep);
+            const enrichment = await this.planEnrichmentQuery(question, allContext, analysis, enrichmentStep, previousEnrichments, contextScoreHistory);
 
                 if (enrichment && enrichment.shouldEnrich && enrichment.cypher) {
                     // Execute enrichment query with validation
@@ -336,7 +423,18 @@ class AgentService {
 
                         agentSteps.push(enrichmentStepData);
 
+                        // Track this enrichment for next iteration
+                        previousEnrichments.push({
+                            cypher: enrichment.cypher,
+                            resultCount: enrichmentContext.length,
+                            purpose: enrichment.purpose,
+                            infoType: enrichment.infoType,
+                            wasValidated: enrichmentResult.wasValidated
+                        });
+
                         // ===== SCORE CONTEXT AFTER ENRICHMENT =====
+                        this.emitProgress(`context_score_enrichment_${enrichmentStep}`, 'Đang đánh giá thông tin bổ sung...');
+                        
                         const enrichmentContextScore = await this.scoreContext(question, allContext, `enrichment_${enrichmentStep}`);
                         currentContextScore = enrichmentContextScore.score;
                         contextScoreHistory.push(currentContextScore);
@@ -363,15 +461,54 @@ class AgentService {
                         enrichmentStep++;
                     } else {
                         logger.info(`[Agent] Enrichment step ${enrichmentStep} returned no results.`);
-                        break;
+                                                
+                        // Track failed enrichment for next iteration learning
+                        previousEnrichments.push({
+                            cypher: enrichment.cypher,
+                            resultCount: 0,
+                            purpose: enrichment.purpose,
+                            infoType: enrichment.infoType,
+                            wasValidated: enrichmentResult.wasValidated,
+                            failed: true,
+                            failureReason: 'No results returned'
+                        });
+
+                        // Add failed step to agentSteps for tracking
+                        agentSteps.push({
+                            step: `enrichment_${enrichmentStep}_failed`,
+                            description: `Enrichment ${enrichmentStep} không tìm thấy kết quả`,
+                            cypher: enrichment.cypher,
+                            resultCount: 0,
+                            failureReason: 'No results',
+                            timestamp: Date.now() - processingStartTime
+                        });
+
+                        enrichmentStep++;
+                        // Continue to next iteration instead of breaking
+                        // This allows the agent to try different approaches
                     }
                 } else {
                     logger.info(`[Agent] No enrichment planned for step ${enrichmentStep}, stopping`);
+                                        
+                    // Track skipped enrichment
+                    previousEnrichments.push({
+                        cypher: null,
+                        resultCount: 0,
+                        purpose: 'Skipped',
+                        infoType: 'none',
+                        wasValidated: false,
+                        skipped: true,
+                        skipReason: 'No valid query generated or not needed'
+                    });
+                    
                     break;
                 }
             }
 
-            // ===== STEP 4: GENERATE FINAL ANSWER =====
+            // ===== STEP 4: ENRICHMENT EFFECTIVENESS ANALYSIS =====
+            const enrichmentAnalysis = this.analyzeEnrichmentEffectiveness(previousEnrichments, contextScoreHistory);
+
+            // ===== STEP 5: GENERATE FINAL ANSWER =====
             const answer = await this.generateComplexAnswer(question, allContext, analysis, agentSteps, chatHistory);
 
             const processingTime = (Date.now() - processingStartTime) / 1000;
@@ -381,6 +518,7 @@ class AgentService {
             const enrichmentStepsCount = enrichmentStep - 1;
 
             logger.info(`[Complex] Agent completed: ${agentSteps.length} steps, ${enrichmentStepsCount} enrichments, final score: ${finalContextScore.toFixed(3)}`);
+            logger.info(`[Complex] Enrichment analysis: ${JSON.stringify(enrichmentAnalysis)}`);
 
             return {
                 answer: this.checkAnswer(answer),
@@ -408,6 +546,12 @@ class AgentService {
                 // === CLASSIFICATION INFO ===
                 classificationConfidence: classification.confidence || 0,
                 classificationReasoning: classification.reasoning || '',
+                
+                // === ENRICHMENT ANALYSIS ===
+                enrichmentAnalysis: enrichmentAnalysis,
+                enrichmentDiversity: enrichmentAnalysis.diversityScore,
+                enrichmentSuccessRate: enrichmentAnalysis.totalAttempts > 0 ? 
+                    enrichmentAnalysis.successfulAttempts / enrichmentAnalysis.totalAttempts : 0,
 
                 // === VALIDATION SUMMARY ===
                 validationSummary: this.buildValidationSummary(cypherData, agentSteps)

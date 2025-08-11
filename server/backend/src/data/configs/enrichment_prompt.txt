@@ -7,23 +7,50 @@ Sample context: <sample_context>
 
 Enrichment targets: <enrichment_targets>
 
+THÔNG TIN HIỆN TẠI:
+- Context score hiện tại: <current_context_score>/1.0
+- Cải thiện score: <score_improvement>
+- Lịch sử scores: <context_score_history>
+
+CÁC ENRICHMENT ĐÃ THỰC HIỆN:
+<previous_enrichments>
+
 QUY TẮC ENRICHMENT:
 1. Chỉ tạo query khi THỰC SỰ cần thiết
 2. Không duplicate với main context
 3. Focus vào info gaps cho intent chính
 4. Query phải valid theo Neo4j schema
-5. Lưu ý quan trọng với học phí:
+5. **QUAN TRỌNG: Tạo query KHÁC BIỆT với các enrichment trước đó**
+6. Nếu enrichment trước trả về 0 kết quả -> đổi hướng tiếp cận hoàn toàn
+7. Nếu context score không cải thiện -> thử approach khác (node type, relationship, keywords)
+8. Phân tích WHY previous enrichments failed và avoid repeating mistakes
+9. Lưu ý quan trọng với học phí:
    - Không cố parse số từ t.content bằng split, filter, hay regex.
    - Không dùng ORDER BY dựa trên giá trị ước lượng học phí.
    - Chỉ cần truy vấn tài liệu học phí (Tuition) kèm tên hệ đào tạo và năm để người dùng đọc so sánh.
    - Dùng ORDER BY p.name để sắp xếp dễ nhìn.
 
-ENRICHMENT SCENARIOS:
-Main query về học phí -> Enrich với scholarship info
-Comparison thiếu 1 side -> Complete comparison
-Advice question thiếu decision factors -> Add career/market info
-Main context đã đầy đủ -> Skip enrichment
-Không liên quan intent -> Skip
+ENRICHMENT SCENARIOS & ADAPTIVE STRATEGIES:
+
+**Khi context score thấp (<0.5):**
+- Nếu main query về học phí nhưng thiếu -> Try Scholarship, Document về học phí
+- Nếu main query về ngành nhưng thiếu -> Try MajorProgramme, Document về ngành
+- Nếu comparison thiếu 1 side -> Complete comparison với approach khác
+
+**Khi previous enrichment failed (0 results):**
+- Đổi node type: Major -> MajorProgramme -> Document
+- Đổi keywords: từ cụ thể -> từ tổng quát hơn
+- Đổi relationship path: direct -> indirect relationships
+
+**Khi context score cải thiện chậm (<0.1 improvement):**
+- Thử node type hoàn toàn khác
+- Thử relationship pattern khác
+- Thử broader keywords hoặc related concepts
+
+**Skip enrichment khi:**
+- Main context đã đầy đủ (score >0.75)
+- Previous enrichments đã cover đủ info types
+- Không liên quan intent chính
 
 QUY TẮC SINH CYPHER:
 ==== I. SCHEMA ĐỒ THỊ (TÓM TẮT) ====
@@ -122,12 +149,29 @@ WHERE apoc.text.clean(toLower(d.text)) CONTAINS apoc.text.clean(toLower('điểm
 - Document chứa tài liệu về ĐIỂM CHUẨN CÁC NGÀNH
 - Document chứa tài liểu về THÔNG TIN TRƯỜNG HỌC
 
+=== ADAPTIVE QUERY GENERATION ===
+**Phân tích previous enrichments:**
+1. Nếu step trước query Major nhưng 0 results -> thử MajorProgramme hoặc Document
+2. Nếu step trước query với keyword cụ thể -> thử keyword tổng quát hơn
+3. Nếu step trước query 1 node type -> thử node type khác
+4. Nếu context score không cải thiện -> đổi hoàn toàn approach
+
+**Ví dụ adaptive strategies:**
+- Query 1: MATCH (m:Major) WHERE ... → 0 results
+- Query 2: MATCH (d:Document) WHERE ... → different approach
+- Query 3: MATCH (mp:MajorProgramme) WHERE ... → another angle
+
+**Đảm bảo diversity:**
+- Mỗi enrichment PHẢI khác biệt về: node types, relationships, keywords, hoặc approach
+- Không repeat exact same pattern với chỉ thay đổi minor details
+
 Trả về JSON:
 {
     "shouldEnrich": true/false,
-    "reasoning": "Lý do cần/không cần enrichment",
-    "purpose": "Mục đích cụ thể của query",
+    "reasoning": "Lý do cần/không cần enrichment + phân tích previous attempts",
+    "purpose": "Mục đích cụ thể của query này",
     "cypher": "MATCH ... RETURN ... LIMIT 10",
-    "expectedValue": "Giá trị dự kiến",
-    "infoType": "scholarship|career|requirements|comparison"
+    "expectedValue": "Giá trị dự kiến từ query này",
+    "infoType": "scholarship|career|requirements|comparison|documents",
+    "differenceFromPrevious": "Giải thích tại sao query này khác với các query trước"
 }
