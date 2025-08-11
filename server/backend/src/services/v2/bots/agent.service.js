@@ -132,10 +132,16 @@ class AgentService {
             let result = await this.cache.get(cacheKey);
 
             if (!result) {
+                logger.info(`[Agent] Calling Gemini for context scoring: ${stepName}`);
                 result = await this.gemini.queueRequest(contextScorePrompt);
                 if (result) {
                     await this.cache.set(cacheKey, result);
+                    logger.info(`[Agent] Gemini response received for ${stepName}:`, typeof result, result ? 'has content' : 'empty');
+                } else {
+                    logger.warn(`[Agent] Gemini returned null/empty for ${stepName}`);
                 }
+            } else {
+                logger.info(`[Agent] Using cached context score for ${stepName}`);
             }
 
             let score = 0;
@@ -143,14 +149,46 @@ class AgentService {
 
             if (result) {
                 try {
+                    logger.info(`[Agent] Parsing result for ${stepName}:`, typeof result, result ? result.substring(0, 200) + '...' : 'null');
+                    
                     const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+                    logger.info(`[Agent] Parsed result for ${stepName}:`, typeof parsed, parsed);
+                    
                     score = Math.max(0, Math.min(1, parseFloat(parsed.score) || 0));
                     reasoning = parsed.reasoning || 'No reasoning provided';
+                    
+                    logger.info(`[Agent] Extracted score: ${score}, reasoning: ${reasoning}`);
                 } catch (e) {
                     logger.warn(`[Agent] Failed to parse context score for ${stepName}:`, e.message);
-                    score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
-                    reasoning = `Parsing error: ${e.message}`;
+                    logger.warn(`[Agent] Raw result that failed parsing:`, result);
+                    
+                    // Improved fallback logic
+                    if (typeof result === 'string' && result.includes('score') && result.includes('reasoning')) {
+                        // Try to extract score and reasoning manually
+                        try {
+                            const scoreMatch = result.match(/"score"\s*:\s*([0-9.]+)/);
+                            const reasoningMatch = result.match(/"reasoning"\s*:\s*"([^"]+)"/);
+                            
+                            if (scoreMatch && reasoningMatch) {
+                                score = Math.max(0, Math.min(1, parseFloat(scoreMatch[1]) || 0));
+                                reasoning = reasoningMatch[1];
+                                logger.info(`[Agent] Manual extraction successful: score=${score}, reasoning=${reasoning}`);
+                            } else {
+                                throw new Error('Manual extraction failed');
+                            }
+                        } catch (manualError) {
+                            logger.warn(`[Agent] Manual extraction also failed:`, manualError.message);
+                            score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
+                            reasoning = `Parsing error: ${e.message}. Raw response: ${result.substring(0, 100)}...`;
+                        }
+                    } else {
+                        score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
+                        reasoning = `Parsing error: ${e.message}. Raw response: ${result.substring(0, 100)}...`;
+                    }
                 }
+            } else {
+                logger.warn(`[Agent] No result from Gemini for ${stepName}`);
+                reasoning = 'No response from Gemini';
             }
 
             logger.info(`[Agent] Context score for ${stepName}: ${score.toFixed(3)} - ${reasoning}`);
