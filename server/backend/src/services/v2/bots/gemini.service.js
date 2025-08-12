@@ -274,6 +274,17 @@ class GeminiService {
 
             let result = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
+            logger.info(`[Gemini] Raw API response:`, {
+                hasCandidates: !!response.data?.candidates,
+                candidatesLength: response.data?.candidates?.length || 0,
+                hasContent: !!response.data?.candidates?.[0]?.content,
+                hasParts: !!response.data?.candidates?.[0]?.content?.parts,
+                partsLength: response.data?.candidates?.[0]?.content?.parts?.length || 0,
+                resultType: typeof result,
+                resultLength: result?.length || 0,
+                resultPreview: result ? result.substring(0, 200) + '...' : 'null'
+            });
+
             if (typeof result === "string") {
                 // Tìm JSON trong code block
                 const jsonMatch = result.match(/```json\s*([\s\S]*?)```/i);
@@ -288,7 +299,8 @@ class GeminiService {
                 } catch (e) {
                     logger.warn(`[Gemini] JSON parse failed`, JSON.stringify({
                         rawResultPreview: result?.substring(0, 200) + '...',
-                        error: e.message
+                        error: e.message,
+                        fullResult: result
                     }));
                     // logger.warn(`[Gemini] Raw result: ${e.message}`);
                     // logger.warn(`[Gemini] Raw result: ${result}`);

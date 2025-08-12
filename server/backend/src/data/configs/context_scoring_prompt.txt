@@ -15,14 +15,18 @@ Nhiệm vụ của bạn:
 <context_json>
 
 **Yêu cầu trả về:**  
-Một chuỗi JSON với định dạng:
-{
-  "score": <float, 0-1>,
-  "reasoning": "<giải thích ngắn gọn>"
-}
+Bạn PHẢI trả về đúng định dạng JSON sau:
 
-Ví dụ:
+```json
 {
   "score": 0.85,
   "reasoning": "Context đã cung cấp đầy đủ thông tin về học phí, chương trình đào tạo và điều kiện xét tuyển cho ngành được hỏi."
 }
+```
+
+**Lưu ý quan trọng:**
+- score phải là số từ 0.0 đến 1.0
+- reasoning phải là chuỗi text giải thích lý do
+- KHÔNG được thêm text nào khác ngoài JSON
+- KHÔNG được dùng markdown formatting
+- Chỉ trả về JSON thuần túy
