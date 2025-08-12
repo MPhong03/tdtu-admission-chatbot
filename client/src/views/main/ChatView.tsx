@@ -16,7 +16,7 @@ import toast from "react-hot-toast";
 import { useBreadcrumb } from "@/contexts/BreadcrumbContext";
 import { useRateLimit } from "@/hooks/useRateLimit";
 
-const TYPEWRITER_INTERVAL = 10;
+const TYPEWRITER_INTERVAL = 2;
 const INITIAL_QUESTION_KEY = 'initialQuestionState';
 
 export interface FeedbackData {
@@ -197,7 +197,7 @@ const ChatView: React.FC<ChatViewProps> = ({
 
       // Calculate next chunk size (adaptive based on visibility)
       const isVisible = !document.hidden;
-      const chunkSize = isVisible ? 1 : Math.min(5, fullText.length - currentIndex);
+      const chunkSize = isVisible ? 3 : Math.min(8, fullText.length - currentIndex);
       const nextIndex = Math.min(currentIndex + chunkSize, fullText.length);
 
       const partial = fullText.slice(0, nextIndex);
@@ -217,7 +217,7 @@ const ChatView: React.FC<ChatViewProps> = ({
       state.currentIndex = nextIndex;
 
       // Adaptive timing based on visibility
-      const delay = isVisible ? TYPEWRITER_INTERVAL : 5;
+      const delay = isVisible ? TYPEWRITER_INTERVAL : 2;
       state.intervalId = setTimeout(typewriterStep, delay);
     };
 
