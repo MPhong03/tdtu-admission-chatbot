@@ -156,10 +156,28 @@ class AgentService {
                         isNull: result === null,
                         isUndefined: result === undefined,
                         length: typeof result === 'string' ? result.length : 'N/A',
-                        preview: typeof result === 'string' ? result.substring(0, 200) + '...' : JSON.stringify(result).substring(0, 200) + '...'
+                        preview: typeof result === 'string' ? result.substring(0, 200) + '...' : (result ? JSON.stringify(result).substring(0, 200) + '...' : 'null')
                     });
                     
-                    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+                    let parsed;
+                    if (typeof result === 'string') {
+                        parsed = JSON.parse(result);
+                    } else if (typeof result === 'object') {
+                        // Handle case where result might have wrapper like {"compressed":false,"data":"{...}"}
+                        if (result.data && typeof result.data === 'string') {
+                            try {
+                                parsed = JSON.parse(result.data);
+                            } catch (dataParseError) {
+                                logger.warn(`[Agent] Failed to parse result.data for ${stepName}:`, dataParseError.message);
+                                parsed = result;
+                            }
+                        } else {
+                            parsed = result;
+                        }
+                    } else {
+                        parsed = result;
+                    }
+                    
                     logger.info(`[Agent] Parsed result for ${stepName}:`, {
                         type: typeof parsed,
                         hasScore: parsed && typeof parsed.score !== 'undefined',
@@ -196,6 +214,24 @@ class AgentService {
                             }
                         } catch (manualError) {
                             logger.warn(`[Agent] Manual extraction also failed:`, manualError.message);
+                            score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
+                            reasoning = `Parsing error: ${e.message}. Raw response: ${typeof result === 'string' ? result.substring(0, 100) + '...' : JSON.stringify(result).substring(0, 100) + '...'}`;
+                        }
+                    } else if (typeof result === 'object' && result.data && typeof result.data === 'string') {
+                        // Handle wrapper case like {"compressed":false,"data":"{...}"}
+                        try {
+                            const scoreMatch = result.data.match(/"score"\s*:\s*([0-9.]+)/);
+                            const reasoningMatch = result.data.match(/"reasoning"\s*:\s*"([^"]+)"/);
+                            
+                            if (scoreMatch && reasoningMatch) {
+                                score = Math.max(0, Math.min(1, parseFloat(scoreMatch[1]) || 0));
+                                reasoning = reasoningMatch[1];
+                                logger.info(`[Agent] Manual extraction from wrapper successful: score=${score}, reasoning=${reasoning}`);
+                            } else {
+                                throw new Error('Manual extraction from wrapper failed');
+                            }
+                        } catch (wrapperError) {
+                            logger.warn(`[Agent] Manual extraction from wrapper also failed:`, wrapperError.message);
                             score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
                             reasoning = `Parsing error: ${e.message}. Raw response: ${typeof result === 'string' ? result.substring(0, 100) + '...' : JSON.stringify(result).substring(0, 100) + '...'}`;
                         }
