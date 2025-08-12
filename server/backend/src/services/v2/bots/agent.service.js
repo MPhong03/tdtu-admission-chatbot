@@ -147,9 +147,23 @@ class AgentService {
 
             if (result) {
                 try {
-                    logger.info(`[Agent] Parsing result for ${stepName}:`, typeof result, result ? result.substring(0, 200) + '...' : 'null');
+                    // Chuẩn hóa dữ liệu từ Gemini
+                    let dataToProcess = result;
                     
-                    const parsed = typeof result === 'string' ? JSON.parse(result) : result;
+                    // Xử lý trường hợp result có cấu trúc wrapper {"compressed":false,"data":"..."}
+                    if (typeof result === 'object' && result.data && typeof result.data === 'string') {
+                        dataToProcess = result.data;
+                        logger.info(`[Agent] Extracting data from wrapper for ${stepName}`);
+                    }
+                    
+                    // Log thông tin debug an toàn
+                    const debugInfo = typeof dataToProcess === 'string' 
+                        ? dataToProcess.substring(0, 200) + '...' 
+                        : JSON.stringify(dataToProcess).substring(0, 200) + '...';
+                    logger.info(`[Agent] Processing data for ${stepName}:`, typeof dataToProcess, debugInfo);
+                    
+                    // Parse JSON
+                    const parsed = typeof dataToProcess === 'string' ? JSON.parse(dataToProcess) : dataToProcess;
                     logger.info(`[Agent] Parsed result for ${stepName}:`, typeof parsed, parsed);
                                         
                     score = Math.max(0, Math.min(1, parseFloat(parsed.score) || 0));
@@ -158,15 +172,47 @@ class AgentService {
                     logger.info(`[Agent] Extracted score: ${score}, reasoning: ${reasoning}`);                    
                 } catch (e) {
                     logger.warn(`[Agent] Failed to parse context score for ${stepName}:`, e.message);
+                    
+                    // Tạo debug info an toàn
+                    let debugInfo = 'unknown';
+                    try {
+                        if (typeof result === 'string') {
+                            debugInfo = result.substring(0, 100) + '...';
+                        } else if (typeof result === 'object') {
+                            debugInfo = JSON.stringify(result).substring(0, 100) + '...';
+                        }
+                    } catch (debugError) {
+                        debugInfo = `debug error: ${debugError.message}`;
+                    }
+                    
                     logger.warn(`[Agent] Raw result that failed parsing:`, {
                         type: typeof result,
-                        value: result,
-                        stringified: JSON.stringify(result)
+                        hasData: result && typeof result === 'object' && 'data' in result,
+                        preview: debugInfo
                     });
                     
                     // Improved fallback logic
-                    if (typeof result === 'string' && result.includes('score') && result.includes('reasoning')) {
-                        // Try to extract score and reasoning manually
+                    let fallbackSuccess = false;
+                    
+                    // Thử trích xuất từ wrapper object trước
+                    if (typeof result === 'object' && result.data && typeof result.data === 'string') {
+                        try {
+                            const scoreMatch = result.data.match(/"score"\s*:\s*([0-9.]+)/);
+                            const reasoningMatch = result.data.match(/"reasoning"\s*:\s*"([^"]+)"/);
+                            
+                            if (scoreMatch && reasoningMatch) {
+                                score = Math.max(0, Math.min(1, parseFloat(scoreMatch[1]) || 0));
+                                reasoning = reasoningMatch[1];
+                                logger.info(`[Agent] Manual extraction from wrapper successful: score=${score}, reasoning=${reasoning}`);
+                                fallbackSuccess = true;
+                            }
+                        } catch (wrapperError) {
+                            logger.warn(`[Agent] Manual extraction from wrapper failed:`, wrapperError.message);
+                        }
+                    }
+                    
+                    // Thử trích xuất từ string result
+                    if (!fallbackSuccess && typeof result === 'string' && result.includes('score') && result.includes('reasoning')) {
                         try {
                             const scoreMatch = result.match(/"score"\s*:\s*([0-9.]+)/);
                             const reasoningMatch = result.match(/"reasoning"\s*:\s*"([^"]+)"/);
@@ -174,18 +220,18 @@ class AgentService {
                             if (scoreMatch && reasoningMatch) {
                                 score = Math.max(0, Math.min(1, parseFloat(scoreMatch[1]) || 0));
                                 reasoning = reasoningMatch[1];
-                                logger.info(`[Agent] Manual extraction successful: score=${score}, reasoning=${reasoning}`);
-                            } else {
-                                throw new Error('Manual extraction failed');
+                                logger.info(`[Agent] Manual extraction from string successful: score=${score}, reasoning=${reasoning}`);
+                                fallbackSuccess = true;
                             }
-                        } catch (manualError) {
-                            logger.warn(`[Agent] Manual extraction also failed:`, manualError.message);
-                            score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
-                            reasoning = `Parsing error: ${e.message}. Raw response: ${typeof result === 'string' ? result.substring(0, 100) + '...' : JSON.stringify(result).substring(0, 100) + '...'}`;
+                        } catch (stringError) {
+                            logger.warn(`[Agent] Manual extraction from string failed:`, stringError.message);
                         }
-                    } else {
+                    }
+                    
+                    // Final fallback nếu tất cả đều thất bại
+                    if (!fallbackSuccess) {
                         score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
-                        reasoning = `Parsing error: ${e.message}. Raw response: ${typeof result === 'string' ? result.substring(0, 100) + '...' : JSON.stringify(result).substring(0, 100) + '...'}`;
+                        reasoning = `Parsing error: ${e.message}. Preview: ${debugInfo}`;
                     }
                 }
             } else {
@@ -194,7 +240,7 @@ class AgentService {
             }
 
             // Final fallback if everything fails
-            if (score === 0 && reasoning.includes('Failed to parse') || reasoning.includes('No response')) {
+            if (score === 0 && (reasoning.includes('Failed to parse') || reasoning.includes('No response'))) {
                 logger.warn(`[Agent] Using final fallback for ${stepName}`);
                 score = contextNodes.length > 0 ? 0.3 : 0;
                 reasoning = `Fallback score based on context size (${contextNodes.length} nodes)`;
