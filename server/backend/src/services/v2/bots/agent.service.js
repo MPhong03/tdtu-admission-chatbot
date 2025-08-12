@@ -149,10 +149,24 @@ class AgentService {
 
             if (result) {
                 try {
-                    logger.info(`[Agent] Parsing result for ${stepName}:`, typeof result, result ? result.substring(0, 200) + '...' : 'null');
+                    logger.info(`[Agent] Parsing result for ${stepName}:`, {
+                        type: typeof result,
+                        isString: typeof result === 'string',
+                        isObject: typeof result === 'object',
+                        isNull: result === null,
+                        isUndefined: result === undefined,
+                        length: typeof result === 'string' ? result.length : 'N/A',
+                        preview: typeof result === 'string' ? result.substring(0, 200) + '...' : JSON.stringify(result).substring(0, 200) + '...'
+                    });
                     
                     const parsed = typeof result === 'string' ? JSON.parse(result) : result;
-                    logger.info(`[Agent] Parsed result for ${stepName}:`, typeof parsed, parsed);
+                    logger.info(`[Agent] Parsed result for ${stepName}:`, {
+                        type: typeof parsed,
+                        hasScore: parsed && typeof parsed.score !== 'undefined',
+                        hasReasoning: parsed && typeof parsed.reasoning !== 'undefined',
+                        score: parsed?.score,
+                        reasoning: parsed?.reasoning
+                    });
                     
                     score = Math.max(0, Math.min(1, parseFloat(parsed.score) || 0));
                     reasoning = parsed.reasoning || 'No reasoning provided';
@@ -160,7 +174,11 @@ class AgentService {
                     logger.info(`[Agent] Extracted score: ${score}, reasoning: ${reasoning}`);
                 } catch (e) {
                     logger.warn(`[Agent] Failed to parse context score for ${stepName}:`, e.message);
-                    logger.warn(`[Agent] Raw result that failed parsing:`, result);
+                    logger.warn(`[Agent] Raw result that failed parsing:`, {
+                        type: typeof result,
+                        value: result,
+                        stringified: JSON.stringify(result)
+                    });
                     
                     // Improved fallback logic
                     if (typeof result === 'string' && result.includes('score') && result.includes('reasoning')) {
@@ -179,16 +197,23 @@ class AgentService {
                         } catch (manualError) {
                             logger.warn(`[Agent] Manual extraction also failed:`, manualError.message);
                             score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
-                            reasoning = `Parsing error: ${e.message}. Raw response: ${result.substring(0, 100)}...`;
+                            reasoning = `Parsing error: ${e.message}. Raw response: ${typeof result === 'string' ? result.substring(0, 100) + '...' : JSON.stringify(result).substring(0, 100) + '...'}`;
                         }
                     } else {
                         score = contextNodes.length > 0 ? 0.3 : 0; // Basic fallback
-                        reasoning = `Parsing error: ${e.message}. Raw response: ${result.substring(0, 100)}...`;
+                        reasoning = `Parsing error: ${e.message}. Raw response: ${typeof result === 'string' ? result.substring(0, 100) + '...' : JSON.stringify(result).substring(0, 100) + '...'}`;
                     }
                 }
             } else {
                 logger.warn(`[Agent] No result from Gemini for ${stepName}`);
                 reasoning = 'No response from Gemini';
+            }
+
+            // Final fallback if everything fails
+            if (score === 0 && reasoning.includes('Failed to parse') || reasoning.includes('No response')) {
+                logger.warn(`[Agent] Using final fallback for ${stepName}`);
+                score = contextNodes.length > 0 ? 0.3 : 0;
+                reasoning = `Fallback score based on context size (${contextNodes.length} nodes)`;
             }
 
             logger.info(`[Agent] Context score for ${stepName}: ${score.toFixed(3)} - ${reasoning}`);

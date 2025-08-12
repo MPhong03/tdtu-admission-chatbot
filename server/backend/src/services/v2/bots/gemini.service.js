@@ -282,7 +282,8 @@ class GeminiService {
                 partsLength: response.data?.candidates?.[0]?.content?.parts?.length || 0,
                 resultType: typeof result,
                 resultLength: result?.length || 0,
-                resultPreview: result ? result.substring(0, 200) + '...' : 'null'
+                resultPreview: result ? result.substring(0, 200) + '...' : 'null',
+                fullResponse: response.data
             });
 
             if (typeof result === "string") {
