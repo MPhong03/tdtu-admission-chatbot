@@ -274,7 +274,7 @@ class GeminiService {
 
             let result = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-            logger.info(`[Gemini] Raw API response:`, {
+            logger.info(`[Gemini] Raw API response:`, JSON.stringify({
                 hasCandidates: !!response.data?.candidates,
                 candidatesLength: response.data?.candidates?.length || 0,
                 hasContent: !!response.data?.candidates?.[0]?.content,
@@ -283,7 +283,7 @@ class GeminiService {
                 resultType: typeof result,
                 resultLength: result?.length || 0,
                 resultPreview: result ? result.substring(0, 200) + '...' : 'null'
-            });
+            }));
 
             if (typeof result === "string") {
                 // Tìm JSON trong code block
